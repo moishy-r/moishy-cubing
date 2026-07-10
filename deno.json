@@ -1,0 +1,16 @@
+{
+  "workspace": [
+    "./packages/cubing-core",
+    "./packages/algsets",
+    "./packages/apb"
+  ],
+  "tasks": {
+    "test": "deno test -A",
+    "fmt": "deno fmt",
+    "lint": "deno lint",
+    "check": "deno check packages/*/mod.ts"
+  },
+  "fmt": {
+    "lineWidth": 100
+  }
+}

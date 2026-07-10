@@ -1,0 +1,10 @@
+{
+  "name": "@moishy/apb",
+  "version": "0.0.1",
+  "exports": "./mod.ts",
+  "license": "MIT",
+  "imports": {
+    "@moishy/cubing-core": "jsr:@moishy/cubing-core@^0.0.1",
+    "@moishy/algsets": "jsr:@moishy/algsets@^0.0.1"
+  }
+}

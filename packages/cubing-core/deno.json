@@ -1,0 +1,6 @@
+{
+  "name": "@moishy/cubing-core",
+  "version": "0.0.1",
+  "exports": "./mod.ts",
+  "license": "MIT"
+}
