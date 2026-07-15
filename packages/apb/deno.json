@@ -6,5 +6,8 @@
   "imports": {
     "@moishy/cubing-core": "jsr:@moishy/cubing-core@^0.0.1",
     "@moishy/algsets": "jsr:@moishy/algsets@^0.0.1"
+  },
+  "publish": {
+    "exclude": ["**/*_test.ts"]
   }
 }

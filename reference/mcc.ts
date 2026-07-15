@@ -135,8 +135,7 @@ const LR_MIRROR: Partial<Record<MoveFamily, MoveFamily>> = {
 };
 
 function baseCostOh(family: MoveFamily, handedness: OhHandedness): number {
-  const effectiveFamily =
-    handedness === "right" ? (LR_MIRROR[family] ?? family) : family;
+  const effectiveFamily = handedness === "right" ? (LR_MIRROR[family] ?? family) : family;
   return BASE_COST_OH_LEFT[effectiveFamily];
 }
 
@@ -240,15 +239,11 @@ export function calculateMcc(alg: string, options: MccOptions): number {
     const move = parsed[i];
 
     if (ROTATION_FAMILIES.has(move.family)) {
-      total +=
-        options.mode === "2H"
-          ? BASE_COST_2H[move.family]
-          : BASE_COST_OH_LEFT[move.family];
+      total += options.mode === "2H" ? BASE_COST_2H[move.family] : BASE_COST_OH_LEFT[move.family];
       continue;
     }
 
-    total +=
-      options.mode === "2H" ? scoreMove2H(move) : scoreMoveOh(move, handedness);
+    total += options.mode === "2H" ? scoreMove2H(move) : scoreMoveOh(move, handedness);
 
     if (i > 0) {
       const prev = parsed[i - 1];

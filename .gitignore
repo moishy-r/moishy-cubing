@@ -1,0 +1,8 @@
+# macOS
+.DS_Store
+
+# npm build output (dnt)
+packages/*/npm/
+
+# Editor / misc
+*.log

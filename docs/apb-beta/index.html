@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>APB Solver — Beta</title>
+  <!--
+    BUILD: this page loads ./apb.bundle.js, a self-contained browser bundle of
+    @moishy/apb + @moishy/cubing-core. To regenerate it after changing the
+    library, run from the repo root:
+
+      deno bundle --platform browser --minify -o docs/apb-beta/apb.bundle.js docs/apb-beta/entry.ts
+  -->
+  <style>
+    body {
+      font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      background: #fff;
+      color: #111;
+      max-width: 760px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      line-height: 1.5;
+    }
+    h1 { font-size: 1.4rem; margin-bottom: 0.2rem; }
+    .beta { color: #888; font-size: 0.85rem; margin-top: 0; }
+    label { display: block; font-weight: 600; margin: 1rem 0 0.3rem; }
+    input[type=text] {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 0.5rem;
+      font-family: ui-monospace, Menlo, Consolas, monospace;
+      font-size: 0.95rem;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+    .row { display: flex; gap: 0.5rem; margin-top: 0.6rem; flex-wrap: wrap; }
+    button {
+      padding: 0.5rem 1rem;
+      font-size: 0.95rem;
+      border: 1px solid #888;
+      background: #f5f5f5;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover { background: #eaeaea; }
+    #out { margin-top: 1.5rem; }
+    table { border-collapse: collapse; width: 100%; margin: 0.5rem 0 1rem; }
+    th, td { border: 1px solid #ddd; padding: 0.35rem 0.5rem; text-align: left; font-size: 0.9rem; }
+    th { background: #fafafa; }
+    code, .mono { font-family: ui-monospace, Menlo, Consolas, monospace; }
+    .solution {
+      background: #f7f7f7;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      padding: 0.75rem;
+      word-break: break-word;
+      font-family: ui-monospace, Menlo, Consolas, monospace;
+      font-size: 0.95rem;
+    }
+    .ok { color: #157a2b; font-weight: 600; }
+    .err { color: #b00020; font-weight: 600; }
+    .muted { color: #888; font-size: 0.85rem; }
+    footer { margin-top: 3rem; color: #999; font-size: 0.8rem; border-top: 1px solid #eee; padding-top: 1rem; }
+  </style>
+</head>
+<body>
+  <h1>APB Solver</h1>
+  <p class="beta">Beta demo of <code>@moishy/apb</code> · fixed-frame APB · <code>fbDfdb</code> block strategy</p>
+
+  <label for="scramble">Scramble</label>
+  <input id="scramble" type="text"
+         value="D' F2 L2 B2 F2 R' B2 R F2 L B2 R' F' D2 R' B D' F' L' B"
+         spellcheck="false" autocapitalize="off" autocomplete="off" />
+  <div class="row">
+    <button id="solve">Solve</button>
+    <span id="status" class="muted"></span>
+  </div>
+
+  <div id="out"></div>
+
+  <footer>
+    Runs entirely in your browser — no server. Built on
+    <code>@moishy/cubing-core</code> + <code>@moishy/algsets</code>.
+  </footer>
+
+  <script type="module">
+    import { apb, applyAlg, formatAlg, isSolved, solvedCube } from "./apb.bundle.js";
+
+    const $ = (id) => document.getElementById(id);
+    const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+
+    // Fixed frame + shallow lookahead: the solver is single-threaded here, so we
+    // skip racing all 8 color-neutral orientations (~150x faster per solve) and
+    // keep the block strategy the beta ships with. The very first solve builds a
+    // pruning table (a few seconds), cached for every solve after — so we warm it
+    // once on load below.
+    const SETTINGS = {
+      stepOptions: { block223: { forceStrategy: "fbDfdb" } },
+      colorNeutrality: "fixed",
+      lookahead: { depth: 1 },
+    };
+
+    let busy = false;
+
+    async function solve() {
+      if (busy) return;
+      const scramble = $("scramble").value.trim();
+      const out = $("out");
+      const status = $("status");
+      out.innerHTML = "";
+      if (!scramble) { status.textContent = "Enter a scramble."; return; }
+      busy = true;
+      $("solve").disabled = true;
+      status.textContent = "Solving…";
+      // Yield so the "Solving…" text paints before the (synchronous) search runs.
+      await new Promise((r) => setTimeout(r, 20));
+
+      let r;
+      try {
+        r = await apb.solve(scramble, SETTINGS, {});
+      } catch (e) {
+        status.textContent = "";
+        out.innerHTML = `<p class="err">Could not solve: ${esc(e.message || e)}</p>
+          <p class="muted">Check the scramble notation (moves like <code>R U R' F2</code>).</p>`;
+        busy = false;
+        $("solve").disabled = false;
+        return;
+      }
+      status.textContent = "";
+
+      // Independent verification: apply scramble + solution to a solved cube.
+      let verified = false;
+      try {
+        verified = isSolved(applyAlg(applyAlg(solvedCube(), scramble), r.solutionString));
+      } catch { /* leave false */ }
+
+      const rows = r.segments.map((seg) => {
+        const detail = seg.phases.map((p) => {
+          const tag = p.kind === "algorithmic" ? (p.caseId ?? "") : "search";
+          const mv = p.moves.length ? formatAlg(p.moves) : "—";
+          return `<div><span class="muted">${esc(p.phaseId)}${tag ? " · " + esc(tag) : ""}:</span> <span class="mono">${esc(mv)}</span></div>`;
+        }).join("");
+        const mv = seg.moves.length ? formatAlg(seg.moves) : "—";
+        return `<tr>
+          <td>${esc(seg.unitId)}</td>
+          <td class="mono">${esc(mv)}</td>
+          <td>${detail}</td>
+          <td>${seg.cost.toFixed(2)}</td>
+        </tr>`;
+      }).join("");
+
+      out.innerHTML = `
+        <p>
+          <span class="${r.solved && verified ? "ok" : "err"}">
+            ${r.solved && verified ? "✓ Solved" : "✗ Not solved"}
+          </span>
+          &nbsp;·&nbsp; ${r.solution.length} moves &nbsp;·&nbsp; cost ${r.cost.toFixed(2)}
+          ${r.orientation.length ? `&nbsp;·&nbsp; orientation <span class="mono">${esc(formatAlg(r.orientation))}</span>` : ""}
+        </p>
+        <table>
+          <thead><tr><th>Step</th><th>Moves</th><th>Detail</th><th>Cost</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+        <label>Full solution</label>
+        <div class="solution">${esc(r.solutionString)}</div>
+        <p class="muted">${verified
+          ? "Verified: applying the scramble then the solution to a solved cube returns it to solved."
+          : "⚠ Independent verification did not pass."}</p>
+      `;
+      busy = false;
+      $("solve").disabled = false;
+    }
+
+    $("solve").addEventListener("click", solve);
+    $("scramble").addEventListener("keydown", (e) => { if (e.key === "Enter") solve(); });
+
+    // Warm up on load: the first solve builds the pruning table (a few seconds),
+    // so run it once against the prefilled scramble. This also shows a worked
+    // example immediately, and every solve after it is near-instant.
+    $("solve").disabled = true;
+    $("status").textContent = "Preparing solver (first run builds lookup tables)…";
+    window.addEventListener("load", () => setTimeout(solve, 50));
+  </script>
+</body>
+</html>

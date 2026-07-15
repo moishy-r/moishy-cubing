@@ -9,7 +9,14 @@
 // once it's built out, copying this package's shape is the recipe for
 // a @moishy/cfop, @moishy/roux, @moishy/zz, etc.
 
-import { VERSION as CUBING_CORE_VERSION } from "@moishy/cubing-core";
+import { Method, VERSION as CUBING_CORE_VERSION } from "@moishy/cubing-core";
+import { apbDefinition } from "./src/apb.ts";
 
 export const VERSION = "0.0.1";
 export const CUBING_CORE_VERSION_USED = CUBING_CORE_VERSION;
+
+export { apbDefinition } from "./src/apb.ts";
+export * from "./src/geometry.ts";
+
+/** The APB method, ready to `.solve(scramble, settings?)`. See ./src/apb.ts. */
+export const apb: Method = new Method(apbDefinition);

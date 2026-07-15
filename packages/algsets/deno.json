@@ -2,7 +2,27 @@
   "name": "@moishy/algsets",
   "version": "0.0.1",
   "exports": {
-    ".": "./mod.ts"
+    ".": "./mod.ts",
+    "./br-pair": "./src/br-pair/index.ts",
+    "./eo-pair": "./src/eo-pair/index.ts",
+    "./dfdb": "./src/dfdb/index.ts",
+    "./lxs": "./src/lxs/index.ts",
+    "./oll": "./src/oll/index.ts",
+    "./pll": "./src/pll/index.ts",
+    "./zbll": "./src/zbll/index.ts",
+    "./coll-epll": "./src/coll-epll/index.ts",
+    "./ocll-pll": "./src/ocll-pll/index.ts",
+    "./eodr": "./src/eodr/index.ts",
+    "./lxs-back-slot": "./src/lxs-back-slot/index.ts",
+    "./sv": "./src/sv/index.ts",
+    "./wv": "./src/wv/index.ts",
+    "./zbls": "./src/zbls/index.ts"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "imports": {
+    "@moishy/cubing-core": "jsr:@moishy/cubing-core@^0.0.1"
+  },
+  "publish": {
+    "exclude": ["**/*_test.ts"]
+  }
 }
