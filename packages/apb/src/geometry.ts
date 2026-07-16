@@ -25,6 +25,7 @@ import {
   invert,
   type Move,
   type MoveFamily,
+  normalizeOrientation,
   solvedCube,
   statesEqual,
 } from "@moishy/cubing-core";
@@ -66,32 +67,44 @@ export function centersSolved(s: CubeState): boolean {
 }
 
 /**
- * True iff every slot in `region` holds its home cubie, correctly oriented,
- * *and* the centers are home.
+ * True iff every slot in `region` holds its home cubie, correctly oriented —
+ * evaluated **up to whole-cube rotation** ({@link normalizeOrientation}).
  *
- * The center check is essential, not incidental: APB is solved in a fixed frame
- * with no whole-cube rotations, so a slot-solved region whose centers have
- * drifted (e.g. after an M-slice DF/DB alg) is *not* actually color-solved — the
- * block pieces sit in their home slots but the surrounding centers no longer
- * match them. Requiring `cn` identity here forces every step to net-preserve the
- * frame: the block search's center-aware heuristic only accepts a net-center-
- * neutral block even when it uses slice/wide moves, and alg phases pick a center-
- * neutral variant among their interchangeable algs (see /DESIGN.md's "Algset
- * schema" — every core APB set carries one per case). Without it, the frame drifts
- * silently through the piece-index-based middle steps and only surfaces at ZBLL's
- * fixed-frame recognition and the final `isSolved`.
+ * The rotation-normalization is what keeps this both correct and frame-safe. It
+ * accepts a region that is solved but held in a rotated frame (a rotation-
+ * containing alg, or a rotation-heavy method), which the old absolute `cn`-home
+ * check wrongly rejected. But it still rejects slice/wide *center drift* (e.g. an
+ * M-slice DF/DB alg): there the pieces did not rotate together with the centers,
+ * so normalizing the centers leaves the region's pieces off their home slots.
+ * Every step therefore still has to net-preserve the colours, not just the slots.
  */
 export function regionSolved(region: Region): (s: CubeState) => boolean {
-  return (s) =>
-    centersSolved(s) &&
-    region.corners.every((i) => s.cp[i] === i && s.co[i] === 0) &&
-    region.edges.every((i) => s.ep[i] === i && s.eo[i] === 0);
+  return (s) => {
+    const n = normalizeOrientation(s);
+    return region.corners.every((i) => n.cp[i] === i && n.co[i] === 0) &&
+      region.edges.every((i) => n.ep[i] === i && n.eo[i] === 0);
+  };
 }
 
 /** True iff `region` is solved *and* all 12 edges are oriented (EO's goal). */
 export function regionSolvedAndEO(region: Region): (s: CubeState) => boolean {
   const solved = regionSolved(region);
-  return (s) => solved(s) && s.eo.every((o) => o === 0);
+  return (s) => solved(s) && normalizeOrientation(s).eo.every((o) => o === 0);
+}
+
+/**
+ * Strict, fixed-frame region goal: pieces home AND centers home (no rotation
+ * tolerance). Used by the block-building *search*, which explores slice/wide
+ * moves (they drift centers) under a heuristic built for the home frame — so its
+ * goal must be the home frame, or the heuristic becomes inadmissible and A*
+ * loses its cost-ordering. Everywhere else the rotation-invariant
+ * {@link regionSolved} is correct; APB's block step is intentionally fixed-frame.
+ */
+export function regionSolvedStrict(region: Region): (s: CubeState) => boolean {
+  return (s) =>
+    centersSolved(s) &&
+    region.corners.every((i) => s.cp[i] === i && s.co[i] === 0) &&
+    region.edges.every((i) => s.ep[i] === i && s.eo[i] === 0);
 }
 
 // --- Recognition signatures ---------------------------------------------------
@@ -275,19 +288,26 @@ export function zblsSignature(): (s: CubeState) => string {
  * `signature` (rather than the algset's own full-facelet default) — the bridge
  * that lets a whole-cube algset recognize on just a region. First-defined case
  * wins a signature (collisions are a data bug, surfaced by the algset's tests).
+ *
+ * Recognition is rotation-invariant: both the stored recognition state and the
+ * queried state are normalized to the home frame ({@link normalizeOrientation})
+ * before the signature is taken, so a case whose alg contains a whole-cube
+ * rotation is still recognized, and a live state reached in a rotated frame
+ * matches the same case. (For the rotation-free core sets this is a no-op.)
  */
 export function regionLookup(
   algSet: AlgSet,
   signature: (s: CubeState) => string,
   caseFilter?: (c: AlgSet["cases"][number]) => boolean,
 ): CaseLookup {
+  const sig = (s: CubeState) => signature(normalizeOrientation(s));
   const bySig = new Map<string, AlgCase>();
   for (const c of algSet.cases) {
     if (caseFilter && !caseFilter(c)) continue;
-    const sig = signature(algSet.recognitionState(c.id));
-    if (!bySig.has(sig)) bySig.set(sig, c);
+    const key = sig(algSet.recognitionState(c.id));
+    if (!bySig.has(key)) bySig.set(key, c);
   }
-  return { find: (s) => bySig.get(signature(s)) ?? null };
+  return { find: (s) => bySig.get(sig(s)) ?? null };
 }
 
 // The four AUF states (identity, U, U2, U') as cube states, for building the
@@ -351,9 +371,11 @@ function conjugateQuarter(
  * Rewrites an alg into an equivalent that ends in the *fixed frame* — same effect
  * on the pieces, but no net whole-cube rotation. It pushes each `x`/`y`/`z` to
  * the end (relabeling every following move through the accumulated rotation) and
- * drops it. See /DESIGN.md's "tilted alg" caveat: some imported last-layer algs
- * end tilted (e.g. an unbalanced `y`), which is fine for a speedsolver holding
- * the cube rotated but not for APB's fixed-frame, center-tracked solve.
+ * drops it.
+ *
+ * Standalone utility: the solve no longer de-rotates algs (recognition and goals
+ * are rotation-invariant, so tilted algs are used verbatim and simply leave the
+ * cube solved-up-to-rotation). Kept for callers that want a fixed-frame rewrite.
  *
  * Conjugation is a homomorphism, so `X^n` under `rot` becomes `(conj X)^n`: the
  * relabeled move's amount is the conjugate quarter turn's direction times the
@@ -379,35 +401,10 @@ export function stripRotations(moves: Move[]): Move[] {
   return out;
 }
 
-const isCenterNeutral = (moves: Move[]) =>
-  applyMoves(solvedCube(), moves).cn.every((v, i) => v === i);
-
 /**
- * A fixed-frame equivalent of one alg variant: unchanged if it is already
- * center-neutral (the common case — including algs that use internal rotations
- * which cancel out); otherwise de-rotated ({@link stripRotations}). If neither is
- * center-neutral (an alg whose net center shift is a slice, not a rotation — not
- * present in the current last-layer data) it is returned as-is and `runPhase`'s
- * goal check will simply reject it.
- */
-function fixedFrameMoves(moves: Move[]): Move[] {
-  if (isCenterNeutral(moves)) return moves;
-  const stripped = stripRotations(moves);
-  return isCenterNeutral(stripped) ? stripped : moves;
-}
-
-/**
- * Like {@link regionLookup}, but (a) de-rotates each variant to the fixed frame
- * ({@link fixedFrameMoves}) and re-derives recognition from the de-rotated
- * primary, and (b) indexes each case under **both** pre- and post-AUF.
- *
- * Both properties are *required* for a terminal full-last-layer step (ZBLL, and
- * the PLL it falls through to) — see below. They are also useful for the
- * non-terminal orientation/corner steps (OCLL, COLL, full OLL) with a projection
- * signature: those sets contain tilted primaries that only de-rotation makes
- * recognizable + fixed-frame-solvable, and the extra post-AUF indexing is a
- * harmless superset there (`runPhase` still picks the pre/post AUF that meets the
- * step's own goal; any residual is absorbed by the next phase's pre-AUF).
+ * Like {@link regionLookup}, but indexes each case under **both** pre- and
+ * post-AUF (a two-sided U-coset). Recognition is rotation-invariant, so algs are
+ * used verbatim (see the tail of this comment).
  *
  * Why both-AUF is *needed* for a terminal step. `runPhase` already tries every pre-AUF (a U turn
  * before the alg) and post-AUF (a U turn after). For a *non-terminal* algorithmic
@@ -428,34 +425,30 @@ function fixedFrameMoves(moves: Move[]): Move[] {
  * cases, so their cosets are disjoint — no new collisions (a genuine collision
  * is still a data bug, surfaced by the set's own tests).
  *
- * Each variant is first put into the fixed frame ({@link stripRotations}) and the
- * recognition state re-derived from that de-rotated primary, so cases whose
- * `algs[0]` ends tilted are both recognized *and* solvable here (their tilted
- * primary would otherwise leave the centers off after `runPhase` applies it).
+ * Recognition is rotation-invariant (both sides normalized via
+ * {@link normalizeOrientation}), so algs are used **verbatim** — a case whose
+ * primary contains a whole-cube rotation is recognized here, and `runPhase`
+ * applies that alg as-is (the cube ends solved up to rotation, which the
+ * rotation-invariant goal accepts). No de-rotation / move rewriting.
  */
 export function aufInvariantLookup(
   algSet: AlgSet,
   signature: (s: CubeState) => string,
   caseFilter?: (c: AlgSet["cases"][number]) => boolean,
 ): CaseLookup {
+  const sig = (s: CubeState) => signature(normalizeOrientation(s));
   const bySig = new Map<string, AlgCase>();
   for (const c of algSet.cases) {
     if (caseFilter && !caseFilter(c)) continue;
-    const cased: AlgCase = {
-      ...c,
-      algs: c.algs.map((a) => ({ ...a, moves: fixedFrameMoves(a.moves) })),
-    };
-    // Recognition state re-derived from the (now fixed-frame) primary, so it sits
-    // in the home frame that a live solve state does — a plain signature matches.
-    const r = applyMoves(solvedCube(), invert(cased.algs[0].moves));
+    const r = applyMoves(solvedCube(), invert(c.algs[0].moves));
     for (const pre of U_STATES) {
       for (const post of U_STATES) {
-        const key = signature(compose(compose(pre, r), post));
-        if (!bySig.has(key)) bySig.set(key, cased);
+        const key = sig(compose(compose(pre, r), post));
+        if (!bySig.has(key)) bySig.set(key, c);
       }
     }
   }
-  return { find: (s) => bySig.get(signature(s)) ?? null };
+  return { find: (s) => bySig.get(sig(s)) ?? null };
 }
 
 /**

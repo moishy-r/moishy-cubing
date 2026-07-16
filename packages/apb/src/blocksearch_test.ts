@@ -19,7 +19,7 @@ import {
   toFacelets,
 } from "@moishy/cubing-core";
 import { apb } from "../mod.ts";
-import { axisCanonical, centersSolved, regionCoordinate, regionSolved } from "./geometry.ts";
+import { axisCanonical, centersSolved, regionCoordinate, regionSolvedStrict } from "./geometry.ts";
 import { regionHeuristic } from "./pruning.ts";
 
 const BLOCK_MOVES: MoveFamily[] = [
@@ -99,7 +99,7 @@ Deno.test("axisCanonical is cost-safe for the shipped 2H and OH models", () => {
 
 Deno.test("regionHeuristic is admissible, zero on goal, and center-aware", () => {
   const h = regionHeuristic(CROSS.corners, CROSS.edges, BLOCK_MOVES);
-  const goal = regionSolved(CROSS);
+  const goal = regionSolvedStrict(CROSS);
   assertEquals(h(solvedCube()), 0);
   // Admissible: never exceeds the true optimal cost (compare vs cost-optimal IDA*
   // on the small cross region, which is tractable).
@@ -111,7 +111,7 @@ Deno.test("regionHeuristic is admissible, zero on goal, and center-aware", () =>
   // Center-aware: pieces home but centers drifted (an M2) → non-zero bound.
   const drifted = applyMoves(solvedCube(), parseAlg("M2"));
   assert(!centersSolved(drifted));
-  assert(regionSolved(CROSS)(drifted) === false); // goal rejects drifted centers
+  assert(regionSolvedStrict(CROSS)(drifted) === false); // goal rejects drifted centers
   assert(h(drifted) > 0, "center-drifted state must get a positive bound");
 });
 
@@ -119,7 +119,7 @@ Deno.test("regionHeuristic is admissible, zero on goal, and center-aware", () =>
 
 Deno.test("block search (slice/wide) is cost-optimal with coordinate key + axis canon", () => {
   const h = regionHeuristic(CROSS.corners, CROSS.edges, BLOCK_MOVES);
-  const goal = regionSolved(CROSS);
+  const goal = regionSolvedStrict(CROSS);
   for (let i = 0; i < 4; i++) {
     const s = applyMoves(solvedCube(), scramble(i + 20, 10));
     // Reference: plain A* (sameFamily ordering, full-cube key) — no canon, no merge.
@@ -140,7 +140,7 @@ Deno.test("block search (slice/wide) is cost-optimal with coordinate key + axis 
       stateKey: regionCoordinate(CROSS),
     });
     assertAlmostEquals(opt.cost, ref.cost, 1e-9, `#${i} cost regressed`);
-    assert(regionSolved(CROSS)(applyMoves(s, opt.moves)));
+    assert(regionSolvedStrict(CROSS)(applyMoves(s, opt.moves)));
   }
 });
 
@@ -148,7 +148,7 @@ Deno.test("block search (slice/wide) is cost-optimal with coordinate key + axis 
 
 Deno.test("searchAStarMany returns distinct, cheapest-first solutions", () => {
   const h = regionHeuristic(CROSS.corners, CROSS.edges, BLOCK_MOVES);
-  const goal = regionSolved(CROSS);
+  const goal = regionSolvedStrict(CROSS);
   const s = applyMoves(solvedCube(), scramble(3, 10));
   const pool = searchAStarMany({
     start: s,
@@ -166,7 +166,7 @@ Deno.test("searchAStarMany returns distinct, cheapest-first solutions", () => {
   }
   // Every candidate actually reaches the goal, and the cheapest matches the single
   // cost-optimal search.
-  for (const c of pool) assert(regionSolved(CROSS)(applyMoves(s, c.moves)));
+  for (const c of pool) assert(regionSolvedStrict(CROSS)(applyMoves(s, c.moves)));
   const single = searchAStar({
     start: s,
     goal,

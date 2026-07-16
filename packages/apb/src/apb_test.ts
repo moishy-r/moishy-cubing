@@ -581,7 +581,10 @@ Deno.test("force-mode eodrLs fires on real solves and verifies", async () => {
       ...parseAlg(scramble),
       ...r.orientation,
     ]);
-    assert(r.solved && isSolved(applyMoves(framed, r.solution)), `eodrLs (${scramble}): must solve`);
+    assert(
+      r.solved && isSolved(applyMoves(framed, r.solution)),
+      `eodrLs (${scramble}): must solve`,
+    );
     assert(
       r.segments.some((s) => s.unitId === "eodrLs"),
       `eodrLs (${scramble}) must fire`,

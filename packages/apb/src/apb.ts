@@ -29,19 +29,25 @@
 // relevant `lxs` variants carry a `preInsert` checkpoint. Replacements/Extras are
 // opt-in (disabled) per project convention.
 //
-// Center frame. APB is a fixed-frame method: no whole-cube rotations, so the
-// solution must leave centers home. But wide/slice moves (in block-building and
-// in imported algs) permute centers. Two things keep the frame intact: the region
-// goals (geometry.ts `regionSolved`) require centers home, so every algorithmic
-// step selects a center-neutral variant among its interchangeable algs, and the
-// block search's goal + center-aware heuristic only accept a net-center-neutral
-// block (so any slice/wide use must restore the frame).
+// Orientation. Recognition and goals are evaluated *up to whole-cube rotation*
+// (cubing-core `normalizeOrientation`): a state is matched/solved by its pieces
+// relative to the centers, so a cube rotation never breaks a step (see
+// geometry.ts `regionSolved` / cubing-core `isSolved`). Crucially this still
+// rejects slice/wide *center drift* — where the pieces did NOT rotate with the
+// centers — so the colours must genuinely match, not just the slots. Algs are
+// used verbatim: an imported primary that ends tilted (a net `y`) simply leaves
+// the cube solved-up-to-rotation, which the goal accepts; and where a case also
+// has a rotation-free variant, the cost race naturally prefers it (no move
+// rewriting, so no awkward introduced `B`s). APB's block *search* keeps the
+// strict fixed frame (geometry.ts `regionSolvedStrict`) because its home-frame
+// heuristic requires it. (A pll data fix also stands: the F-perm's primary was
+// an OLL alg.)
 //
-// Last layer. ZBLL is terminal, so its recognition must be complete up to BOTH
-// pre- and post-AUF (geometry.ts `aufInvariantLookup`), and its algs must end in
-// the fixed frame — a couple of imported primaries end tilted (a net `y`) and are
-// de-rotated (`stripRotations`) so they leave centers home. (One corrupt import
-// was also fixed in the pll data: the F-perm's primary was an OLL alg.)
+// NOT YET GENERAL (tracked): applying a home-frame alg when a step's *input* is
+// itself in a rotated frame (a mid-solve rotation, as CFOP/ZB would need) — that
+// wants a per-phase reorient-to-home, plus reconciling a few imported primaries
+// whose tilt is not a clean whole-cube rotation. APB never hits this (the block
+// search keeps centers home through to the terminal ZBLL), so it is deferred.
 
 import {
   type AlgorithmicPhase,
@@ -84,6 +90,7 @@ import {
   regionLookup,
   regionSolved,
   regionSolvedAndEO,
+  regionSolvedStrict,
   zblsSignature,
 } from "./geometry.ts";
 import { regionHeuristic } from "./pruning.ts";
@@ -177,9 +184,13 @@ const blockSearch = (
   moves: MoveFamily[] = BLOCK_MOVES,
 ): SearchPhase => ({
   kind: "search",
-  id,
-  goal: regionSolved(goal),
+  // Strict fixed-frame goal: the block search uses slice/wide moves under a
+  // home-frame heuristic, so its goal must be the home frame (see
+  // geometry.ts `regionSolvedStrict`). Algorithmic phases use the
+  // rotation-invariant `regionSolved`.
+  goal: regionSolvedStrict(goal),
   moves,
+  id,
   heuristic: regionHeuristic([...heuristicRegion.corners], [...heuristicRegion.edges], moves),
   // A* + the pruning table: cost-optimal without IDA*'s real-cost thrashing.
   useAStar: true,
@@ -330,10 +341,10 @@ const zbll: MethodDefinition["steps"][number] = {
 // Recognition (see geometry.ts): OCLL keys on last-layer *orientation* only
 // (`orientationSignature`) — the OLL set's default full-facelet signature also
 // pins the permutation, so it never matched a real solve's last layer. Built with
-// `aufInvariantLookup` so the de-rotation applies (some OLL primaries end tilted)
-// and both AUFs are covered. PLL is terminal here (reaches solved), so it too
-// needs the both-AUF, de-rotating lookup — a plain pre-AUF-only `regionLookup`
-// would only recognize the quarter of PLL states needing no post-AUF.
+// `aufInvariantLookup` for both-AUF, rotation-invariant recognition. PLL is
+// terminal here (reaches solved), so it too needs the both-AUF lookup — a plain
+// pre-AUF-only `regionLookup` would only recognize the quarter of PLL states
+// needing no post-AUF.
 const OCLL_IDS = new Set(["oll-21", "oll-22", "oll-23", "oll-24", "oll-25", "oll-26", "oll-27"]);
 const ocllLookup = aufInvariantLookup(ollSet, orientationSignature(), (c) => OCLL_IDS.has(c.id));
 const pllLookup = aufInvariantLookup(pllSet, pllSet.signature);
@@ -355,7 +366,7 @@ const ocllPll: Replacement = {
 // set — it's the `pll` cases where corners are already solved (Ua/Ub/Z/H),
 // filtered out. No lookahead past COLL (EPLL is fully determined by COLL's end).
 const cornersSolved = (s: CubeState) => s.cp.every((c, i) => c === i && s.co[i] === 0);
-// EPLL is terminal (reaches solved) -> both-AUF, de-rotating lookup like PLL.
+// EPLL is terminal (reaches solved) -> both-AUF lookup like PLL.
 const epllLookup = aufInvariantLookup(
   pllSet,
   pllSet.signature,
@@ -363,9 +374,10 @@ const epllLookup = aufInvariantLookup(
 );
 // COLL keys on the *corners* only (`cornerSignature`) — the coll-epll set's
 // default full-facelet signature pins the edge permutation EPLL is meant to fix,
-// so it never matched. Built with `aufInvariantLookup` so the many tilted COLL
-// primaries are de-rotated (their raw form ends in a whole-cube rotation, which
-// left the recognition state — and the applied alg — out of the fixed frame).
+// so it never matched. Built with `aufInvariantLookup` (both-AUF, rotation-
+// invariant). Many COLL primaries end tilted; the cost race prefers a case's
+// rotation-free variant where one exists. (A few cases are rotation-free-less;
+// see the "NOT YET GENERAL" note up top — they can still miss.)
 const collLookup = aufInvariantLookup(collSet, cornerSignature());
 const collEpll: Replacement = {
   id: "collEpll",
@@ -480,7 +492,7 @@ const cornersOriented = (s: CubeState) => s.co.every((o) => o === 0);
 // oll (region [eo..zbll], boundary trigger = whole F2L already solved): full OLL
 // then PLL, straight from an un-EO'd finished F2L. `pll` reused. OLL keys on
 // last-layer *orientation* only (`orientationSignature`); built via
-// `aufInvariantLookup` for de-rotation + both-AUF coverage (same fix as OCLL).
+// `aufInvariantLookup` for both-AUF, rotation-invariant recognition (same as OCLL).
 const ollLookup = aufInvariantLookup(ollSet, orientationSignature());
 const ollExtra = {
   id: "oll",
@@ -501,8 +513,9 @@ const ollExtra = {
 // solve EO + last slot in one alg, landing ZBLL-ready. Recognizes on the
 // last-slot pair + edge orientation (geometry.ts `zblsSignature`) — the algset's
 // default full-facelet signature pinned the last-layer permutation ZBLS leaves
-// for ZBLL, so it never matched. Built with `aufInvariantLookup` for de-rotation
-// (32 of the 302 primaries end tilted). See KNOWN below.
+// for ZBLL, so it never matched. Built with `aufInvariantLookup` (both-AUF,
+// rotation-invariant); tilted primaries lose the cost race to rotation-free
+// variants where present. See KNOWN below.
 //
 // KNOWN (data, ~2 cases): two (pair, EO) collision pairs are not mutually
 // solvable (f2l-8-4/f2l-35-2, f2l-24-3/f2l-28-2) — for a corner-orientation-

@@ -7,6 +7,7 @@ import {
   cloneState,
   type CubeState,
   isSolved,
+  normalizeOrientation,
   SOLVED,
   solvedCube,
   statesEqual,
@@ -41,10 +42,17 @@ Deno.test("applyMove does not mutate its input", () => {
   assert(statesEqual(s, before));
 });
 
-Deno.test("a single quarter turn is not solved", () => {
+Deno.test("a single quarter turn is not solved (rotations excepted)", () => {
   for (const fam of ALL_FAMILIES) {
     const s = applyAlg(solvedCube(), fam);
-    assertFalse(isSolved(s), `${fam} should disturb the cube`);
+    if (fam === "x" || fam === "y" || fam === "z") {
+      // A whole-cube rotation leaves the cube solved up to orientation, which
+      // isSolved now (deliberately) accepts. Exact frame change is still visible.
+      assert(isSolved(s), `${fam} is solved up to rotation`);
+      assertFalse(statesEqual(s, solvedCube()), `${fam} still changes the frame`);
+    } else {
+      assertFalse(isSolved(s), `${fam} should disturb the cube`);
+    }
   }
 });
 
@@ -158,4 +166,17 @@ Deno.test("statesEqual distinguishes different states", () => {
   const b: CubeState = applyAlg(solvedCube(), "R");
   assertFalse(statesEqual(a, b));
   assert(statesEqual(a, solvedCube()));
+});
+
+Deno.test("isSolved is invariant to whole-cube rotation but not to slice drift", () => {
+  for (const r of ["x", "y", "z", "x2", "y'", "z2", "x y", "z2 y'"]) {
+    assert(isSolved(applyAlg(solvedCube(), r)), `${r} is solved up to rotation`);
+  }
+  // Slice/wide center drift is NOT a whole-cube rotation: pieces don't rotate
+  // with the centers, so it must read as unsolved.
+  for (const drift of ["M", "E", "S", "r", "u", "M2 E"]) {
+    assertFalse(isSolved(applyAlg(solvedCube(), drift)), `${drift} drifts centers, not solved`);
+  }
+  // normalizeOrientation homes a rotated solved cube exactly.
+  assert(statesEqual(normalizeOrientation(applyAlg(solvedCube(), "x y'")), solvedCube()));
 });

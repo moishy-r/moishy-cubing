@@ -26,7 +26,7 @@
 // flips all twelve edges in place. See the notation package's tests and the
 // cube-state tests for these checks.
 
-import { type Move, type MoveFamily, parseAlg } from "./notation.ts";
+import { invert, type Move, type MoveFamily, parseAlg } from "./notation.ts";
 
 /**
  * A cube configuration as cubie permutation + orientation vectors.
@@ -259,12 +259,76 @@ export function applyAlg(s: CubeState, alg: string): CubeState {
   return applyMoves(s, parseAlg(alg));
 }
 
-/** True iff the state is exactly solved (identity permutation and orientation). */
+// --- Whole-cube orientation -------------------------------------------------
+//
+// Only rotations, slices, and wide turns move centers, and every one of them
+// permutes the six centers by an element of the 24-element rotation group. So a
+// state's `cn` uniquely identifies its current whole-cube orientation. We build
+// the 24 orientations once (BFS over the rotation generators) as `cn` key -> the
+// rotation moves that produce it from the home frame, so any state can be rotated
+// back to the home frame (`normalizeOrientation`).
+const ORIENTATIONS: { cn: string; moves: Move[] }[] = (() => {
+  const gens = ["x", "y", "z", "x'", "y'", "z'"].map((m) => parseAlg(m));
+  const seen = new Map<string, Move[]>();
+  const home = solvedCube();
+  seen.set(home.cn.join(","), []);
+  let frontier: { state: CubeState; moves: Move[] }[] = [{ state: home, moves: [] }];
+  while (frontier.length > 0 && seen.size < 24) {
+    const next: typeof frontier = [];
+    for (const { state, moves } of frontier) {
+      for (const g of gens) {
+        const st = applyMoves(state, g);
+        const key = st.cn.join(",");
+        if (!seen.has(key)) {
+          const seq = [...moves, ...g];
+          seen.set(key, seq);
+          next.push({ state: st, moves: seq });
+        }
+      }
+    }
+    frontier = next;
+  }
+  return [...seen].map(([cn, moves]) => ({ cn, moves }));
+})();
+
+/**
+ * Rotates `s` back to the home frame (centers `U R F D L B`), leaving its pieces
+ * where they are *relative to the centers*. This is the projection that makes
+ * "solved" and region goals invariant to whole-cube rotation: a state that is
+ * solved up to a rotation normalizes to the exact solved cube, whereas slice/wide
+ * *center drift* — where the pieces did not rotate together with the centers —
+ * does not (normalizing the centers leaves those pieces off their home slots).
+ */
+export function normalizeOrientation(s: CubeState): CubeState {
+  const home = homingRotation(s);
+  return home.length > 0 ? applyMoves(s, home) : s;
+}
+
+/**
+ * The whole-cube rotation moves that bring `s` to the home frame (empty if `s`
+ * is already home). Prepending these to a phase lets a home-frame alg be applied
+ * to a state reached in a rotated frame — the way a solver reorients before
+ * executing a standard alg. See {@link normalizeOrientation}.
+ */
+export function homingRotation(s: CubeState): Move[] {
+  const key = s.cn.join(",");
+  const o = ORIENTATIONS.find((o) => o.cn === key);
+  // cn is always a rotation-group element (see above), so `o` is always found.
+  return o && o.moves.length > 0 ? invert(o.moves) : [];
+}
+
+/**
+ * True iff the state is solved **up to a whole-cube rotation** — i.e. every face
+ * is a single colour, regardless of which way the cube is being held. A cube that
+ * a rotation-containing alg (or a `z2` inspection) left tilted is still solved.
+ * Slice/wide center drift is correctly *not* solved (see {@link normalizeOrientation}).
+ * For an exact, frame-sensitive check use {@link statesEqual} against {@link SOLVED}.
+ */
 export function isSolved(s: CubeState): boolean {
-  for (let i = 0; i < 8; i++) if (s.cp[i] !== i || s.co[i] !== 0) return false;
-  for (let i = 0; i < 12; i++) if (s.ep[i] !== i || s.eo[i] !== 0) return false;
-  for (let i = 0; i < 6; i++) if (s.cn[i] !== i) return false;
-  return true;
+  const n = normalizeOrientation(s);
+  for (let i = 0; i < 8; i++) if (n.cp[i] !== i || n.co[i] !== 0) return false;
+  for (let i = 0; i < 12; i++) if (n.ep[i] !== i || n.eo[i] !== 0) return false;
+  return true; // centers are home after normalization
 }
 
 /** Structural equality of two cube states. */
