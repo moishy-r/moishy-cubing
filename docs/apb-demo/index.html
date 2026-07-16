@@ -1,0 +1,504 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>APB Solver — Beta Demo</title>
+  <!--
+    BUILD: this page loads ./apb.bundle.js, a self-contained browser bundle of
+    @moishy/apb + @moishy/cubing-core. To regenerate it after changing the
+    library, run from the repo root:
+
+      deno bundle --platform browser --minify -o docs/apb-demo/apb.bundle.js docs/apb-demo/entry.ts
+
+    The options form is generated at runtime from `apbDefinition`, so it always
+    reflects the library's real steps / strategies / replacements / extras.
+  -->
+  <style>
+    body {
+      font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      background: #fff;
+      color: #111;
+      max-width: 820px;
+      margin: 2rem auto;
+      padding: 0 1rem;
+      line-height: 1.5;
+    }
+    h1 { font-size: 1.4rem; margin-bottom: 0.2rem; }
+    h2 { font-size: 1.05rem; margin: 1.4rem 0 0.4rem; border-bottom: 1px solid #eee; padding-bottom: 0.2rem; }
+    .sub { color: #888; font-size: 0.85rem; margin-top: 0; }
+    .beta-banner {
+      border: 1px solid #e0c000;
+      background: #fffbe6;
+      border-radius: 6px;
+      padding: 0.6rem 0.8rem;
+      margin: 1rem 0;
+      font-size: 0.9rem;
+    }
+    .beta-banner strong { color: #8a6d00; }
+    .badge {
+      display: inline-block;
+      background: #8a6d00;
+      color: #fff;
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      padding: 0.1rem 0.4rem;
+      border-radius: 4px;
+      vertical-align: middle;
+    }
+    label { display: block; font-weight: 600; margin: 0.9rem 0 0.3rem; }
+    input[type=text], input[type=number], select, textarea {
+      box-sizing: border-box;
+      padding: 0.45rem;
+      font-family: ui-monospace, Menlo, Consolas, monospace;
+      font-size: 0.9rem;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      background: #fff;
+    }
+    #scramble { width: 100%; }
+    textarea { width: 100%; min-height: 3.5rem; }
+    .field { margin: 0.5rem 0; }
+    .field > label { display: inline-block; min-width: 0; margin: 0 0.4rem 0.2rem 0; }
+    details {
+      border: 1px solid #e5e5e5;
+      border-radius: 6px;
+      padding: 0.3rem 0.8rem;
+      margin: 0.6rem 0;
+      background: #fafafa;
+    }
+    details > summary { cursor: pointer; font-weight: 600; padding: 0.3rem 0; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 0.4rem 1rem; }
+    .unit { border-top: 1px solid #eee; padding: 0.5rem 0; }
+    .unit-title { font-weight: 600; }
+    .unit-meta { color: #999; font-weight: 400; font-size: 0.8rem; }
+    .inline { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; }
+    .inline label { display: inline; font-weight: 400; margin: 0; }
+    .chk { font-weight: 400; }
+    .row { display: flex; gap: 0.5rem; margin-top: 1.2rem; align-items: center; flex-wrap: wrap; }
+    button {
+      padding: 0.55rem 1.2rem;
+      font-size: 1rem;
+      border: 1px solid #444;
+      background: #f0f0f0;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    button.secondary { font-size: 0.85rem; padding: 0.4rem 0.8rem; border-color: #aaa; }
+    button:hover:not(:disabled) { background: #e6e6e6; }
+    button:disabled { opacity: 0.5; cursor: default; }
+    #out { margin-top: 1.5rem; }
+    table { border-collapse: collapse; width: 100%; margin: 0.5rem 0 1rem; }
+    th, td { border: 1px solid #ddd; padding: 0.35rem 0.5rem; text-align: left; font-size: 0.9rem; vertical-align: top; }
+    th { background: #fafafa; }
+    code, .mono { font-family: ui-monospace, Menlo, Consolas, monospace; }
+    .solution {
+      background: #f7f7f7; border: 1px solid #ddd; border-radius: 4px;
+      padding: 0.75rem; word-break: break-word;
+      font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 0.95rem;
+    }
+    .ok { color: #157a2b; font-weight: 600; }
+    .err { color: #b00020; font-weight: 600; }
+    .muted { color: #888; font-size: 0.85rem; }
+    .hint { color: #999; font-size: 0.8rem; font-weight: 400; margin: 0.1rem 0 0; }
+    footer { margin-top: 3rem; color: #999; font-size: 0.8rem; border-top: 1px solid #eee; padding-top: 1rem; }
+  </style>
+</head>
+<body>
+  <h1>APB Solver <span class="badge">BETA</span></h1>
+  <p class="sub">Interactive demo of <code>@moishy/apb</code> — the full solver config is exposed below.</p>
+
+  <div class="beta-banner">
+    <strong>⚠ Beta software.</strong> This solver is a work in progress. Some algorithm sets
+    are still being authored, and heavier settings can be slow (the solver runs single-threaded,
+    right here in your browser). Solutions are independently verified below, but treat everything
+    here as experimental — please double-check any solution before trusting it.
+  </div>
+
+  <label for="scramble">Scramble</label>
+  <input id="scramble" type="text"
+         value="D' F2 L2 B2 F2 R' B2 R F2 L B2 R' F' D2 R' B D' F' L' B"
+         spellcheck="false" autocapitalize="off" autocomplete="off" />
+  <p class="hint">Standard WCA notation: <code>U D L R F B</code>, wide <code>u l f …</code>, slices <code>M E S</code>, rotations <code>x y z</code>; suffix <code>'</code> or <code>2</code>.</p>
+
+  <h2>Solver options</h2>
+  <p class="hint">Every option maps directly to the library's <code>SolverSettings</code> / <code>SolveOptions</code>. Defaults below are tuned for browser speed; use “Library-recommended” for the settings the method ships with.</p>
+  <form id="opts"></form>
+
+  <div class="row">
+    <button id="solve">Solve</button>
+    <button type="button" id="reset" class="secondary">Reset (fast defaults)</button>
+    <button type="button" id="recommended" class="secondary">Library-recommended</button>
+    <span id="status" class="muted"></span>
+  </div>
+
+  <div id="out"></div>
+
+  <footer>
+    Runs entirely in your browser — no server. Built on
+    <code>@moishy/cubing-core</code> + <code>@moishy/algsets</code>. Beta demo.
+  </footer>
+
+  <script type="module">
+    import {
+      apb, apbDefinition, applyAlg, createDefaultMoveCostModel,
+      formatAlg, isSolved, parseAlg, solvedCube,
+    } from "./apb.bundle.js";
+
+    const $ = (id) => document.getElementById(id);
+    const el = (tag, attrs = {}, ...kids) => {
+      const n = document.createElement(tag);
+      for (const [k, v] of Object.entries(attrs)) {
+        if (k === "class") n.className = v;
+        else if (k === "html") n.innerHTML = v;
+        else if (k in n) n[k] = v; else n.setAttribute(k, v);
+      }
+      for (const c of kids) n.append(c);
+      return n;
+    };
+    const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+
+    const DEF = apbDefinition;
+    const REC = DEF.recommendedSettings ?? {};
+    const REC_CN = REC.colorNeutrality;            // the 8-orientation dual-CN set (Move[][])
+    const REC_LA = REC.lookahead ?? { depth: 0 };  // recommended lookahead
+
+    // --- Build the options form from the method definition -------------------
+    const form = $("opts");
+
+    // Global settings ---------------------------------------------------------
+    const global = el("details", { open: true });
+    global.append(el("summary", {}, "Global settings"));
+
+    // Color neutrality: "fixed" | "full" | Move[][]
+    const cnSel = el("select", { id: "cn" },
+      el("option", { value: "fixed" }, "Fixed frame — keep given orientation (1)"),
+      el("option", { value: "recommended" }, `Dual-CN bottom — library default (${REC_CN?.length ?? 8})`),
+      el("option", { value: "full" }, "Full color neutrality — all orientations (24)"),
+      el("option", { value: "custom" }, "Custom — list orientations below"),
+    );
+    const cnCustom = el("textarea", {
+      id: "cnCustom",
+      placeholder: "One orientation per line, e.g.\ny\nz2 y'\n(blank line = keep as-is)",
+      style: "display:none",
+    });
+    cnSel.addEventListener("change", () => {
+      cnCustom.style.display = cnSel.value === "custom" ? "block" : "none";
+    });
+    global.append(el("div", { class: "field" }, el("label", {}, "Color neutrality"), cnSel, cnCustom));
+
+    // Move cost model (createDefaultMoveCostModel options)
+    const mccMode = el("select", { id: "mccMode" },
+      el("option", { value: "2H" }, "Two-handed (2H)"),
+      el("option", { value: "OH" }, "One-handed (OH)"),
+    );
+    const mccHand = el("select", { id: "mccHand" },
+      el("option", { value: "left" }, "Left"),
+      el("option", { value: "right" }, "Right"),
+    );
+    const handWrap = el("span", { id: "handWrap", style: "display:none" },
+      el("label", {}, "OH hand"), mccHand);
+    mccMode.addEventListener("change", () => {
+      handWrap.style.display = mccMode.value === "OH" ? "inline-flex" : "none";
+    });
+    global.append(el("div", { class: "field inline" },
+      el("label", {}, "Move cost model"), mccMode, handWrap));
+
+    // Lookahead
+    const laDepth = el("input", { id: "laDepth", type: "number", min: "0", max: "4", step: "1", value: "1", style: "width:5rem" });
+    global.append(el("div", { class: "field inline" },
+      el("label", {}, "Lookahead depth"), laDepth,
+      el("span", { class: "hint" }, "0 = off. How many units ahead the solver peeks.")));
+
+    // Lookahead scope
+    const laScopeMode = el("select", { id: "laScopeMode" },
+      el("option", { value: "all" }, "All adjacent pairs"),
+      el("option", { value: "restrict" }, "Restrict to selected pairs"),
+    );
+    const scopeBox = el("div", { id: "scopeBox", class: "grid", style: "display:none;margin-top:0.4rem" });
+    const recPairs = REC_LA.scope ?? [];
+    for (const [a, b] of recPairs) {
+      const cb = el("input", { type: "checkbox", checked: true, class: "la-pair", "data-from": a, "data-to": b });
+      scopeBox.append(el("label", { class: "chk inline" }, cb, `${a} → ${b}`));
+    }
+    laScopeMode.addEventListener("change", () => {
+      scopeBox.style.display = laScopeMode.value === "restrict" ? "grid" : "none";
+    });
+    global.append(el("div", { class: "field" },
+      el("label", {}, "Lookahead scope"), laScopeMode,
+      el("p", { class: "hint" }, "Recommended scope is preselected. Leave on “all” to peek across every adjacent unit."),
+      scopeBox));
+
+    // Global maxDepth (settings.maxDepth)
+    const sMaxDepth = el("input", { id: "sMaxDepth", type: "number", min: "0", step: "1", placeholder: "default", style: "width:6rem" });
+    global.append(el("div", { class: "field inline" },
+      el("label", {}, "Default search depth (settings.maxDepth)"), sMaxDepth,
+      el("span", { class: "hint" }, "Blank = each phase's own bound.")));
+
+    form.append(global);
+
+    // Per-step options --------------------------------------------------------
+    const stepsBox = el("details", { open: true });
+    stepsBox.append(el("summary", {}, "Per-step strategy & phase-chaining"));
+    for (const step of DEF.steps) {
+      const unit = el("div", { class: "unit" });
+      unit.append(el("div", { class: "unit-title" }, `${step.label ?? step.id} `,
+        el("span", { class: "unit-meta" }, `(step id: ${step.id})`)));
+
+      // forceStrategy
+      const force = el("select", { class: "st-force", "data-step": step.id },
+        el("option", { value: "" }, "Auto (race enabled strategies)"));
+      for (const s of step.strategies) {
+        force.append(el("option", { value: s.id }, `Force: ${s.label ?? s.id}`));
+      }
+      // Default: block223 forces fbDfdb (proven fast); others auto.
+      if (step.id === "block223") force.value = "fbDfdb";
+
+      // enabledStrategies (only matters in Auto)
+      const stratWrap = el("div", { class: "inline" });
+      for (const s of step.strategies) {
+        const on = s.enabledByDefault ?? true;
+        const cb = el("input", { type: "checkbox", checked: on, class: "st-enabled", "data-step": step.id, "data-strat": s.id });
+        stratWrap.append(el("label", { class: "chk inline" }, cb, `${s.label ?? s.id}${on ? "" : " (off by default)"}`));
+      }
+
+      // phaseChaining
+      const pcEnabled = el("input", { type: "checkbox", checked: true, class: "st-pc", "data-step": step.id });
+      const pcSlack = el("input", { type: "number", min: "0", step: "1", value: "2", class: "st-slack", "data-step": step.id, style: "width:4.5rem" });
+
+      unit.append(
+        el("div", { class: "field inline" }, el("label", {}, "Strategy"), force),
+        step.strategies.length > 1
+          ? el("div", { class: "field" }, el("span", { class: "hint" }, "Enabled when Auto:"), stratWrap)
+          : el("span"),
+        el("div", { class: "field inline" },
+          el("label", { class: "chk inline" }, pcEnabled, "Phase-chaining"),
+          el("label", {}, "slack"), pcSlack),
+      );
+      stepsBox.append(unit);
+    }
+    form.append(stepsBox);
+
+    // Replacements & Extras ---------------------------------------------------
+    const buildUnitToggles = (list, cls, kindLabel) => {
+      const box = el("details", {});
+      box.append(el("summary", {}, `${kindLabel} (opt-in)`));
+      for (const u of list) {
+        const enabled = el("input", { type: "checkbox", class: `${cls}-en`, "data-id": u.id });
+        const mode = el("select", { class: `${cls}-mode`, "data-id": u.id },
+          el("option", { value: "compete" }, "compete"),
+          el("option", { value: "force" }, "force"),
+        );
+        mode.value = u.mode ?? "compete";
+        const region = Array.isArray(u.region) ? `${u.region[0]} … ${u.region[1]}` : "";
+        const trig = u.trigger?.kind ? `, trigger: ${u.trigger.kind}` : "";
+        box.append(el("div", { class: "unit inline" },
+          el("label", { class: "chk inline" }, enabled, el("strong", {}, u.label ?? u.id)),
+          el("span", { class: "unit-meta" }, `[${u.id}] region ${region}${trig}`),
+          el("label", {}, "mode"), mode));
+      }
+      return box;
+    };
+    if (DEF.replacements?.length) form.append(buildUnitToggles(DEF.replacements, "rep", "Replacements"));
+    if (DEF.extras?.length) form.append(buildUnitToggles(DEF.extras, "ext", "Extras"));
+
+    // Per-call solve options --------------------------------------------------
+    const callBox = el("details", {});
+    callBox.append(el("summary", {}, "Per-call options (SolveOptions)"));
+    const oMaxDepth = el("input", { id: "oMaxDepth", type: "number", min: "0", step: "1", placeholder: "default", style: "width:6rem" });
+    const oTime = el("input", { id: "oTime", type: "number", min: "0", step: "100", placeholder: "none", style: "width:7rem" });
+    callBox.append(
+      el("div", { class: "field inline" }, el("label", {}, "maxDepth"), oMaxDepth,
+        el("span", { class: "hint" }, "Overall search-depth bound for this call.")),
+      el("div", { class: "field inline" }, el("label", {}, "timeBudgetMs"), oTime,
+        el("span", { class: "hint" }, "Stops early with a partial result if exceeded.")),
+    );
+    form.append(callBox);
+
+    // --- Presets -------------------------------------------------------------
+    function applyRecommended() {
+      cnSel.value = "recommended"; cnCustom.style.display = "none";
+      mccMode.value = "2H"; handWrap.style.display = "none";
+      laDepth.value = String(REC_LA.depth ?? 1);
+      laScopeMode.value = REC_LA.scope ? "restrict" : "all";
+      scopeBox.style.display = REC_LA.scope ? "grid" : "none";
+      document.querySelectorAll(".la-pair").forEach((c) => (c.checked = true));
+      sMaxDepth.value = "";
+      // Steps: auto everywhere, default-enabled strategies, phase-chaining on.
+      document.querySelectorAll(".st-force").forEach((s) => (s.value = ""));
+      document.querySelectorAll(".st-enabled").forEach((c) => {
+        const step = DEF.steps.find((x) => x.id === c.dataset.step);
+        const strat = step.strategies.find((x) => x.id === c.dataset.strat);
+        c.checked = strat.enabledByDefault ?? true;
+      });
+      document.querySelectorAll(".st-pc").forEach((c) => (c.checked = true));
+      document.querySelectorAll(".st-slack").forEach((i) => (i.value = "2"));
+      document.querySelectorAll(".rep-en,.ext-en").forEach((c) => (c.checked = false));
+      oMaxDepth.value = ""; oTime.value = "";
+    }
+    function applyFastDefaults() {
+      applyRecommended();
+      cnSel.value = "fixed";                 // fixed frame — keeps the demo snappy
+      document.querySelector('.st-force[data-step="block223"]').value = "fbDfdb";
+    }
+
+    // --- Collect settings from the form --------------------------------------
+    function collectSettings() {
+      const settings = {};
+
+      // colorNeutrality
+      if (cnSel.value === "fixed") settings.colorNeutrality = "fixed";
+      else if (cnSel.value === "full") settings.colorNeutrality = "full";
+      else if (cnSel.value === "recommended") settings.colorNeutrality = REC_CN ?? "fixed";
+      else {
+        const orientations = cnCustom.value.split("\n")
+          .map((l) => l.trim())
+          .map((l) => (l === "" ? [] : parseAlg(l)));
+        settings.colorNeutrality = orientations.length ? orientations : "fixed";
+      }
+
+      // moveCostModel
+      settings.moveCostModel = createDefaultMoveCostModel(
+        mccMode.value === "OH" ? { mode: "OH", handedness: mccHand.value } : { mode: "2H" },
+      );
+
+      // lookahead
+      const depth = Number(laDepth.value) || 0;
+      const lookahead = { depth };
+      if (laScopeMode.value === "restrict") {
+        lookahead.scope = [...document.querySelectorAll(".la-pair")]
+          .filter((c) => c.checked)
+          .map((c) => [c.dataset.from, c.dataset.to]);
+      }
+      settings.lookahead = lookahead;
+
+      // settings.maxDepth
+      if (sMaxDepth.value !== "") settings.maxDepth = Number(sMaxDepth.value);
+
+      // stepOptions
+      const stepOptions = {};
+      for (const step of DEF.steps) {
+        const o = {};
+        const force = document.querySelector(`.st-force[data-step="${step.id}"]`).value;
+        if (force) o.forceStrategy = force;
+        const enabled = [...document.querySelectorAll(`.st-enabled[data-step="${step.id}"]`)]
+          .filter((c) => c.checked).map((c) => c.dataset.strat);
+        if (enabled.length && enabled.length !== step.strategies.length) o.enabledStrategies = enabled;
+        const pcEnabled = document.querySelector(`.st-pc[data-step="${step.id}"]`).checked;
+        const slack = Number(document.querySelector(`.st-slack[data-step="${step.id}"]`).value);
+        o.phaseChaining = { enabled: pcEnabled, slack };
+        stepOptions[step.id] = o;
+      }
+      settings.stepOptions = stepOptions;
+
+      // replacements / extras
+      const collectUnits = (list, cls) => {
+        const out = {};
+        for (const u of list ?? []) {
+          const en = document.querySelector(`.${cls}-en[data-id="${u.id}"]`).checked;
+          const mode = document.querySelector(`.${cls}-mode[data-id="${u.id}"]`).value;
+          out[u.id] = { enabled: en, mode };
+        }
+        return out;
+      };
+      settings.replacements = collectUnits(DEF.replacements, "rep");
+      settings.extras = collectUnits(DEF.extras, "ext");
+
+      // per-call options
+      const opts = {};
+      if (oMaxDepth.value !== "") opts.maxDepth = Number(oMaxDepth.value);
+      if (oTime.value !== "") opts.timeBudgetMs = Number(oTime.value);
+
+      return { settings, opts };
+    }
+
+    // --- Solve ---------------------------------------------------------------
+    let busy = false;
+    async function solve() {
+      if (busy) return;
+      const scramble = $("scramble").value.trim();
+      const out = $("out"), status = $("status");
+      out.innerHTML = "";
+      if (!scramble) { status.textContent = "Enter a scramble."; return; }
+
+      let cfg;
+      try { cfg = collectSettings(); }
+      catch (e) {
+        out.innerHTML = `<p class="err">Bad options: ${esc(e.message || e)}</p>
+          <p class="muted">Check the custom orientation notation.</p>`;
+        return;
+      }
+
+      busy = true; $("solve").disabled = true;
+      status.textContent = "Solving…";
+      await new Promise((r) => setTimeout(r, 20));
+
+      let r;
+      try {
+        r = await apb.solve(scramble, cfg.settings, cfg.opts);
+      } catch (e) {
+        status.textContent = "";
+        out.innerHTML = `<p class="err">Could not solve: ${esc(e.message || e)}</p>
+          <p class="muted">Check the scramble notation and options.</p>`;
+        busy = false; $("solve").disabled = false;
+        return;
+      }
+      status.textContent = "";
+
+      let verified = false;
+      try { verified = isSolved(applyAlg(applyAlg(solvedCube(), scramble), r.solutionString)); }
+      catch { /* leave false */ }
+
+      const rows = r.segments.map((seg) => {
+        const detail = seg.phases.map((p) => {
+          const tag = p.kind === "algorithmic" ? (p.caseId ?? "") : "search";
+          const mv = p.moves.length ? formatAlg(p.moves) : "—";
+          return `<div><span class="muted">${esc(p.phaseId)}${tag ? " · " + esc(tag) : ""}:</span> <span class="mono">${esc(mv)}</span></div>`;
+        }).join("");
+        const alts = seg.alternatives?.length
+          ? `<div class="muted">alts: ${seg.alternatives.map((a) => `${esc(a.strategyId)}=${a.cost.toFixed(1)}`).join(", ")}</div>`
+          : "";
+        const mv = seg.moves.length ? formatAlg(seg.moves) : "—";
+        return `<tr>
+          <td>${esc(seg.unitId)}<div class="muted">${esc(seg.kind)} · ${esc(seg.strategyId)}</div></td>
+          <td class="mono">${esc(mv)}</td>
+          <td>${detail}${alts}</td>
+          <td>${seg.cost.toFixed(2)}</td>
+        </tr>`;
+      }).join("");
+
+      out.innerHTML = `
+        <p>
+          <span class="${r.solved && verified ? "ok" : "err"}">${r.solved && verified ? "✓ Solved" : "✗ Not solved"}</span>
+          &nbsp;·&nbsp; ${r.solution.length} moves &nbsp;·&nbsp; cost ${r.cost.toFixed(2)}
+          ${r.orientation.length ? `&nbsp;·&nbsp; orientation <span class="mono">${esc(formatAlg(r.orientation))}</span>` : ""}
+        </p>
+        <table>
+          <thead><tr><th>Step</th><th>Moves</th><th>Detail</th><th>Cost</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+        <label>Full solution</label>
+        <div class="solution">${esc(r.solutionString)}</div>
+        <p class="muted">${verified
+          ? "Verified: scramble + solution applied to a solved cube returns it to solved."
+          : "⚠ Independent verification did not pass — treat this solution with caution."}</p>
+      `;
+      busy = false; $("solve").disabled = false;
+    }
+
+    $("solve").addEventListener("click", solve);
+    $("reset").addEventListener("click", applyFastDefaults);
+    $("recommended").addEventListener("click", applyRecommended);
+    $("scramble").addEventListener("keydown", (e) => { if (e.key === "Enter") solve(); });
+
+    // Warm up on load: the first solve builds a pruning table (a few seconds),
+    // cached for every solve after. Running it against the prefilled scramble
+    // also shows a worked example immediately.
+    applyFastDefaults();
+    $("solve").disabled = true;
+    $("status").textContent = "Preparing solver (first run builds lookup tables)…";
+    window.addEventListener("load", () => setTimeout(solve, 50));
+  </script>
+</body>
+</html>
