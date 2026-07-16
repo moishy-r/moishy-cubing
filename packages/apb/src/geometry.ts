@@ -211,6 +211,31 @@ export function eoSignature(): (s: CubeState) => string {
   return (s) => EO_EDGE_SLOTS.map((slot) => s.eo[slot]).join("");
 }
 
+/**
+ * Orientation-only recognition: every piece's orientation, by slot, ignoring
+ * permutation entirely. The recognition key for an *orientation* step (OLL /
+ * OCLL): two states are the same case iff their corner+edge orientation patterns
+ * match, regardless of how the last layer is permuted. Slot-based like
+ * {@link eoSignature}, so AUF rotates the pattern and the coset builders /
+ * `runPhase` align a live state to the stored representative. (A plain
+ * whole-facelet signature would additionally pin the permutation — the bug that
+ * kept OLL/OCLL from recognizing any real solve's last layer.)
+ */
+export function orientationSignature(): (s: CubeState) => string {
+  return (s) => `${s.co.join("")}|${s.eo.join("")}`;
+}
+
+/**
+ * Corner-only recognition: corner orientation + corner permutation, ignoring
+ * every edge. The recognition key for COLL, which fixes the last-layer corners
+ * (orientation *and* permutation) while leaving edge permutation to EPLL — so two
+ * states are the same COLL case iff their corner states match, whatever the edges
+ * are doing. Slot-based, so AUF is handled upstream.
+ */
+export function cornerSignature(): (s: CubeState) => string {
+  return (s) => `${s.co.join("")}|${s.cp.join("")}`;
+}
+
 // --- CaseLookup builders ------------------------------------------------------
 
 /**
@@ -259,25 +284,35 @@ const NON_ROTATIONS: MoveFamily[] = [
   "f",
   "b",
 ];
-const SINGLE_MOVE_STATES = NON_ROTATIONS.map((family) => ({
-  family,
-  state: applyMoves(solvedCube(), [{ family, amount: 1 }]),
-}));
+// Quarter-turn states (both directions) for every non-rotation family, for
+// identifying what a quarter turn becomes once conjugated by a rotation.
+const QUARTER_TURN_STATES = NON_ROTATIONS.flatMap((family) =>
+  ([1, 3] as const).map((amount) => ({
+    family,
+    amount,
+    state: applyMoves(solvedCube(), [{ family, amount }]),
+  }))
+);
 
 /**
- * The single face/slice/wide move equal to `rot · {family} · rot⁻¹` — i.e. what
- * `family` becomes once the cube has been rotated by `rot`. Computed against the
- * engine (not a hand table) so it is correct for every family, including slices
- * and wides. `rot` is the accumulated rotation moves seen so far.
+ * The single quarter turn equal to `rot · {family}(quarter) · rot⁻¹` — i.e. what
+ * a quarter turn of `family` becomes once the cube has been rotated by `rot`.
+ * A rotation conjugates a quarter turn to a quarter turn, but possibly of the
+ * *opposite* direction (e.g. `M` under `y` is `S'`), so the resulting `amount`
+ * (1 or 3) is returned alongside the family and must not be assumed to be 1.
+ * Computed against the engine (not a hand table) so it is correct for every
+ * family, including slices and wides. `rot` is the accumulated rotation so far.
  */
-function conjugateFamily(family: MoveFamily, rot: Move[]): MoveFamily {
-  if (rot.length === 0) return family;
+function conjugateQuarter(
+  family: MoveFamily,
+  rot: Move[],
+): { family: MoveFamily; amount: 1 | 3 } {
   const target = applyMoves(solvedCube(), [...rot, { family, amount: 1 }, ...invert(rot)]);
-  for (const { family: g, state } of SINGLE_MOVE_STATES) {
-    if (statesEqual(target, state)) return g;
+  for (const q of QUARTER_TURN_STATES) {
+    if (statesEqual(target, q.state)) return { family: q.family, amount: q.amount };
   }
   // A rotation conjugates a quarter-turn to a quarter-turn, so this is unreachable.
-  throw new Error(`conjugate of ${family} under rotation is not a single move`);
+  throw new Error(`conjugate of ${family} under rotation is not a single quarter turn`);
 }
 
 /**
@@ -287,13 +322,27 @@ function conjugateFamily(family: MoveFamily, rot: Move[]): MoveFamily {
  * drops it. See /DESIGN.md's "tilted alg" caveat: some imported last-layer algs
  * end tilted (e.g. an unbalanced `y`), which is fine for a speedsolver holding
  * the cube rotated but not for APB's fixed-frame, center-tracked solve.
+ *
+ * Conjugation is a homomorphism, so `X^n` under `rot` becomes `(conj X)^n`: the
+ * relabeled move's amount is the conjugate quarter turn's direction times the
+ * original amount (mod 4). This matters for slices/wides, whose conjugate can be
+ * a prime — a double stays a double, but `M2`→`S2`, `M`→`S'`, `M'`→`S`, etc.
  */
 export function stripRotations(moves: Move[]): Move[] {
   const rot: Move[] = [];
   const out: Move[] = [];
   for (const m of moves) {
-    if (ROTATIONS.has(m.family)) rot.push(m);
-    else out.push({ family: conjugateFamily(m.family, rot), amount: m.amount });
+    if (ROTATIONS.has(m.family)) {
+      rot.push(m);
+      continue;
+    }
+    if (rot.length === 0) {
+      out.push(m);
+      continue;
+    }
+    const q = conjugateQuarter(m.family, rot);
+    const amount = ((q.amount * m.amount) % 4) as 1 | 2 | 3;
+    out.push({ family: q.family, amount });
   }
   return out;
 }
@@ -316,11 +365,19 @@ function fixedFrameMoves(moves: Move[]): Move[] {
 }
 
 /**
- * Like {@link regionLookup}, but for a *terminal* full-last-layer step (ZBLL,
- * and the PLL it falls through to): recognizes a case up to **both** pre- and
- * post-AUF.
+ * Like {@link regionLookup}, but (a) de-rotates each variant to the fixed frame
+ * ({@link fixedFrameMoves}) and re-derives recognition from the de-rotated
+ * primary, and (b) indexes each case under **both** pre- and post-AUF.
  *
- * Why this is needed only here. `runPhase` already tries every pre-AUF (a U turn
+ * Both properties are *required* for a terminal full-last-layer step (ZBLL, and
+ * the PLL it falls through to) — see below. They are also useful for the
+ * non-terminal orientation/corner steps (OCLL, COLL, full OLL) with a projection
+ * signature: those sets contain tilted primaries that only de-rotation makes
+ * recognizable + fixed-frame-solvable, and the extra post-AUF indexing is a
+ * harmless superset there (`runPhase` still picks the pre/post AUF that meets the
+ * step's own goal; any residual is absorbed by the next phase's pre-AUF).
+ *
+ * Why both-AUF is *needed* for a terminal step. `runPhase` already tries every pre-AUF (a U turn
  * before the alg) and post-AUF (a U turn after). For a *non-terminal* algorithmic
  * step that only has to reach a region goal, that is enough — any residual U
  * misalignment it leaves is simply absorbed by the *next* step's pre-AUF, so its

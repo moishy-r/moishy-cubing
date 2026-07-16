@@ -492,3 +492,54 @@ Deno.test(
     );
   },
 );
+
+// Regression: force-mode replacements/extras must actually FIRE against real,
+// live solve states — not just recognize their own canonical recognition states.
+// This is the gap that let permutation-sensitive full-facelet signatures ship:
+// OCLL/COLL/OLL recognize on a *projection* (orientation / corners), and their
+// tilted primaries must be de-rotated, or a real last layer never matches.
+Deno.test("force-mode LL replacements fire on a real solve and verify", async () => {
+  const scramble = "D' F2 L2 B2 F2 R' B2 R F2 L B2 R' F' D2 R' B D' F' L' B";
+  const base = {
+    colorNeutrality: "fixed" as const,
+    lookahead: { depth: 1 },
+    stepOptions: { block223: { forceStrategy: "fbDfdb" } },
+  };
+  const verifies = (r: { orientation: Move[]; solution: Move[] }) =>
+    isSolved(applyMoves(
+      applyMoves(solvedCube(), [...invert(r.orientation), ...parseAlg(scramble), ...r.orientation]),
+      r.solution,
+    ));
+
+  for (const id of ["ocllPll", "collEpll"]) {
+    const r = await apb.solve(scramble, {
+      ...base,
+      replacements: { [id]: { enabled: true, mode: "force" } },
+    }, {});
+    assert(r.solved && verifies(r), `${id}: solution must solve the scramble`);
+    assert(
+      r.segments.some((s) => s.unitId === id && s.kind === "replacement"),
+      `forced ${id} must appear in the solve (it silently dropped out)`,
+    );
+  }
+});
+
+Deno.test("force-mode OLL extra fires when its F2L-solved trigger is met", async () => {
+  // Pure last-layer scrambles keep the F2L solved, satisfying the oll extra's
+  // boundary trigger at the eo step; OLL must then recognize and solve.
+  for (const scramble of ["R U R' U R U2 R'", "F R U R' U' F'", "r U R' U' r' F R F'"]) {
+    const r = await apb.solve(scramble, {
+      colorNeutrality: "fixed",
+      lookahead: { depth: 0 },
+      extras: { oll: { enabled: true, mode: "force" } },
+    }, {});
+    assert(
+      r.solved && isSolved(applyMoves(applyMoves(solvedCube(), parseAlg(scramble)), r.solution)),
+      `oll extra (${scramble}): solution must solve`,
+    );
+    assert(
+      r.segments.some((s) => s.unitId === "oll" && s.kind === "extra"),
+      `oll extra (${scramble}) must fire`,
+    );
+  }
+});

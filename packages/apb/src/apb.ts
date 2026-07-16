@@ -73,9 +73,11 @@ import {
   aufInvariantLookup,
   axisCanonical,
   BLOCK223,
+  cornerSignature,
   eoSignature,
   F2L,
   fallThrough,
+  orientationSignature,
   pieceSignature,
   regionCoordinate,
   regionLookup,
@@ -323,9 +325,16 @@ const zbll: MethodDefinition["steps"][number] = {
 // ocllPll: OCLL (orient LL corners; edges already EO'd) then PLL. OCLL is the
 // 7 all-edges-oriented cases of the OLL set (OLL 21-27), reused rather than
 // re-authored. Lookahead ocll->pll picks the OCLL variant setting up cheaper PLL.
+// Recognition (see geometry.ts): OCLL keys on last-layer *orientation* only
+// (`orientationSignature`) — the OLL set's default full-facelet signature also
+// pins the permutation, so it never matched a real solve's last layer. Built with
+// `aufInvariantLookup` so the de-rotation applies (some OLL primaries end tilted)
+// and both AUFs are covered. PLL is terminal here (reaches solved), so it too
+// needs the both-AUF, de-rotating lookup — a plain pre-AUF-only `regionLookup`
+// would only recognize the quarter of PLL states needing no post-AUF.
 const OCLL_IDS = new Set(["oll-21", "oll-22", "oll-23", "oll-24", "oll-25", "oll-26", "oll-27"]);
-const ocllLookup = regionLookup(ollSet, ollSet.signature, (c) => OCLL_IDS.has(c.id));
-const pllLookup = regionLookup(pllSet, pllSet.signature);
+const ocllLookup = aufInvariantLookup(ollSet, orientationSignature(), (c) => OCLL_IDS.has(c.id));
+const pllLookup = aufInvariantLookup(pllSet, pllSet.signature);
 const ocllPll: Replacement = {
   id: "ocllPll",
   label: "OCLL + PLL",
@@ -344,11 +353,18 @@ const ocllPll: Replacement = {
 // set — it's the `pll` cases where corners are already solved (Ua/Ub/Z/H),
 // filtered out. No lookahead past COLL (EPLL is fully determined by COLL's end).
 const cornersSolved = (s: CubeState) => s.cp.every((c, i) => c === i && s.co[i] === 0);
-const epllLookup = regionLookup(
+// EPLL is terminal (reaches solved) -> both-AUF, de-rotating lookup like PLL.
+const epllLookup = aufInvariantLookup(
   pllSet,
   pllSet.signature,
   (c) => cornersSolved(pllSet.recognitionState(c.id)),
 );
+// COLL keys on the *corners* only (`cornerSignature`) — the coll-epll set's
+// default full-facelet signature pins the edge permutation EPLL is meant to fix,
+// so it never matched. Built with `aufInvariantLookup` so the many tilted COLL
+// primaries are de-rotated (their raw form ends in a whole-cube rotation, which
+// left the recognition state — and the applied alg — out of the fixed frame).
+const collLookup = aufInvariantLookup(collSet, cornerSignature());
 const collEpll: Replacement = {
   id: "collEpll",
   label: "COLL + EPLL",
@@ -357,7 +373,7 @@ const collEpll: Replacement = {
   strategies: [{
     id: "collEpll",
     phases: [
-      alg("coll", cornersSolved, regionLookup(collSet, collSet.signature)),
+      alg("coll", cornersSolved, collLookup),
       alg("epll", isSolved, epllLookup),
     ],
   }],
@@ -441,6 +457,14 @@ const eodrLs: Replacement = {
     id: "eodrLs",
     // eodr recognizes on the full arrangement (position + orientation) of the 6
     // EO edges — orientation alone collides (it also fixes DR + U-edge order).
+    //
+    // KNOWN LIMITATION (data, not code): the `eodr` set is a partial stub (55
+    // cases) relative to the full EODR space it recognizes on (U-edge position +
+    // orientation + DR ≈ thousands up to AUF). So most live states are not
+    // covered, and this replacement (even forced) simply drops out and normal
+    // eo->lxs solving runs. Unlike OCLL/COLL/OLL — whose non-firing was a
+    // signature/de-rotation bug now fixed — making eodrLs fire generally needs
+    // the `eodr` algset completed (and its intended EODR definition pinned down).
     phases: [
       alg(
         "eodr",
@@ -457,8 +481,10 @@ const eodrLs: Replacement = {
 const cornersOriented = (s: CubeState) => s.co.every((o) => o === 0);
 
 // oll (region [eo..zbll], boundary trigger = whole F2L already solved): full OLL
-// then PLL, straight from an un-EO'd finished F2L. `pll` reused.
-const ollLookup = regionLookup(ollSet, ollSet.signature);
+// then PLL, straight from an un-EO'd finished F2L. `pll` reused. OLL keys on
+// last-layer *orientation* only (`orientationSignature`); built via
+// `aufInvariantLookup` for de-rotation + both-AUF coverage (same fix as OCLL).
+const ollLookup = aufInvariantLookup(ollSet, orientationSignature());
 const ollExtra = {
   id: "oll",
   label: "OLL + PLL",
@@ -476,6 +502,14 @@ const ollExtra = {
 
 // zbls (region [eo, lxs], boundary trigger = DR already solved after brPair):
 // solve EO + last slot in one alg, landing ZBLL-ready.
+//
+// KNOWN LIMITATION (recognition): this still uses the algset's default
+// full-facelet signature, which — like the pre-fix OCLL/COLL/OLL — pins the
+// last-layer permutation that zbls deliberately leaves for ZBLL, so it fails to
+// recognize live states. Fixing it needs a projection signature over just the
+// pieces zbls fixes (EO of all edges + the last-slot DFR/FR), built with
+// `aufInvariantLookup` (de-rotation), then verified against the 302-case set.
+// Deferred: the trigger (DR solved right after brPair) is rarely met anyway.
 const zblsExtra = {
   id: "zbls",
   label: "ZBLS",
