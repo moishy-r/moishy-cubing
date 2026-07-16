@@ -13,7 +13,7 @@
 // threading context across phases, Replacements, Extras/checkpoints — live in
 // the method pipeline runner (step 6); `runPhase` is the primitive it builds on.
 
-import { applyMoves, type CubeState } from "./cube-state.ts";
+import { applyMoves, type CubeState, homingRotation } from "./cube-state.ts";
 import type { Move, MoveFamily } from "./notation.ts";
 import { createDefaultMoveCostModel, type MoveCostModel } from "./move-cost.ts";
 import { search, searchAStar, searchAStarMany, searchMany } from "./search.ts";
@@ -218,6 +218,25 @@ function aufOptions(families: MoveFamily[]): Move[][] {
 }
 
 /**
+ * Reorients `start` to the home frame so a home-frame alg (or a home-frame
+ * pruning heuristic) applies correctly even when the phase's *input* is itself
+ * in a rotated frame — a mid-solve rotation, or any step reached after a
+ * center-shifting move (as rotation-heavy methods like CFOP/ZB need).
+ *
+ * Returns the reoriented state plus the whole-cube rotation moves that produced
+ * it: a phase runs its recognition/search against `homed`, then *prepends*
+ * `homeMoves` to whatever it emits, so its solution begins by reorienting the
+ * cube exactly as a solver would before executing a standard alg. When `start`
+ * is already home (`homeMoves` empty — always the case for APB, whose block
+ * search holds centers home through the terminal ZBLL) this is a no-op and the
+ * phase runs byte-for-byte as before. See {@link import("./cube-state.ts").homingRotation}.
+ */
+function homeStart(start: CubeState): { homed: CubeState; homeMoves: Move[] } {
+  const homeMoves = homingRotation(start);
+  return { homed: homeMoves.length > 0 ? applyMoves(start, homeMoves) : start, homeMoves };
+}
+
+/**
  * Executes a single phase against `start`, returning its best (cheapest by MCC)
  * segment, or `null` if the phase cannot reach its goal.
  *
@@ -233,30 +252,40 @@ export function runPhase(
 ): PhaseSegment | null {
   const costModel = context.costModel ?? createDefaultMoveCostModel();
   const prevMove = context.prevMove ?? null;
+  // Reorient a rotated input to the home frame first; the phase runs against the
+  // homed state and prepends the rotation to its solution (no-op when home).
+  const { homed, homeMoves } = homeStart(start);
+  const innerPrev = homeMoves.length > 0 ? homeMoves[homeMoves.length - 1] : prevMove;
 
   if (phase.kind === "search") {
     const engine = phase.useAStar ? searchAStar : search;
     const result = engine({
-      start,
+      start: homed,
       goal: phase.goal,
       moves: phase.moves,
       heuristic: phase.heuristic,
       canFollow: phase.canFollow,
       costModel,
-      prevMove,
+      prevMove: innerPrev,
       stateKey: phase.stateKey,
       maxDepth: phase.maxDepth ?? context.maxDepth,
       signal: context.signal,
       deadline: context.deadline,
     });
     if (!result.found) return null;
+    const moves = homeMoves.length > 0 ? [...homeMoves, ...result.moves] : result.moves;
+    // result.cost is threaded from innerPrev (the last homing move); prefix the
+    // homing rotations' own cost, threaded from the external prevMove.
+    const cost = homeMoves.length > 0
+      ? segmentCost(homeMoves, prevMove, costModel) + result.cost
+      : result.cost;
     return {
       phaseId: phase.id,
       kind: "search",
-      moves: result.moves,
-      cost: result.cost,
+      moves,
+      cost,
       startState: start,
-      endState: applyMoves(start, result.moves),
+      endState: applyMoves(start, moves),
       nodesVisited: result.nodesVisited,
     };
   }
@@ -272,14 +301,15 @@ export function runPhase(
   // is handled here rather than as data. A skip is usually the cheapest option,
   // so it is seeded first and the case search only replaces it if truly cheaper.
   for (const pre of auf) {
-    const endState = applyMoves(start, pre);
+    const endState = applyMoves(homed, pre);
     if (!phase.goal(endState)) continue;
-    const cost = segmentCost(pre, prevMove, costModel);
+    const moves = homeMoves.length > 0 ? [...homeMoves, ...pre] : [...pre];
+    const cost = segmentCost(moves, prevMove, costModel);
     if (best && cost >= best.cost) continue;
     best = {
       phaseId: phase.id,
       kind: "algorithmic",
-      moves: [...pre],
+      moves,
       cost,
       startState: start,
       endState,
@@ -288,21 +318,22 @@ export function runPhase(
   }
 
   for (const pre of auf) {
-    const aligned = applyMoves(start, pre);
+    const aligned = applyMoves(homed, pre);
     const matched = phase.cases.find(aligned);
     if (!matched) continue;
     for (let vi = 0; vi < matched.algs.length; vi++) {
       const variant = matched.algs[vi];
       const afterAlg = applyMoves(aligned, variant.moves);
       for (const post of auf) {
-        const moves = [...pre, ...variant.moves, ...post];
+        const moves = [...homeMoves, ...pre, ...variant.moves, ...post];
         const endState = applyMoves(afterAlg, post);
         if (!phase.goal(endState)) continue;
         const cost = segmentCost(moves, prevMove, costModel);
         if (best && cost >= best.cost) continue;
+        const offset = homeMoves.length + pre.length;
         const checkpoints = variant.checkpoints?.map((c) => ({
           label: c.label,
-          index: c.index + pre.length,
+          index: c.index + offset,
         }));
         best = {
           phaseId: phase.id,
@@ -358,9 +389,14 @@ export function runPhaseCandidates(
 ): PhaseSegment[] {
   const costModel = context.costModel ?? createDefaultMoveCostModel();
   const prevMove = context.prevMove ?? null;
+  // Reorient a rotated input to the home frame (no-op when already home); the
+  // phase runs against `homed` and prepends `homeMoves` to every candidate.
+  const { homed, homeMoves } = homeStart(start);
+  const innerPrev = homeMoves.length > 0 ? homeMoves[homeMoves.length - 1] : prevMove;
+  const homePrefixCost = homeMoves.length > 0 ? segmentCost(homeMoves, prevMove, costModel) : 0;
 
   if (phase.kind === "search") {
-    // No pool requested → single cheapest.
+    // No pool requested → single cheapest (runPhase homes internally).
     if (opts.searchSlack === undefined) {
       const only = runPhase(phase, start, context);
       return only ? [only] : [];
@@ -372,13 +408,13 @@ export function runPhaseCandidates(
     // (heuristic-less) search phases, where its length-slack DFS is affordable.
     const results = phase.useAStar
       ? searchAStarMany({
-        start,
+        start: homed,
         goal: phase.goal,
         moves: phase.moves,
         heuristic: phase.heuristic,
         canFollow: phase.canFollow,
         costModel,
-        prevMove,
+        prevMove: innerPrev,
         stateKey: phase.poolStateKey ?? phase.stateKey,
         maxDepth: phase.maxDepth ?? context.maxDepth,
         costSlack: opts.searchSlack,
@@ -387,28 +423,31 @@ export function runPhaseCandidates(
         deadline: context.deadline,
       })
       : searchMany({
-        start,
+        start: homed,
         goal: phase.goal,
         moves: phase.moves,
         heuristic: phase.heuristic,
         canFollow: phase.canFollow,
         costModel,
-        prevMove,
+        prevMove: innerPrev,
         maxDepth: phase.maxDepth ?? context.maxDepth,
         slack: opts.searchSlack,
         maxSolutions: opts.max,
         signal: context.signal,
         deadline: context.deadline,
       });
-    return results.map((r) => ({
-      phaseId: phase.id,
-      kind: "search" as const,
-      moves: r.moves,
-      cost: r.cost,
-      startState: start,
-      endState: applyMoves(start, r.moves),
-      nodesVisited: r.nodesVisited,
-    }));
+    return results.map((r) => {
+      const moves = homeMoves.length > 0 ? [...homeMoves, ...r.moves] : r.moves;
+      return {
+        phaseId: phase.id,
+        kind: "search" as const,
+        moves,
+        cost: homePrefixCost + r.cost,
+        startState: start,
+        endState: applyMoves(start, moves),
+        nodesVisited: r.nodesVisited,
+      };
+    });
   }
 
   // Algorithmic: one candidate per variant of the recognized case, each with
@@ -420,14 +459,15 @@ export function runPhaseCandidates(
   // alg needed (see runPhase). Included in the pool so lookahead can weigh it.
   let skip: PhaseSegment | null = null;
   for (const pre of auf) {
-    const endState = applyMoves(start, pre);
+    const endState = applyMoves(homed, pre);
     if (!phase.goal(endState)) continue;
-    const cost = segmentCost(pre, prevMove, costModel);
+    const moves = homeMoves.length > 0 ? [...homeMoves, ...pre] : [...pre];
+    const cost = segmentCost(moves, prevMove, costModel);
     if (skip && cost >= skip.cost) continue;
     skip = {
       phaseId: phase.id,
       kind: "algorithmic",
-      moves: [...pre],
+      moves,
       cost,
       startState: start,
       endState,
@@ -436,22 +476,23 @@ export function runPhaseCandidates(
   }
 
   for (const pre of auf) {
-    const aligned = applyMoves(start, pre);
+    const aligned = applyMoves(homed, pre);
     const matched = phase.cases.find(aligned);
     if (!matched) continue;
     for (let vi = 0; vi < matched.algs.length; vi++) {
       const variant = matched.algs[vi];
       const afterAlg = applyMoves(aligned, variant.moves);
       for (const post of auf) {
-        const moves = [...pre, ...variant.moves, ...post];
+        const moves = [...homeMoves, ...pre, ...variant.moves, ...post];
         const endState = applyMoves(afterAlg, post);
         if (!phase.goal(endState)) continue;
         const cost = segmentCost(moves, prevMove, costModel);
         const existing = perVariant.get(vi);
         if (existing && cost >= existing.cost) continue;
+        const offset = homeMoves.length + pre.length;
         const checkpoints = variant.checkpoints?.map((c) => ({
           label: c.label,
-          index: c.index + pre.length,
+          index: c.index + offset,
         }));
         perVariant.set(vi, {
           phaseId: phase.id,

@@ -43,11 +43,23 @@
 // heuristic requires it. (A pll data fix also stands: the F-perm's primary was
 // an OLL alg.)
 //
-// NOT YET GENERAL (tracked): applying a home-frame alg when a step's *input* is
-// itself in a rotated frame (a mid-solve rotation, as CFOP/ZB would need) — that
-// wants a per-phase reorient-to-home, plus reconciling a few imported primaries
-// whose tilt is not a clean whole-cube rotation. APB never hits this (the block
-// search keeps centers home through to the terminal ZBLL), so it is deferred.
+// Rotation-GENERAL (as of the homing work): a phase whose *input* is itself in a
+// rotated frame — a mid-solve rotation, a center-shifting move, or a solve begun
+// after a `z2` inspection, as rotation-heavy methods (CFOP/ZB) need — is handled
+// by cubing-core `runPhase`/`runPhaseCandidates`, which reorient the input to the
+// home frame (`homeStart`, using `homingRotation`) before recognizing/searching,
+// and prepend that rotation to the phase's moves. No primary needed re-authoring:
+// every last-layer primary's tilt is a *clean* whole-cube rotation (audited over
+// zbll/coll/oll/pll), so a homed input plus the both-AUF, rotation-invariant
+// recognition (`aufInvariantLookup`) plus the rotation-invariant goals below
+// reconcile it — cases like coll `t-3`/`t-4`, whose only alg ends tilted, now
+// solve (the tilted result feeds the next phase, which homes it). APB itself
+// still never triggers homing: its block search holds centers home through to the
+// terminal ZBLL, and colour-neutrality is realized by conjugation (centers stay
+// home), so `homeStart` is a no-op on every APB phase and the solves above are
+// byte-identical. (`zbls`, an opt-in/incomplete extra, has 32 of its 302 cases
+// still unsolvable up to rotation+AUF — genuine transcription gaps, unrelated to
+// the frame work; see its KNOWN note.)
 
 import {
   type AlgorithmicPhase,
@@ -57,6 +69,7 @@ import {
   type MethodDefinition,
   type Move,
   type MoveFamily,
+  normalizeOrientation,
   parseAlg,
   type Replacement,
   type SearchPhase,
@@ -356,7 +369,7 @@ const ocllPll: Replacement = {
   strategies: [{
     id: "ocllPll",
     phases: [
-      alg("ocll", (s) => s.co.every((o) => o === 0), ocllLookup),
+      alg("ocll", (s) => normalizeOrientation(s).co.every((o) => o === 0), ocllLookup),
       alg("pll", isSolved, pllLookup),
     ],
   }],
@@ -365,7 +378,15 @@ const ocllPll: Replacement = {
 // collEpll: COLL (orient + permute LL corners) then EPLL. EPLL is not its own
 // set — it's the `pll` cases where corners are already solved (Ua/Ub/Z/H),
 // filtered out. No lookahead past COLL (EPLL is fully determined by COLL's end).
-const cornersSolved = (s: CubeState) => s.cp.every((c, i) => c === i && s.co[i] === 0);
+// Corner goals are evaluated *up to whole-cube rotation* (like `regionSolved`):
+// a case whose only (or cheapest) variant ends tilted by a clean rotation — e.g.
+// coll `t-3`/`t-4`, which have no rotation-free alg — still counts as solved, and
+// the next phase homes that tilted input (see cubing-core `homeStart`). Without
+// this the absolute check rejected those legitimately-tilted results outright.
+const cornersSolved = (s: CubeState) => {
+  const n = normalizeOrientation(s);
+  return n.cp.every((c, i) => c === i && n.co[i] === 0);
+};
 // EPLL is terminal (reaches solved) -> both-AUF lookup like PLL.
 const epllLookup = aufInvariantLookup(
   pllSet,
@@ -376,8 +397,10 @@ const epllLookup = aufInvariantLookup(
 // default full-facelet signature pins the edge permutation EPLL is meant to fix,
 // so it never matched. Built with `aufInvariantLookup` (both-AUF, rotation-
 // invariant). Many COLL primaries end tilted; the cost race prefers a case's
-// rotation-free variant where one exists. (A few cases are rotation-free-less;
-// see the "NOT YET GENERAL" note up top — they can still miss.)
+// rotation-free variant where one exists, and the few cases that have none
+// (`t-3`, `t-4`) now solve too — their tilted result satisfies the rotation-
+// invariant `cornersSolved` goal, and the following `epll` phase homes that
+// rotated input (see the "Rotation-GENERAL" note up top).
 const collLookup = aufInvariantLookup(collSet, cornerSignature());
 const collEpll: Replacement = {
   id: "collEpll",
@@ -487,7 +510,9 @@ const eodrLs: Replacement = {
 
 // --- Extras ------------------------------------------------------------------
 
-const cornersOriented = (s: CubeState) => s.co.every((o) => o === 0);
+// Orientation goals (OLL/OCLL/WV) likewise up to whole-cube rotation.
+const cornersOriented = (s: CubeState) => normalizeOrientation(s).co.every((o) => o === 0);
+const edgesOriented = (s: CubeState) => normalizeOrientation(s).eo.every((o) => o === 0);
 
 // oll (region [eo..zbll], boundary trigger = whole F2L already solved): full OLL
 // then PLL, straight from an un-EO'd finished F2L. `pll` reused. OLL keys on
@@ -503,7 +528,7 @@ const ollExtra = {
   strategies: [{
     id: "ollPll",
     phases: [
-      alg("oll", (s) => cornersOriented(s) && s.eo.every((o) => o === 0), ollLookup),
+      alg("oll", (s) => cornersOriented(s) && edgesOriented(s), ollLookup),
       alg("pll", isSolved, pllLookup),
     ],
   }],
@@ -517,11 +542,18 @@ const ollExtra = {
 // rotation-invariant); tilted primaries lose the cost race to rotation-free
 // variants where present. See KNOWN below.
 //
-// KNOWN (data, ~2 cases): two (pair, EO) collision pairs are not mutually
-// solvable (f2l-8-4/f2l-35-2, f2l-24-3/f2l-28-2) — for a corner-orientation-
-// independent ZBLS they should be, so one of each pair is likely mis-transcribed
-// (cf. the eodr case-3 fix). Until reconciled, states needing the shadowed case
-// drop out (~5% of triggers); recognition is otherwise complete.
+// KNOWN (data, 32 of 302 cases): an audit of every case's own recognition state
+// (both AUFs, up to whole-cube rotation) found 32 cases whose stored algs do not
+// actually reach the ZBLS goal — genuine transcription gaps, NOT a frame/rotation
+// issue (their primaries' tilts are clean whole-cube rotations, like every other
+// last-layer set). Some are the mutually-unsolvable collision pairs first spotted
+// here (f2l-8-4/f2l-35-2, f2l-24-3/f2l-28-2 — one of each is likely mis-
+// transcribed, cf. the eodr case-3 fix); the full list is f2l-{2-1,3-1,3-5,5-3,
+// 6-1,6-2,6-5,6-7,8-1,8-4,8-5,9-1,9-3,11-1,12-5,13-1,18-7,20-3,22-4,24-3,24-6,
+// 24-7,26-4,28-2,28-5,28-7,29-1,32-5,33-7,34-5,35-1,35-2}. Until re-authored,
+// states needing one of these drop out (~10% of triggers); recognition (the
+// zblsSignature projection) is otherwise complete. zbls is opt-in and its set is
+// still being authored, so this does not affect any shipped solve.
 const zblsExtra = {
   id: "zbls",
   label: "ZBLS",

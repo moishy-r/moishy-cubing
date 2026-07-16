@@ -11,9 +11,11 @@ import {
   invert,
   isSolved,
   type Move,
+  normalizeOrientation,
   parseAlg,
   runPhase,
   solvedCube,
+  statesEqual,
 } from "@moishy/cubing-core";
 import { assert, assertEquals } from "@std/assert";
 import { apb, apbDefinition } from "../mod.ts";
@@ -22,6 +24,7 @@ import {
   aufInvariantLookup,
   BLOCK223,
   centersSolved,
+  cornerSignature,
   eoSignature,
   F2L,
   fallThrough,
@@ -163,16 +166,27 @@ Deno.test(
     const { collEpll } = await import("@moishy/algsets/coll-epll");
     const { eodr } = await import("@moishy/algsets/eodr");
     const { lxsBackSlot } = await import("@moishy/algsets/lxs-back-slot");
-    const cornersSolved = (s: CubeState) => s.cp.every((c, i) => c === i && s.co[i] === 0);
+    // Corner goal up to whole-cube rotation (matches apb.ts): coll has cases
+    // (t-3, t-4, and every tilted-primary case) whose solving alg ends the cube
+    // rotated by a clean whole-cube turn. That is a valid corner solve; the next
+    // phase homes the tilted input (cubing-core `homeStart`).
+    const cornersSolved = (s: CubeState) => {
+      const n = normalizeOrientation(s);
+      return n.cp.every((c, i) => c === i && n.co[i] === 0);
+    };
     const dr = (s: CubeState) => s.ep[4] === 4 && s.eo[4] === 0;
 
+    // coll recognizes on the corners up to *both* AUFs (apb.ts `collLookup`),
+    // never the algset's full-facelet default — many COLL primaries are tilted,
+    // so a full-facelet, single-AUF lookup only matched the raw (tilted)
+    // recognition state by the verbatim-primary coincidence, not a real solve.
     assertEquals(
       assertSolvesAllCases(
         {
           kind: "algorithmic",
           id: "coll",
           goal: cornersSolved,
-          cases: regionLookup(collEpll, collEpll.signature),
+          cases: aufInvariantLookup(collEpll, cornerSignature()),
           auf: ["U"],
         },
         collEpll,
@@ -493,6 +507,128 @@ Deno.test(
     );
   },
 );
+
+// The general rotation architecture end-to-end: solve a cube whose *frame is
+// rotated* (a z2 "inspection" rotation up front, a y "mid-solve" rotation at the
+// end) so the first phase's INPUT has drifted centers. APB's own solves never hit
+// this — colour-neutrality is realized by conjugation, which keeps centers home —
+// so a rotation baked into the scramble is how we exercise the per-phase
+// reorient-to-home (cubing-core `homeStart`). The solve must still verify, and it
+// must reorient (emit whole-cube rotations) rather than fail.
+Deno.test("APB solves from a rotated input frame (z2 inspection + mid-solve y)", async () => {
+  const base = "D' F2 L2 B2 F2 R' B2 R F2 L B2 R' F' D2 R' B D' F' L' B";
+  for (const scramble of [`z2 ${base} y`, `x ${base} z'`]) {
+    const r = await apb.solve(scramble, {
+      colorNeutrality: "fixed",
+      lookahead: { depth: 1 },
+      stepOptions: { block223: { forceStrategy: "fbDfdb" } },
+    }, {});
+    // Fixed CN + a net-rotated scramble ⇒ the block search's input is genuinely
+    // in a rotated frame.
+    const framed = applyMoves(solvedCube(), [
+      ...invert(r.orientation),
+      ...parseAlg(scramble),
+      ...r.orientation,
+    ]);
+    assert(framed.cn.join("") !== "012345", `${scramble}: input frame really is rotated`);
+    assert(r.solved, `${scramble}: solve should complete from the rotated frame`);
+    assert(
+      isSolved(applyMoves(framed, r.solution)),
+      `${scramble}: solution must solve the rotated-frame scramble`,
+    );
+    assert(
+      r.solution.some((m) => m.family === "x" || m.family === "y" || m.family === "z"),
+      `${scramble}: solution must reorient the cube to the home frame`,
+    );
+  }
+});
+
+// A whole-cube rotation is a real reframe of the pieces (the user's LXS example:
+// under a `y`, the edge in DF moves to the DL slot). Recognition/goals key on
+// pieces *relative to the centers*, so this reframe is invariant — never a break.
+Deno.test("a rotation reframes the pieces but is invariant up to the centers", () => {
+  const afterY = applyMoves(solvedCube(), parseAlg("y"));
+  // DL slot (edge index 6) now holds the DF cubie (5): DF -> DL under y.
+  assertEquals(afterY.ep[6], 5);
+  assert(!statesEqual(afterY, solvedCube()), "a bare y is not the home frame");
+  // ...yet it is solved up to rotation, and normalizes back to the exact solved cube.
+  assert(isSolved(afterY));
+  assert(statesEqual(normalizeOrientation(afterY), solvedCube()));
+});
+
+// Req: with the dual-CN default (8 orientations), a solve that commits to a
+// *rotated* orientation ends the cube solved but held in a frame rotated from the
+// original — which must be detected as solved, not "not solved". Verified
+// PHYSICALLY: execute the orientation rotation, then the solution, on the
+// scrambled cube (rotations executed, never converted).
+Deno.test("dual-CN solves verify as solved even in a rotated final frame", async () => {
+  const scrambles = [
+    "R U2 F' L2 D R2 B' U F2 L' D2 B2 U'",
+    "D' F2 L2 B2 F2 R' B2 R F2 L B2 R' F' D2 R' B D' F' L' B",
+    "B2 U2 L2 F2 D' R2 D2 B2 R2 D' B2 L' D2 F' L U' F2 D R2 B",
+    "D2 L2 U F2 U' B2 U2 R2 F2 D' L2 F' R' D2 B' U L2 F' U2 R",
+  ];
+  let sawRotatedFrame = false;
+  for (const scramble of scrambles) {
+    const r = await apb.solve(scramble, {}, {}); // {} => recommended defaults = dual-CN (8)
+    assert(r.solved, `${scramble}: solve should complete`);
+    const scrambled = applyMoves(solvedCube(), parseAlg(scramble));
+    const asHeld = applyMoves(scrambled, [...r.orientation, ...r.solution]);
+    assert(
+      isSolved(asHeld),
+      `${scramble}: executing orientation + solution must leave the cube solved ` +
+        `(even if held rotated)`,
+    );
+    if (!statesEqual(asHeld, solvedCube())) {
+      sawRotatedFrame = true;
+      // Solved-but-rotated: NOT the exact home frame, but solved up to rotation.
+      assert(
+        statesEqual(normalizeOrientation(asHeld), solvedCube()),
+        `${scramble}: rotated final frame must still be solved up to rotation`,
+      );
+    }
+  }
+  assert(
+    sawRotatedFrame,
+    "at least one dual-CN solve should commit to a rotated orientation (else this " +
+      "test isn't exercising the rotated-frame path)",
+  );
+});
+
+// Req: an alg that contains a whole-cube rotation is EXECUTED verbatim — never
+// rewritten into other moves. coll `t-3`/`t-4` have no rotation-free variant, so
+// a correct solution *must* contain a rotation; if rotations were being converted
+// to face moves the solution would have zero and this assertion would catch it.
+Deno.test("rotation-containing algs are executed verbatim, never converted", async () => {
+  const { collEpll } = await import("@moishy/algsets/coll-epll");
+  const cornersSolved = (s: CubeState) => {
+    const n = normalizeOrientation(s);
+    return n.cp.every((c, i) => c === i && n.co[i] === 0);
+  };
+  const phase: AlgorithmicPhase = {
+    kind: "algorithmic",
+    id: "coll",
+    goal: cornersSolved,
+    cases: aufInvariantLookup(collEpll, cornerSignature()),
+    auf: ["U"],
+  };
+  const isRotation = (m: Move) => m.family === "x" || m.family === "y" || m.family === "z";
+  for (const id of ["t-3", "t-4"]) {
+    assert(
+      collEpll.get(id)!.algs.every((a) => a.moves.some(isRotation)),
+      `precondition: every ${id} variant contains a rotation`,
+    );
+    const seg = runPhase(phase, collEpll.recognitionState(id))!;
+    assert(seg !== null, `${id}: recognized and solved`);
+    assert(cornersSolved(seg.endState), `${id}: corners solved (up to rotation)`);
+    assert(
+      seg.moves.some(isRotation),
+      `${id}: solution must contain a rotation (algs weren't converted to face moves)`,
+    );
+    // And the emitted moves genuinely solve the ORIGINAL (untouched) input.
+    assert(cornersSolved(applyMoves(collEpll.recognitionState(id), seg.moves)));
+  }
+});
 
 // Regression: force-mode replacements/extras must actually FIRE against real,
 // live solve states — not just recognize their own canonical recognition states.
