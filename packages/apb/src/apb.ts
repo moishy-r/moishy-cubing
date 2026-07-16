@@ -84,6 +84,7 @@ import {
   regionLookup,
   regionSolved,
   regionSolvedAndEO,
+  zblsSignature,
 } from "./geometry.ts";
 import { regionHeuristic } from "./pruning.ts";
 
@@ -497,15 +498,17 @@ const ollExtra = {
 };
 
 // zbls (region [eo, lxs], boundary trigger = DR already solved after brPair):
-// solve EO + last slot in one alg, landing ZBLL-ready.
+// solve EO + last slot in one alg, landing ZBLL-ready. Recognizes on the
+// last-slot pair + edge orientation (geometry.ts `zblsSignature`) — the algset's
+// default full-facelet signature pinned the last-layer permutation ZBLS leaves
+// for ZBLL, so it never matched. Built with `aufInvariantLookup` for de-rotation
+// (32 of the 302 primaries end tilted). See KNOWN below.
 //
-// KNOWN LIMITATION (recognition): this still uses the algset's default
-// full-facelet signature, which — like the pre-fix OCLL/COLL/OLL — pins the
-// last-layer permutation that zbls deliberately leaves for ZBLL, so it fails to
-// recognize live states. Fixing it needs a projection signature over just the
-// pieces zbls fixes (EO of all edges + the last-slot DFR/FR), built with
-// `aufInvariantLookup` (de-rotation), then verified against the 302-case set.
-// Deferred: the trigger (DR solved right after brPair) is rarely met anyway.
+// KNOWN (data, ~2 cases): two (pair, EO) collision pairs are not mutually
+// solvable (f2l-8-4/f2l-35-2, f2l-24-3/f2l-28-2) — for a corner-orientation-
+// independent ZBLS they should be, so one of each pair is likely mis-transcribed
+// (cf. the eodr case-3 fix). Until reconciled, states needing the shadowed case
+// drop out (~5% of triggers); recognition is otherwise complete.
 const zblsExtra = {
   id: "zbls",
   label: "ZBLS",
@@ -515,10 +518,9 @@ const zblsExtra = {
     kind: "boundary" as const,
     test: (s: CubeState) => regionSolved(AFTER_BR)(s) && drSolved(s),
   },
-  // TODO(data): zbls algset being authored (~300 cases).
   strategies: [{
     id: "zbls",
-    phases: [alg("zbls", regionSolvedAndEO(F2L), regionLookup(zblsSet, zblsSet.signature))],
+    phases: [alg("zbls", regionSolvedAndEO(F2L), aufInvariantLookup(zblsSet, zblsSignature()))],
   }],
 };
 

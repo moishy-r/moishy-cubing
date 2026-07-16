@@ -255,6 +255,19 @@ export function eodrSignature(): (s: CubeState) => string {
   return (s) => `${EODR_EDGE_SLOTS.map((slot) => s.eo[slot]).join("")}|dr${s.ep.indexOf(4)}`;
 }
 
+/**
+ * ZBLS recognition: the last-slot pair — DFR corner (4) + FR edge (8),
+ * location + orientation — plus the edge-orientation pattern (by slot). ZBLS
+ * solves the last F2L slot while orienting all edges, landing ZBLL-ready; it does
+ * NOT fix the last-layer corner state or the U-edge permutation (ZBLL does), so
+ * recognition must ignore those — keying on the algset's default full-facelet
+ * signature pinned the last-layer permutation and almost never matched a live
+ * state. Slot-based orientation, so AUF is handled upstream.
+ */
+export function zblsSignature(): (s: CubeState) => string {
+  return (s) => `${pieceSignature([4], [8])(s)}/${s.eo.join("")}`;
+}
+
 // --- CaseLookup builders ------------------------------------------------------
 
 /**

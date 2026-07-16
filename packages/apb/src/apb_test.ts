@@ -588,3 +588,29 @@ Deno.test("force-mode eodrLs fires on real solves and verifies", async () => {
     );
   }
 });
+
+// Regression: forced zbls extra fires + verifies. These scrambles leave DR
+// solved right after brPair, satisfying zbls's boundary trigger. Guards the
+// zblsSignature projection + de-rotation (the old full-facelet signature never
+// matched a live state).
+Deno.test("force-mode zbls extra fires on triggering solves and verifies", async () => {
+  const scrambles = [
+    "U L U2 F' L F2 U' L2 U' L U2 F L2 U2 F2 L' F' L U2 F'",
+    "F L2 U F2 L F L' F' U F2 L U2 L2 U2 L F L2 U L' F'",
+  ];
+  for (const scramble of scrambles) {
+    const r = await apb.solve(scramble, {
+      colorNeutrality: "fixed",
+      lookahead: { depth: 1 },
+      stepOptions: { block223: { forceStrategy: "fbDfdb" } },
+      extras: { zbls: { enabled: true, mode: "force" } },
+    }, {});
+    const framed = applyMoves(solvedCube(), [
+      ...invert(r.orientation),
+      ...parseAlg(scramble),
+      ...r.orientation,
+    ]);
+    assert(r.solved && isSolved(applyMoves(framed, r.solution)), `zbls (${scramble}): must solve`);
+    assert(r.segments.some((s) => s.unitId === "zbls"), `zbls (${scramble}) must fire`);
+  }
+});
