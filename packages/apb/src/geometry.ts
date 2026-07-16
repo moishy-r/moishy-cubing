@@ -236,6 +236,25 @@ export function cornerSignature(): (s: CubeState) => string {
   return (s) => `${s.co.join("")}|${s.cp.join("")}`;
 }
 
+// The six edge slots EODR works on: UR, UF, UL, UB (U-layer), FR (E-slice), DR.
+const EODR_EDGE_SLOTS = [0, 1, 2, 3, 8, 4] as const;
+
+/**
+ * EODR recognition: the orientation of the edge *in each* of the six EODR slots,
+ * plus which slot currently holds the DR edge (cubie 4). EODR orients those six
+ * edges and *places DR*, but does NOT fix the permutation of the U-layer edges or
+ * FR (that is left for LXS/ZBLL) — so recognition keys on orientation-by-slot
+ * (the U edges are interchangeable) + the DR location it must route, and nothing
+ * else. Keying on the U-edge/FR *positions* (as a plain `pieceSignature` over the
+ * six cubies does) over-constrains: it pins a permutation EODR never fixes, so a
+ * live state almost never matched one of the 55 stored cases. Slot-based, so AUF
+ * is handled upstream. Verified: distinct across all 55 cases, and every reachable
+ * post-brPair EODR state is covered.
+ */
+export function eodrSignature(): (s: CubeState) => string {
+  return (s) => `${EODR_EDGE_SLOTS.map((slot) => s.eo[slot]).join("")}|dr${s.ep.indexOf(4)}`;
+}
+
 // --- CaseLookup builders ------------------------------------------------------
 
 /**

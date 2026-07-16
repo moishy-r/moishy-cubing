@@ -15,7 +15,7 @@ export const eodr: AlgSet = defineAlgSet({
   cases: [
     { id: "1", subset: "All Oriented", algs: ["R' U' R U R", "U' S' U2 S", "U S R2 S' R2"] },
     { id: "2", subset: "All Oriented", algs: ["R U R2 U' R U R", "R' U2 R' U2 R", "R' U' R' U R"] },
-    { id: "3", subset: "2 Misoriented", algs: ["f U R U' R' f"] },
+    { id: "3", subset: "2 Misoriented", algs: ["f U R U' R' f'"] },
     { id: "4", subset: "2 Misoriented", algs: ["F R' F' R", "F U R U' R' F'", "U' S' R U' R' S"] },
     { id: "5", subset: "2 Misoriented", algs: ["R' F R F'", "U' F' U F"] },
     { id: "6", subset: "2 Misoriented", algs: ["R' U' f R f' R U R", "S' U R' U' R S U R"] },

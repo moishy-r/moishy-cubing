@@ -74,6 +74,7 @@ import {
   axisCanonical,
   BLOCK223,
   cornerSignature,
+  eodrSignature,
   eoSignature,
   F2L,
   fallThrough,
@@ -455,21 +456,16 @@ const eodrLs: Replacement = {
   mode: "compete",
   strategies: [{
     id: "eodrLs",
-    // eodr recognizes on the full arrangement (position + orientation) of the 6
-    // EO edges — orientation alone collides (it also fixes DR + U-edge order).
-    //
-    // KNOWN LIMITATION (data, not code): the `eodr` set is a partial stub (55
-    // cases) relative to the full EODR space it recognizes on (U-edge position +
-    // orientation + DR ≈ thousands up to AUF). So most live states are not
-    // covered, and this replacement (even forced) simply drops out and normal
-    // eo->lxs solving runs. Unlike OCLL/COLL/OLL — whose non-firing was a
-    // signature/de-rotation bug now fixed — making eodrLs fire generally needs
-    // the `eodr` algset completed (and its intended EODR definition pinned down).
+    // eodr recognizes on the orientation of the 6 EODR edges (by slot) + the DR
+    // location it must route (geometry.ts `eodrSignature`). It does NOT fix the
+    // U-edge / FR *permutation* (LXS/ZBLL do), so keying on their positions — as
+    // the old `pieceSignature` over the 6 cubies did — over-constrained and almost
+    // never matched a live state. The 55 cases cover the space under this key.
     phases: [
       alg(
         "eodr",
         (s) => regionSolvedAndEO(AFTER_BR)(s) && drSolved(s),
-        regionLookup(eodrSet, pieceSignature([], [0, 1, 2, 3, 8, 4])),
+        regionLookup(eodrSet, eodrSignature()),
       ),
       alg("ls", regionSolvedAndEO(F2L), lsLookup),
     ],

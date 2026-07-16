@@ -1,4 +1,5 @@
 import { brPair as brPairSet } from "@moishy/algsets/br-pair";
+import { eodr as eodrSet } from "@moishy/algsets/eodr";
 import { eoPair as eoPairSet } from "@moishy/algsets/eo-pair";
 import { lxs as lxsSet } from "@moishy/algsets/lxs";
 import { pll as pllSet } from "@moishy/algsets/pll";
@@ -540,6 +541,50 @@ Deno.test("force-mode OLL extra fires when its F2L-solved trigger is met", async
     assert(
       r.segments.some((s) => s.unitId === "oll" && s.kind === "extra"),
       `oll extra (${scramble}) must fire`,
+    );
+  }
+});
+
+// Regression: every EODR alg must preserve block223 + brPair (corners 5,6,7 and
+// edges 5,6,7,9,10,11). Would have caught the mis-transcribed case 3
+// ("f U R U' R' f", which displaced DF/DL/FL) before it broke recognition.
+Deno.test("every eodr alg preserves block223 + brPair", () => {
+  const blockCorners = [5, 6, 7], blockEdges = [5, 6, 7, 9, 10, 11];
+  for (const c of eodrSet.cases) {
+    for (let vi = 0; vi < c.algs.length; vi++) {
+      const s = applyMoves(solvedCube(), c.algs[vi].moves);
+      const ok = blockCorners.every((i) => s.cp[i] === i && s.co[i] === 0) &&
+        blockEdges.every((i) => s.ep[i] === i && s.eo[i] === 0);
+      assert(ok, `eodr case ${c.id} alg[${vi}] disturbs block223/brPair`);
+    }
+  }
+});
+
+// Regression: forced eodrLs fires and verifies on real solves (guards the
+// eodrSignature projection — the old piece signature over-constrained on U-edge
+// / FR permutation and almost never matched).
+Deno.test("force-mode eodrLs fires on real solves and verifies", async () => {
+  const scrambles = [
+    "D' F2 L2 B2 F2 R' B2 R F2 L B2 R' F' D2 R' B D' F' L' B",
+    "R U2 F' L2 D R2 B' U F2 L' D2 B2 U'",
+    "F2 D2 R2 B2 L2 F2 U' L2 U R2 U2 F' L' U B F D' L2 R'",
+  ];
+  for (const scramble of scrambles) {
+    const r = await apb.solve(scramble, {
+      colorNeutrality: "fixed",
+      lookahead: { depth: 1 },
+      stepOptions: { block223: { forceStrategy: "fbDfdb" } },
+      replacements: { eodrLs: { enabled: true, mode: "force" } },
+    }, {});
+    const framed = applyMoves(solvedCube(), [
+      ...invert(r.orientation),
+      ...parseAlg(scramble),
+      ...r.orientation,
+    ]);
+    assert(r.solved && isSolved(applyMoves(framed, r.solution)), `eodrLs (${scramble}): must solve`);
+    assert(
+      r.segments.some((s) => s.unitId === "eodrLs"),
+      `eodrLs (${scramble}) must fire`,
     );
   }
 });
