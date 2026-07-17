@@ -493,6 +493,24 @@ function solveSpanDP(
   const best: (Cell | null)[] = Array(n + 1).fill(null);
   best[0] = { cost: 0, state: start, lastMove: prevMove, segments: [] };
 
+  // Choosing the span's FINAL cover by span-cost alone ignores that a pricier
+  // cover — e.g. a compete replacement — may leave a much cheaper continuation
+  // (the reason a replacement can lose a race it should win: it costs a little
+  // more locally but sets up a far easier next step). So the final cover is
+  // scored by span cost PLUS a lookahead into the step right after the span,
+  // mirroring the plain-step path's `chooseStepCand`. Intermediate cells stay
+  // pure-cost (they are prefixes, and their own next step is inside the span).
+  const afterIdx = toIdx + 1;
+  const afterStep = ctx.def.steps[afterIdx];
+  const exitLookahead = ctx.lookahead.depth > 0 && afterStep !== undefined &&
+    !ctx.regionAlts.some((a) => a.fromIdx === afterIdx) &&
+    ctx.scopeHas(ctx.def.steps[toIdx].id, afterStep.id);
+  const coverScore = (cell: Cell, end: number): number => {
+    if (end !== n || !exitLookahead) return cell.cost;
+    const ahead = peekCost(afterIdx, cell.state, cell.lastMove, ctx.lookahead.depth, ctx);
+    return cell.cost + (ahead === Infinity ? 0 : ahead);
+  };
+
   for (let end = 1; end <= n; end++) {
     const pos = fromIdx + end - 1; // absolute index of the block's last step
     // Option A: a plain Step occupying just `pos`.
@@ -506,7 +524,7 @@ function solveSpanDP(
           lastMove: cand.lastMove,
           segments: [...prev.segments, toSegment(ctx.def.steps[pos].id, "step", cand)],
         };
-        if (!best[end] || cell.cost < best[end]!.cost) best[end] = cell;
+        if (!best[end] || coverScore(cell, end) < coverScore(best[end]!, end)) best[end] = cell;
       }
     }
     // Option B: a compete region ending exactly at `pos`.
@@ -533,7 +551,7 @@ function solveSpanDP(
           ),
         ],
       };
-      if (!best[end] || cell.cost < best[end]!.cost) best[end] = cell;
+      if (!best[end] || coverScore(cell, end) < coverScore(best[end]!, end)) best[end] = cell;
     }
   }
 
