@@ -702,13 +702,23 @@ Deno.test("backSlotEoLxs fires as a forced replacement and verifies", async () =
     r.segments.some((s) => s.unitId === "backSlotEoLxs" && s.kind === "replacement"),
     "forced backSlotEoLxs must appear in the solve",
   );
-  // Competing (enabled, default compete mode) must complete without hanging.
+  // Competing (default compete mode) with lookahead on: backSlotEoLxs costs a
+  // little more over [brPair, eo, lxs] but leaves a much cheaper ZBLL, so the
+  // TOTAL wins here. The span DP must weigh that downstream step — otherwise it
+  // greedily takes the locally-cheaper-but-worse-overall core path (the reported
+  // bug: compete produced a longer solution than force and skipped the replacement).
   const rc = await apb.solve(scramble, {
     colorNeutrality: "fixed",
+    lookahead: { depth: 1 },
     stepOptions: { block223: { forceStrategy: "fbDfdb" } },
     replacements: { backSlotEoLxs: { enabled: true } },
   }, {});
   assert(rc.solved, "competing backSlotEoLxs must still produce a solved cube");
+  assert(
+    rc.segments.some((s) => s.unitId === "backSlotEoLxs"),
+    "compete must pick backSlotEoLxs when it wins overall (span DP downstream lookahead)",
+  );
+  assert(rc.cost <= r.cost + 1e-9, "compete must be no worse than force");
 });
 
 Deno.test("force-mode OLL extra fires when its F2L-solved trigger is met", async () => {
