@@ -13,8 +13,9 @@
 //     `eo-pair`; zbll falls through to `pll`),
 //   - replacements: ocllPll (OCLL = OLL 21-27), collEpll (coll + epll=pll
 //     subset), eoPair (insert subsets), eodrLs (eodr + ls=lxs subset),
-//   - extras: oll, zbls, winterSummerVariation (wv/sv), backSlotEoLxs
-//     (eoBackSlot = `dfr` subset + lxsBackSlot).
+//     backSlotEoLxs (eoBackSlot = `dfr` subset + lxsBackSlot — an every-scramble
+//     front-pair-first alternative, hence a compete replacement, not an extra),
+//   - extras: oll, zbls, winterSummerVariation (wv/sv).
 // Full end-to-end solves work and stay in the fixed frame (centers home from
 // start to finish) — see the "Center frame" and "Last layer" notes below and
 // geometry.ts. ZBLL is complete: all 7775 EO-solved last-layer states solve
@@ -589,23 +590,46 @@ const winterSummerVariation = {
   }],
 };
 
-// backSlotEoLxs (region [brPair..lxs], boundary trigger = front-right pair
-// already formed+oriented): insert it, then EO + last slot from the back side.
-// eoBackSlot is the `dfr` subset of eo-pair; lxsBackSlot is being authored.
+// backSlotEoLxs (replacement, region [brPair..lxs]): insert the front-right pair,
+// then EO + last slot from the back side. This is a genuine every-scramble
+// alternative to brPair -> eo -> lxs (you can always insert the front pair and
+// finish from the back), so it is a `compete` *Replacement* — not an Extra. (It
+// was mistakenly authored as a boundary-triggered Extra that only fired when the
+// front pair happened to be pre-formed; `compete` is exactly the knob for "use it
+// when it's cheaper," so it belongs as a replacement.) eoBackSlot is the `dfr`
+// subset of eo-pair; lxsBackSlot solves the back-right slot. Opt-in like the rest.
 const frontPairFormed = (s: CubeState) =>
   s.cp[4] === 4 && s.co[4] === 0 && s.ep[8] === 8 && s.eo[8] === 0;
 const eoBackSlotLookup = regionLookup(eoPairSet, eoSignature(), (c) => c.subset === "dfr");
-const backSlotEoLxs = {
+// What eoBackSlot lands on: block223 + the front-right pair (DFR corner 4, FR
+// edge 8), all edges oriented. The BACK slot (DBR 7 + BR 11) and DR (edge 4) are
+// still open — lxsBackSlot fills them. (`dfr` is the front-pair-solved EO subset,
+// exactly mirroring the EO step's `dbr` back-pair-solved subset — so its goal is
+// this front region + EO, NOT AFTER_BR, which would wrongly demand the back slot.)
+const AFTER_FRONT = { corners: [4, 5, 6], edges: [5, 6, 7, 8, 9, 10] } as const;
+const backSlotEoLxs: Replacement = {
   id: "backSlotEoLxs",
   label: "Back-slot EO + LXS",
-  region: ["brPair", "lxs"] as [string, string],
-  mode: "force" as const,
-  trigger: { kind: "boundary" as const, test: frontPairFormed },
+  region: ["brPair", "lxs"],
+  mode: "compete",
   strategies: [{
     id: "backSlotEoLxs",
     phases: [
-      searchPhase("insertFrontRightPair", frontPairFormed),
-      alg("eoBackSlot", regionSolvedAndEO(AFTER_BR), eoBackSlotLookup),
+      // Insert the front-right pair while keeping block223 intact — an R/U-area
+      // manipulation, so outer faces only, guided by an A* pruning heuristic on
+      // the pair (like eoPair's formPair). A blind IDA* here would explode; this
+      // stays bounded. (Follow-up: this pair is the mirror of brPair, so it could
+      // instead be an *algorithmic* phase over frPair algs — derived by inverting
+      // the brPair set, or authored directly.)
+      searchPhase("insertFrontRightPair", (s) => regionSolved(BLOCK223)(s) && frontPairFormed(s), {
+        moves: ["U", "D", "L", "R", "F", "B"],
+        useAStar: true,
+        canFollow: axisCanonical,
+        heuristic: regionHeuristic([4], [8], ["U", "D", "L", "R", "F", "B"]),
+        stateKey: regionCoordinate(AFTER_FRONT),
+        maxDepth: 9,
+      }),
+      alg("eoBackSlot", regionSolvedAndEO(AFTER_FRONT), eoBackSlotLookup),
       // Back slot = DBR corner (7) + BR edge (11) + DR edge (4): lxsBackSlot
       // solves the back-right slot, so it recognizes on those pieces (not the
       // front DFR/FR slot that the insertFrontRightPair search handles).
@@ -633,8 +657,8 @@ export const apbDefinition: MethodDefinition = {
   id: "apb",
   label: "APB",
   steps: [block223, brPair, eo, lxs, zbll],
-  replacements: [ocllPll, collEpll, eoPair, eodrLs],
-  extras: [ollExtra, zblsExtra, winterSummerVariation, backSlotEoLxs],
+  replacements: [ocllPll, collEpll, eoPair, eodrLs, backSlotEoLxs],
+  extras: [ollExtra, zblsExtra, winterSummerVariation],
   recommendedSettings: {
     colorNeutrality: DUAL_CN_BOTTOM,
     lookahead: {

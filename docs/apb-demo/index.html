@@ -726,7 +726,16 @@
 
       let verified = false;
       try {
-        verified = isSolved(applyAlg(applyAlg(solvedCube(), scramble), r.solutionString));
+        // The full executable sequence is orientation + solution: the solution is
+        // expressed in the (color-neutral) oriented frame, so the pre-rotation must
+        // be applied first. isSolved is rotation-invariant, so a cube left solved
+        // but held rotated (a rotated orientation) still verifies.
+        verified = isSolved(
+          applyAlg(
+            applyAlg(applyAlg(solvedCube(), scramble), formatAlg(r.orientation)),
+            r.solutionString,
+          ),
+        );
       } catch { /* leave false */ }
 
       const rows = r.segments.map((seg) => {
@@ -768,10 +777,13 @@
           <tbody>${rows}</tbody>
         </table>
         <label>Full solution</label>
-        <div class="solution">${esc(r.solutionString)}</div>
+        <div class="solution">${
+        esc((r.orientation.length ? formatAlg(r.orientation) + " " : "") + r.solutionString)
+      }</div>
         <p class="muted">${
         verified
-          ? "Verified: scramble + solution applied to a solved cube returns it to solved."
+          ? "Verified: scramble + orientation + solution returns the cube to solved " +
+            "(up to a whole-cube rotation)."
           : "⚠ Independent verification did not pass — treat this solution with caution."
       }</p>
       `;
