@@ -4,6 +4,7 @@
   "exports": {
     ".": "./mod.ts",
     "./br-pair": "./src/br-pair/index.ts",
+    "./fr-pair": "./src/fr-pair/index.ts",
     "./eo-pair": "./src/eo-pair/index.ts",
     "./dfdb": "./src/dfdb/index.ts",
     "./lxs": "./src/lxs/index.ts",

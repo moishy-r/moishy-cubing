@@ -79,11 +79,11 @@ Deno.test("APB method definition has the five core steps in order", () => {
   );
   assertEquals(
     apbDefinition.replacements?.map((r) => r.id),
-    ["ocllPll", "collEpll", "eoPair", "eodrLs"],
+    ["ocllPll", "collEpll", "eoPair", "eodrLs", "backSlotEoLxs"],
   );
   assertEquals(
     apbDefinition.extras?.map((e) => e.id),
-    ["oll", "zbls", "winterSummerVariation", "backSlotEoLxs"],
+    ["oll", "zbls", "winterSummerVariation"],
   );
   // Recommended lookahead scope covers each adjacent core pair + ocll->pll.
   assert(
@@ -108,6 +108,24 @@ Deno.test(
       brPairSet,
       regionSolved(AFTER_BR),
     );
+    assertEquals(n, 89);
+  },
+);
+
+Deno.test(
+  "frPair: every case is recognized and inserts the front pair (region signature, all AUFs)",
+  async () => {
+    const { frPair } = await import("@moishy/algsets/fr-pair");
+    // frPair lands block223 + the front-right pair (DFR 4, FR 8); EO comes later.
+    const AFTER_FRONT = { corners: [4, 5, 6], edges: [5, 6, 7, 8, 9, 10] };
+    const phase: AlgorithmicPhase = {
+      kind: "algorithmic",
+      id: "frPair",
+      goal: regionSolved(AFTER_FRONT),
+      cases: regionLookup(frPair, pieceSignature([4], [8])),
+      auf: ["U"],
+    };
+    const { n } = assertSolvesAllCases(phase, frPair, regionSolved(AFTER_FRONT));
     assertEquals(n, 89);
   },
 );
@@ -563,6 +581,9 @@ Deno.test("a rotation reframes the pieces but is invariant up to the centers", (
 // scrambled cube (rotations executed, never converted).
 Deno.test("dual-CN solves verify as solved even in a rotated final frame", async () => {
   const scrambles = [
+    // The reported scramble: dual-CN commits to a z2 y2 orientation, so the cube
+    // ends solved but held rotated — must verify as solved, not "not solved".
+    "D' F2 L2 B2 F2 R' B2 R F2 L' F' L' B",
     "R U2 F' L2 D R2 B' U F2 L' D2 B2 U'",
     "D' F2 L2 B2 F2 R' B2 R F2 L B2 R' F' D2 R' B D' F' L' B",
     "B2 U2 L2 F2 D' R2 D2 B2 R2 D' B2 L' D2 F' L U' F2 D R2 B",
@@ -659,6 +680,35 @@ Deno.test("force-mode LL replacements fire on a real solve and verify", async ()
       `forced ${id} must appear in the solve (it silently dropped out)`,
     );
   }
+});
+
+// Regression: backSlotEoLxs is a `compete` *replacement* (front-pair-first F2L+EO
+// — an every-scramble alternative), not a triggered extra. Forcing it must fire
+// and verify; competing must not hang (its front-pair search is bounded, not the
+// blind IDA* it shipped with). Guards both the reclassification and the phase
+// wiring (eoBackSlot lands on the front region + EO, back slot left for lxsBackSlot).
+Deno.test("backSlotEoLxs fires as a forced replacement and verifies", async () => {
+  const scramble = "D' F2 L2 B2 F2 R' B2 R F2 L' F' L' B";
+  const r = await apb.solve(scramble, {
+    colorNeutrality: "fixed",
+    stepOptions: { block223: { forceStrategy: "fbDfdb" } },
+    replacements: { backSlotEoLxs: { enabled: true, mode: "force" } },
+  }, {});
+  assert(
+    r.solved && isSolved(applyMoves(applyMoves(solvedCube(), parseAlg(scramble)), r.solution)),
+    "backSlotEoLxs: solution must solve the scramble",
+  );
+  assert(
+    r.segments.some((s) => s.unitId === "backSlotEoLxs" && s.kind === "replacement"),
+    "forced backSlotEoLxs must appear in the solve",
+  );
+  // Competing (enabled, default compete mode) must complete without hanging.
+  const rc = await apb.solve(scramble, {
+    colorNeutrality: "fixed",
+    stepOptions: { block223: { forceStrategy: "fbDfdb" } },
+    replacements: { backSlotEoLxs: { enabled: true } },
+  }, {});
+  assert(rc.solved, "competing backSlotEoLxs must still produce a solved cube");
 });
 
 Deno.test("force-mode OLL extra fires when its F2L-solved trigger is met", async () => {

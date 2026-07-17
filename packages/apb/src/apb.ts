@@ -13,8 +13,9 @@
 //     `eo-pair`; zbll falls through to `pll`),
 //   - replacements: ocllPll (OCLL = OLL 21-27), collEpll (coll + epll=pll
 //     subset), eoPair (insert subsets), eodrLs (eodr + ls=lxs subset),
-//   - extras: oll, zbls, winterSummerVariation (wv/sv), backSlotEoLxs
-//     (eoBackSlot = `dfr` subset + lxsBackSlot).
+//     backSlotEoLxs (frPair + eoBackSlot=`dfr` subset + lxsBackSlot — an
+//     every-scramble front-pair-first alternative, a compete replacement not an extra),
+//   - extras: oll, zbls, winterSummerVariation (wv/sv).
 // Full end-to-end solves work and stay in the fixed frame (centers home from
 // start to finish) — see the "Center frame" and "Last layer" notes below and
 // geometry.ts. ZBLL is complete: all 7775 EO-solved last-layer states solve
@@ -75,6 +76,7 @@ import {
   type SearchPhase,
 } from "@moishy/cubing-core";
 import { brPair as brPairSet } from "@moishy/algsets/br-pair";
+import { frPair as frPairSet } from "@moishy/algsets/fr-pair";
 import { dfdb as dfdbSet } from "@moishy/algsets/dfdb";
 import { lxs as lxsSet } from "@moishy/algsets/lxs";
 import { zbll as zbllSet } from "@moishy/algsets/zbll";
@@ -589,26 +591,38 @@ const winterSummerVariation = {
   }],
 };
 
-// backSlotEoLxs (region [brPair..lxs], boundary trigger = front-right pair
-// already formed+oriented): insert it, then EO + last slot from the back side.
-// eoBackSlot is the `dfr` subset of eo-pair; lxsBackSlot is being authored.
-const frontPairFormed = (s: CubeState) =>
-  s.cp[4] === 4 && s.co[4] === 0 && s.ep[8] === 8 && s.eo[8] === 0;
+// backSlotEoLxs (replacement, region [brPair..lxs]): the front-pair-first F2L+EO
+// order — insert the front-right pair (frPair), then EO from the back (backSlotEo),
+// then solve the back slot (backSlotLxs). A genuine every-scramble alternative to
+// brPair -> eo -> lxs (you can always insert the front pair and finish from the
+// back), so it is a `compete` *Replacement*, not an Extra. (It was mistakenly a
+// boundary-triggered Extra that fired only when the front pair happened to be
+// pre-formed; `compete` is exactly the "use it when it's cheaper" knob.) frPair is
+// the mirror of the brPair set; backSlotEo is the `dfr` subset of eo-pair;
+// backSlotLxs solves the back-right slot. Opt-in like the rest.
 const eoBackSlotLookup = regionLookup(eoPairSet, eoSignature(), (c) => c.subset === "dfr");
-const backSlotEoLxs = {
+// What backSlotEo lands on: block223 + the front-right pair (DFR corner 4, FR edge
+// 8), all edges oriented. The BACK slot (DBR 7 + BR 11) and DR (edge 4) are still
+// open — backSlotLxs fills them. (`dfr` is the front-pair-solved EO subset, exactly
+// mirroring the EO step's `dbr` back-pair-solved subset — so its goal is this front
+// region + EO, NOT AFTER_BR, which would wrongly demand the back slot.)
+const AFTER_FRONT = { corners: [4, 5, 6], edges: [5, 6, 7, 8, 9, 10] } as const;
+const backSlotEoLxs: Replacement = {
   id: "backSlotEoLxs",
   label: "Back-slot EO + LXS",
-  region: ["brPair", "lxs"] as [string, string],
-  mode: "force" as const,
-  trigger: { kind: "boundary" as const, test: frontPairFormed },
+  region: ["brPair", "lxs"],
+  mode: "compete",
   strategies: [{
     id: "backSlotEoLxs",
     phases: [
-      searchPhase("insertFrontRightPair", frontPairFormed),
-      alg("eoBackSlot", regionSolvedAndEO(AFTER_BR), eoBackSlotLookup),
-      // Back slot = DBR corner (7) + BR edge (11) + DR edge (4): lxsBackSlot
+      // Insert the front-right pair (DFR 4 + FR 8) by alg — the mirror of brPair,
+      // recognized on those two pieces. Every frPair alg keeps block223 intact
+      // (fixed-frame, verified), so this leaves the block solved + front pair in.
+      alg("frPair", regionSolved(AFTER_FRONT), regionLookup(frPairSet, pieceSignature([4], [8]))),
+      alg("eoBackSlot", regionSolvedAndEO(AFTER_FRONT), eoBackSlotLookup),
+      // Back slot = DBR corner (7) + BR edge (11) + DR edge (4): backSlotLxs
       // solves the back-right slot, so it recognizes on those pieces (not the
-      // front DFR/FR slot that the insertFrontRightPair search handles).
+      // front DFR/FR slot that frPair handles).
       alg(
         "lxsBackSlot",
         regionSolvedAndEO(F2L),
@@ -627,14 +641,14 @@ const backSlotEoLxs = {
  * empty) sets, so they light up the moment those algs land; they are opt-in
  * (disabled) and produce no candidate until then. Recommended defaults ship
  * Lookahead on (depth 1) across every adjacent core-Step pair plus the
- * intra-strategy `ocll->pll` / `eodr->ls` / `eoBackSlot->lxsBackSlot` pairs.
+ * intra-strategy `ocll->pll` / `eodr->ls` / `frPair->eoBackSlot->lxsBackSlot` pairs.
  */
 export const apbDefinition: MethodDefinition = {
   id: "apb",
   label: "APB",
   steps: [block223, brPair, eo, lxs, zbll],
-  replacements: [ocllPll, collEpll, eoPair, eodrLs],
-  extras: [ollExtra, zblsExtra, winterSummerVariation, backSlotEoLxs],
+  replacements: [ocllPll, collEpll, eoPair, eodrLs, backSlotEoLxs],
+  extras: [ollExtra, zblsExtra, winterSummerVariation],
   recommendedSettings: {
     colorNeutrality: DUAL_CN_BOTTOM,
     lookahead: {
@@ -646,6 +660,7 @@ export const apbDefinition: MethodDefinition = {
         ["lxs", "zbll"],
         ["ocll", "pll"],
         ["eodr", "ls"],
+        ["frPair", "eoBackSlot"],
         ["eoBackSlot", "lxsBackSlot"],
       ],
     },
