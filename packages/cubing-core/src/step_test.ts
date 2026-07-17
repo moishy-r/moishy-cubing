@@ -1,6 +1,14 @@
 import { assert, assertEquals } from "@std/assert";
-import { applyAlg, isSolved, solvedCube, statesEqual, toFacelets } from "./cube-state.ts";
-import { formatAlg, parseAlg } from "./notation.ts";
+import {
+  applyAlg,
+  applyMoves,
+  isSolved,
+  SOLVED,
+  solvedCube,
+  statesEqual,
+  toFacelets,
+} from "./cube-state.ts";
+import { formatAlg, type Move, parseAlg } from "./notation.ts";
 import {
   type AlgCase,
   type AlgorithmicPhase,
@@ -125,6 +133,74 @@ Deno.test("runPhase returns null when the goal is unreachable", () => {
     cases: exactLookup([{ state: caseState, case: sexyCase }]),
   };
   assertEquals(runPhase(algPhase, applyAlg(solvedCube(), "F2")), null); // unrecognized
+});
+
+const isRotation = (m: Move) => m.family === "x" || m.family === "y" || m.family === "z";
+
+Deno.test("homing: an AlgorithmicPhase applies a home-frame alg to a rotated input", () => {
+  const phase: AlgorithmicPhase = {
+    kind: "algorithmic",
+    id: "ll",
+    goal: isSolved,
+    cases: exactLookup([{ state: caseState, case: sexyCase }]),
+    auf: ["U"],
+  };
+  // The very same case, but the whole cube is held in a rotated frame (an
+  // inspection z2 plus a mid-solve y): centers are drifted, so the phase's INPUT
+  // is rotated — the scenario APB never hits but rotation-heavy methods do.
+  const rotated = applyMoves(caseState, parseAlg("z2 y"));
+  assert(!statesEqual(rotated, caseState), "input really is in a rotated frame");
+
+  const seg = runPhase(phase, rotated)!;
+  assert(seg !== null, "the rotated case is still recognized and solved");
+  assertEquals(seg.caseId, "sexy");
+  // The solution reorients the cube first (the homing rotation), then runs the
+  // verbatim home-frame alg — exactly what a solver does before a standard alg.
+  assert(isRotation(seg.moves[0]), "solution begins by reorienting to the home frame");
+  assert(isSolved(seg.endState));
+  assert(
+    isSolved(applyAlg(rotated, formatAlg(seg.moves))),
+    "applying the emitted moves to the ORIGINAL rotated input solves it",
+  );
+  // Checkpoints stay anchored to the emitted move list: the sexy `insert`
+  // checkpoint (index 2 in the alg) shifts by the prepended homing rotation.
+  const homeLen = seg.moves.length - 4; // 4 = the sexy alg, no AUF needed here
+  assertEquals(seg.checkpoints![0], { label: "insert", index: homeLen + 2 });
+});
+
+Deno.test("homing: a home-frame input emits no reorientation (APB path unchanged)", () => {
+  const phase: AlgorithmicPhase = {
+    kind: "algorithmic",
+    id: "ll",
+    goal: isSolved,
+    cases: exactLookup([{ state: caseState, case: sexyCase }]),
+  };
+  const seg = runPhase(phase, caseState)!;
+  assert(!seg.moves.some(isRotation), "no rotation is introduced for a home-frame input");
+  assertEquals(formatAlg(seg.moves), "R U R' U'");
+});
+
+Deno.test("homing: a SearchPhase homes a rotated input then searches the home frame", () => {
+  // A fixed-frame goal (exact SOLVED, centers home): with a face-only move set a
+  // center-drifted input is unsolvable unless the phase reorients first.
+  const phase: SearchPhase = {
+    kind: "search",
+    id: "solve",
+    goal: (s) => statesEqual(s, SOLVED),
+    moves: ["U", "D", "L", "R", "F", "B"],
+    maxDepth: 6,
+  };
+  const home = applyAlg(solvedCube(), "R U'");
+  const rotated = applyMoves(home, parseAlg("z2"));
+  assert(rotated.cn.join("") !== "012345", "input centers are drifted");
+
+  const seg = runPhase(phase, rotated)!;
+  assert(seg !== null, "the rotated scramble is solved");
+  assert(isRotation(seg.moves[0]), "solution begins by reorienting to the home frame");
+  assert(
+    statesEqual(applyMoves(rotated, seg.moves), SOLVED),
+    "the emitted moves solve the ORIGINAL rotated input to the exact home frame",
+  );
 });
 
 Deno.test("phases compose: a Strategy's phases chain, threading state and prevMove", () => {
