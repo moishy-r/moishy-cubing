@@ -394,8 +394,13 @@ function regionAltCands(
 /**
  * Peek cost: the minimum achievable cost of solving `depth` consecutive plain
  * Steps starting at `fromIdx`, from `state`. Used by lookahead to compare
- * continuations. Only peeks plain Steps; stops at a region-consumed boundary or
- * the end of the step list. Returns 0 when nothing (more) to peek.
+ * continuations. Peeks *through* an enabled **compete** region using its plain
+ * core Steps: those Steps are a genuine alternative there (the region races core
+ * vs replacement in `solveSpanDP`), so estimating with them is accurate — and it
+ * keeps merely enabling a compete replacement from perturbing/pessimizing
+ * upstream choices like the very first block. Still stops at a **force** region
+ * (its plain Steps never run, so peeking them would mis-estimate — deferred, as
+ * before). Returns 0 when nothing (more) to peek.
  */
 function peekCost(
   fromIdx: number,
@@ -405,8 +410,8 @@ function peekCost(
   ctx: RunCtx,
 ): number {
   if (depth <= 0 || fromIdx >= ctx.def.steps.length) return 0;
-  // If a region alternative starts here, lookahead across it is deferred — stop.
-  if (ctx.regionAlts.some((a) => a.fromIdx === fromIdx)) return 0;
+  // A forced region replaces its plain Steps outright — don't peek past it.
+  if (ctx.regionAlts.some((a) => a.fromIdx === fromIdx && a.mode === "force")) return 0;
   const step = ctx.def.steps[fromIdx];
   const cands = stepCands(step, state, prevMove, ctx, depth > 1);
   if (cands.length === 0) return Infinity;
@@ -429,8 +434,12 @@ function chooseStepCand(
   const step = ctx.def.steps[stepIdx];
   const nextIdx = stepIdx + 1;
   const nextStep = ctx.def.steps[nextIdx];
+  // Look ahead into the next plain step even when a *compete* region starts there
+  // — its core Steps are a real alternative, so peeking them is accurate and keeps
+  // enabling a replacement from changing this step's choice (see `peekCost`). A
+  // *force* region still suppresses lookahead (its plain Steps never run).
   const lookaheadActive = ctx.lookahead.depth > 0 && nextStep !== undefined &&
-    !ctx.regionAlts.some((a) => a.fromIdx === nextIdx) &&
+    !ctx.regionAlts.some((a) => a.fromIdx === nextIdx && a.mode === "force") &&
     ctx.scopeHas(step.id, nextStep.id);
 
   const cands = stepCands(step, start, prevMove, ctx, lookaheadActive);
@@ -513,10 +522,14 @@ function solveSpanDP(
 
   for (let end = 1; end <= n; end++) {
     const pos = fromIdx + end - 1; // absolute index of the block's last step
-    // Option A: a plain Step occupying just `pos`.
+    // Option A: a plain Step occupying just `pos`. Chosen WITH lookahead — the
+    // same way the standalone walk solves it — so the plain-step cover is not
+    // undervalued against a compete replacement. (No-lookahead here made a step
+    // greedily pick a locally-cheap case that wrecks the next step, inflating the
+    // core cover's cost and handing the race to a replacement that shouldn't win.)
     const prev = best[end - 1];
     if (prev) {
-      const cand = chooseStepCandNoLookahead(pos, prev.state, prev.lastMove, ctx);
+      const cand = chooseStepCand(pos, prev.state, prev.lastMove, ctx);
       if (cand) {
         const cell: Cell = {
           cost: prev.cost + cand.cost,
@@ -558,17 +571,6 @@ function solveSpanDP(
   const final = best[n];
   if (!final) return null;
   return { segments: final.segments, endState: final.state, lastMove: final.lastMove };
-}
-
-/** Plain-step candidate without lookahead (used inside the span DP). */
-function chooseStepCandNoLookahead(
-  stepIdx: number,
-  start: CubeState,
-  prevMove: Move | null,
-  ctx: RunCtx,
-): Cand | null {
-  const cands = stepCands(ctx.def.steps[stepIdx], start, prevMove, ctx, false);
-  return cands[0] ?? null;
 }
 
 // --- Color-neutrality orientations ---

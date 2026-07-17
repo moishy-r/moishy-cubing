@@ -702,23 +702,51 @@ Deno.test("backSlotEoLxs fires as a forced replacement and verifies", async () =
     r.segments.some((s) => s.unitId === "backSlotEoLxs" && s.kind === "replacement"),
     "forced backSlotEoLxs must appear in the solve",
   );
-  // Competing (default compete mode) with lookahead on: backSlotEoLxs costs a
-  // little more over [brPair, eo, lxs] but leaves a much cheaper ZBLL, so the
-  // TOTAL wins here. The span DP must weigh that downstream step — otherwise it
-  // greedily takes the locally-cheaper-but-worse-overall core path (the reported
-  // bug: compete produced a longer solution than force and skipped the replacement).
-  const rc = await apb.solve(scramble, {
-    colorNeutrality: "fixed",
+});
+
+// Regression: enabling a `compete` replacement must NEVER produce a worse solve
+// than leaving it off — the core path is always available, so compete = min(core,
+// replacement). This broke because (a) the span DP solved the core cover WITHOUT
+// lookahead and (b) lookahead was suppressed across the region's entry boundary,
+// so merely enabling the replacement pessimized upstream steps (even block223) and
+// handed the race to the replacement when the true core was cheaper. Both fixed:
+// lookahead now estimates continuations with the plain core steps regardless of
+// which replacements are enabled, and the span DP scores covers with that lookahead.
+Deno.test("compete replacement never worsens a solve; wins only when cheaper", async () => {
+  const base = {
+    colorNeutrality: "fixed" as const,
     lookahead: { depth: 1 },
     stepOptions: { block223: { forceStrategy: "fbDfdb" } },
-    replacements: { backSlotEoLxs: { enabled: true } },
-  }, {});
-  assert(rc.solved, "competing backSlotEoLxs must still produce a solved cube");
+  };
+  const withBS = (scr: string) =>
+    apb.solve(scr, { ...base, replacements: { backSlotEoLxs: { enabled: true } } }, {});
+  const pureCore = (scr: string) => apb.solve(scr, { ...base }, {});
+  const picked = (r: { segments: { unitId: string }[] }, id: string) =>
+    r.segments.some((s) => s.unitId === id);
+
+  // (1) A scramble whose core path is genuinely best: enabling backSlotEoLxs must
+  // NOT degrade it — compete equals pure-core (and keeps the core path). Before the
+  // fix, compete forced a worse block223 and shipped a longer solution here.
+  const coreScr = "D' F2 L2 B2 F2 R' B2 R F2 L' F' L' B";
+  const [c1, k1] = [await withBS(coreScr), await pureCore(coreScr)];
+  assert(c1.solved && k1.solved);
   assert(
-    rc.segments.some((s) => s.unitId === "backSlotEoLxs"),
-    "compete must pick backSlotEoLxs when it wins overall (span DP downstream lookahead)",
+    c1.cost <= k1.cost + 1e-9,
+    `compete (${c1.cost.toFixed(2)}) must be no worse than pure-core (${k1.cost.toFixed(2)})`,
   );
-  assert(rc.cost <= r.cost + 1e-9, "compete must be no worse than force");
+  assert(!picked(c1, "backSlotEoLxs"), "must keep the cheaper core path here");
+
+  // (2) A scramble where backSlotEoLxs genuinely wins: it must be chosen, and the
+  // total must strictly beat pure-core (front-pair-first leaves a much cheaper LL).
+  const winScr = "R U D' U' D F2 R' L B2 D2 U' R' U' B2 L2 B' R2 L2 F U2";
+  const [c2, k2] = [await withBS(winScr), await pureCore(winScr)];
+  assert(c2.solved && k2.solved);
+  assert(picked(c2, "backSlotEoLxs"), "compete must pick backSlotEoLxs when it wins overall");
+  assert(
+    c2.cost < k2.cost - 1e-9,
+    `winning backSlotEoLxs (${c2.cost.toFixed(2)}) must beat pure-core (${k2.cost.toFixed(2)})`,
+  );
+  assert(isSolved(applyMoves(applyMoves(solvedCube(), parseAlg(winScr)), c2.solution)));
 });
 
 Deno.test("force-mode OLL extra fires when its F2L-solved trigger is met", async () => {
