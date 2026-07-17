@@ -113,6 +113,24 @@ Deno.test(
 );
 
 Deno.test(
+  "frPair: every case is recognized and inserts the front pair (region signature, all AUFs)",
+  async () => {
+    const { frPair } = await import("@moishy/algsets/fr-pair");
+    // frPair lands block223 + the front-right pair (DFR 4, FR 8); EO comes later.
+    const AFTER_FRONT = { corners: [4, 5, 6], edges: [5, 6, 7, 8, 9, 10] };
+    const phase: AlgorithmicPhase = {
+      kind: "algorithmic",
+      id: "frPair",
+      goal: regionSolved(AFTER_FRONT),
+      cases: regionLookup(frPair, pieceSignature([4], [8])),
+      auf: ["U"],
+    };
+    const { n } = assertSolvesAllCases(phase, frPair, regionSolved(AFTER_FRONT));
+    assertEquals(n, 89);
+  },
+);
+
+Deno.test(
   "eo: the dbr subset of eo-pair recognizes + solves as the core EO step",
   () => {
     const dbr = (c: { subset?: string }) => c.subset === "dbr-solved-eo-(1)";

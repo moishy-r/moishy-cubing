@@ -13,8 +13,8 @@
 //     `eo-pair`; zbll falls through to `pll`),
 //   - replacements: ocllPll (OCLL = OLL 21-27), collEpll (coll + epll=pll
 //     subset), eoPair (insert subsets), eodrLs (eodr + ls=lxs subset),
-//     backSlotEoLxs (eoBackSlot = `dfr` subset + lxsBackSlot — an every-scramble
-//     front-pair-first alternative, hence a compete replacement, not an extra),
+//     backSlotEoLxs (frPair + eoBackSlot=`dfr` subset + lxsBackSlot — an
+//     every-scramble front-pair-first alternative, a compete replacement not an extra),
 //   - extras: oll, zbls, winterSummerVariation (wv/sv).
 // Full end-to-end solves work and stay in the fixed frame (centers home from
 // start to finish) — see the "Center frame" and "Last layer" notes below and
@@ -76,6 +76,7 @@ import {
   type SearchPhase,
 } from "@moishy/cubing-core";
 import { brPair as brPairSet } from "@moishy/algsets/br-pair";
+import { frPair as frPairSet } from "@moishy/algsets/fr-pair";
 import { dfdb as dfdbSet } from "@moishy/algsets/dfdb";
 import { lxs as lxsSet } from "@moishy/algsets/lxs";
 import { zbll as zbllSet } from "@moishy/algsets/zbll";
@@ -590,22 +591,21 @@ const winterSummerVariation = {
   }],
 };
 
-// backSlotEoLxs (replacement, region [brPair..lxs]): insert the front-right pair,
-// then EO + last slot from the back side. This is a genuine every-scramble
-// alternative to brPair -> eo -> lxs (you can always insert the front pair and
-// finish from the back), so it is a `compete` *Replacement* — not an Extra. (It
-// was mistakenly authored as a boundary-triggered Extra that only fired when the
-// front pair happened to be pre-formed; `compete` is exactly the knob for "use it
-// when it's cheaper," so it belongs as a replacement.) eoBackSlot is the `dfr`
-// subset of eo-pair; lxsBackSlot solves the back-right slot. Opt-in like the rest.
-const frontPairFormed = (s: CubeState) =>
-  s.cp[4] === 4 && s.co[4] === 0 && s.ep[8] === 8 && s.eo[8] === 0;
+// backSlotEoLxs (replacement, region [brPair..lxs]): the front-pair-first F2L+EO
+// order — insert the front-right pair (frPair), then EO from the back (backSlotEo),
+// then solve the back slot (backSlotLxs). A genuine every-scramble alternative to
+// brPair -> eo -> lxs (you can always insert the front pair and finish from the
+// back), so it is a `compete` *Replacement*, not an Extra. (It was mistakenly a
+// boundary-triggered Extra that fired only when the front pair happened to be
+// pre-formed; `compete` is exactly the "use it when it's cheaper" knob.) frPair is
+// the mirror of the brPair set; backSlotEo is the `dfr` subset of eo-pair;
+// backSlotLxs solves the back-right slot. Opt-in like the rest.
 const eoBackSlotLookup = regionLookup(eoPairSet, eoSignature(), (c) => c.subset === "dfr");
-// What eoBackSlot lands on: block223 + the front-right pair (DFR corner 4, FR
-// edge 8), all edges oriented. The BACK slot (DBR 7 + BR 11) and DR (edge 4) are
-// still open — lxsBackSlot fills them. (`dfr` is the front-pair-solved EO subset,
-// exactly mirroring the EO step's `dbr` back-pair-solved subset — so its goal is
-// this front region + EO, NOT AFTER_BR, which would wrongly demand the back slot.)
+// What backSlotEo lands on: block223 + the front-right pair (DFR corner 4, FR edge
+// 8), all edges oriented. The BACK slot (DBR 7 + BR 11) and DR (edge 4) are still
+// open — backSlotLxs fills them. (`dfr` is the front-pair-solved EO subset, exactly
+// mirroring the EO step's `dbr` back-pair-solved subset — so its goal is this front
+// region + EO, NOT AFTER_BR, which would wrongly demand the back slot.)
 const AFTER_FRONT = { corners: [4, 5, 6], edges: [5, 6, 7, 8, 9, 10] } as const;
 const backSlotEoLxs: Replacement = {
   id: "backSlotEoLxs",
@@ -615,24 +615,14 @@ const backSlotEoLxs: Replacement = {
   strategies: [{
     id: "backSlotEoLxs",
     phases: [
-      // Insert the front-right pair while keeping block223 intact — an R/U-area
-      // manipulation, so outer faces only, guided by an A* pruning heuristic on
-      // the pair (like eoPair's formPair). A blind IDA* here would explode; this
-      // stays bounded. (Follow-up: this pair is the mirror of brPair, so it could
-      // instead be an *algorithmic* phase over frPair algs — derived by inverting
-      // the brPair set, or authored directly.)
-      searchPhase("insertFrontRightPair", (s) => regionSolved(BLOCK223)(s) && frontPairFormed(s), {
-        moves: ["U", "D", "L", "R", "F", "B"],
-        useAStar: true,
-        canFollow: axisCanonical,
-        heuristic: regionHeuristic([4], [8], ["U", "D", "L", "R", "F", "B"]),
-        stateKey: regionCoordinate(AFTER_FRONT),
-        maxDepth: 9,
-      }),
+      // Insert the front-right pair (DFR 4 + FR 8) by alg — the mirror of brPair,
+      // recognized on those two pieces. Every frPair alg keeps block223 intact
+      // (fixed-frame, verified), so this leaves the block solved + front pair in.
+      alg("frPair", regionSolved(AFTER_FRONT), regionLookup(frPairSet, pieceSignature([4], [8]))),
       alg("eoBackSlot", regionSolvedAndEO(AFTER_FRONT), eoBackSlotLookup),
-      // Back slot = DBR corner (7) + BR edge (11) + DR edge (4): lxsBackSlot
+      // Back slot = DBR corner (7) + BR edge (11) + DR edge (4): backSlotLxs
       // solves the back-right slot, so it recognizes on those pieces (not the
-      // front DFR/FR slot that the insertFrontRightPair search handles).
+      // front DFR/FR slot that frPair handles).
       alg(
         "lxsBackSlot",
         regionSolvedAndEO(F2L),
@@ -651,7 +641,7 @@ const backSlotEoLxs: Replacement = {
  * empty) sets, so they light up the moment those algs land; they are opt-in
  * (disabled) and produce no candidate until then. Recommended defaults ship
  * Lookahead on (depth 1) across every adjacent core-Step pair plus the
- * intra-strategy `ocll->pll` / `eodr->ls` / `eoBackSlot->lxsBackSlot` pairs.
+ * intra-strategy `ocll->pll` / `eodr->ls` / `frPair->eoBackSlot->lxsBackSlot` pairs.
  */
 export const apbDefinition: MethodDefinition = {
   id: "apb",
@@ -670,6 +660,7 @@ export const apbDefinition: MethodDefinition = {
         ["lxs", "zbll"],
         ["ocll", "pll"],
         ["eodr", "ls"],
+        ["frPair", "eoBackSlot"],
         ["eoBackSlot", "lxsBackSlot"],
       ],
     },
