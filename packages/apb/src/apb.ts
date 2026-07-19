@@ -106,6 +106,7 @@ import {
   regionSolved,
   regionSolvedAndEO,
   regionSolvedStrict,
+  wvSvSignature,
   zblsSignature,
 } from "./geometry.ts";
 import { regionHeuristic } from "./pruning.ts";
@@ -458,7 +459,13 @@ const eoPair: Replacement = {
         useAStar: true,
         canFollow: axisCanonical,
         heuristic: regionHeuristic([7], [11], ["U", "D", "L", "R", "F", "B"]),
-        stateKey: regionCoordinate(AFTER_BR),
+        // The A* identity key must be a sufficient statistic for the goal. The
+        // goal (`eoPairFormed` -> `pairJoined`) turns on the EO pattern (via the
+        // insert lookup's `eoSignature`), so the key MUST include EO — otherwise
+        // A* merges a goal state with an EO-differing non-goal state under one key
+        // and can return the non-goal one (the pair left one U short). The block +
+        // pair coordinate alone was not enough.
+        stateKey: (s, last) => `${regionCoordinate(AFTER_BR)(s, last)}/${eoSignature()(s)}`,
         maxDepth: 9,
       }),
       alg("eoPairInsert", regionSolvedAndEO(AFTER_BR), eoPairInsertLookup),
@@ -471,12 +478,31 @@ const eoPair: Replacement = {
 // must stay solved — centers included). The search must not just form the pair as
 // fast as possible; a slice used to join the pair has to be undone (or its effect
 // on the block otherwise restored), which the `regionSolved(BLOCK223)` clause
-// enforces. Recognizability is checked up to pre-AUF, matching what `runPhase`
-// tries for the insert phase — so any formed state the insert can consume counts.
+// enforces.
+//
+// The pair must be genuinely JOINED at formPair's end — not merely one U turn
+// away. `runPhase` will still try a pre-AUF for the insert, and that pre-AUF is a
+// legitimate *alignment* ONLY when the joined pair lives entirely on the U face:
+// then a U spins corner+edge together and the pair stays made. If a pair piece is
+// off the U layer (the BR edge sitting in FR — the "R" cases), a U instead moves
+// the corner *relative to* the fixed edge, so that U is what *joins* the pair and
+// belongs in formPair, not as the insert's pre-AUF. Hence:
+//   - both pair pieces in the U layer -> recognizable up to AUF is enough (the
+//     residual U is true alignment, left to `eoPairInsert`);
+//   - otherwise -> require *direct* recognition (the joining U is folded into
+//     formPair, where it belongs).
+// This keeps the common U-face case as fast as before and only tightens the goal
+// for the off-U-layer pairs, so the split lands on the real pair-forming move.
 const AUF4: Move[][] = [[], parseAlg("U"), parseAlg("U2"), parseAlg("U'")];
-function eoPairFormed(s: CubeState): boolean {
-  return regionSolved(BLOCK223)(s) &&
+function pairJoined(s: CubeState): boolean {
+  if (eoPairInsertLookup.find(s) !== null) return true; // joined at the canonical alignment
+  const cornerInU = s.cp.indexOf(7) < 4;
+  const edgeInU = s.ep.indexOf(11) < 4;
+  return cornerInU && edgeInU &&
     AUF4.some((u) => eoPairInsertLookup.find(applyMoves(s, u)) !== null);
+}
+function eoPairFormed(s: CubeState): boolean {
+  return regionSolved(BLOCK223)(s) && pairJoined(s);
 }
 
 // eodrLs (region [eo, lxs]): EODR (orient all edges + place DR) then LS. LS is
@@ -573,18 +599,25 @@ const zblsExtra = {
 
 // winterSummerVariation (region [lxs, zbll], checkpoint trigger): mid-LXS, right
 // before the final insert, splice WV/SV then PLL instead of finishing normally.
-// TODO(data): (a) author wv/sv sets; (b) add a `checkpoints` entry to the
-// relevant `lxs` variants (label "preInsert") so this can fire.
+// The checkpoint trigger auto-scans every prefix of the chosen LXS alg for the
+// point where the last pair is set up on top and a WV/SV case is recognized (no
+// hand-placed `checkpoints` needed — not every LXS case has a WV/SV form, and
+// annotating each alg would be error-prone); the runner races each such splice
+// against the normal LXS->ZBLL finish by MCC. This works across methods (e.g. the
+// last F2L pair in CFOP). WV/SV recognize on last-layer orientation + the last-
+// pair setup (geometry.ts `wvSvSignature`) — the sets' default full-facelet
+// signature pinned the LL permutation PLL leaves, so it never matched a live
+// mid-insert state. Built with `aufInvariantLookup` (both-AUF, rotation-invariant).
 const wvSvLookup = fallThrough(
-  regionLookup(wvSet, wvSet.signature),
-  regionLookup(svSet, svSet.signature),
+  aufInvariantLookup(wvSet, wvSvSignature()),
+  aufInvariantLookup(svSet, wvSvSignature()),
 );
 const winterSummerVariation = {
   id: "winterSummerVariation",
   label: "Winter/Summer Variation",
   region: ["lxs", "zbll"] as [string, string],
   mode: "force" as const,
-  trigger: { kind: "checkpoint" as const, label: "preInsert" },
+  trigger: { kind: "checkpoint" as const },
   strategies: [{
     id: "wvSv",
     phases: [alg("wvSv", cornersOriented, wvSvLookup), alg("pll", isSolved, pllLookup)],

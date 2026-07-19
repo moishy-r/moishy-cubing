@@ -175,6 +175,53 @@ Deno.test("subset halves are non-empty and filter as expected", () => {
   );
 });
 
+// Regression: the eoPair split must leave the BR pair genuinely JOINED at
+// formPair's end — never one U short, with the joining move stranded as the
+// insert's "pre-AUF" (the reported bug). A U pre-AUF is legitimate alignment
+// only when the whole pair lives on the U face; when the BR edge sits off the U
+// layer (in FR), a U moves the corner relative to the fixed edge, so that U is
+// pair-forming and must be part of formPair. Verified end to end on real solves.
+Deno.test("eoPair splits so formPair actually forms the pair (not the insert)", async () => {
+  // The real formPair goal object (its predicate is what must hold at the split).
+  const formPairGoal = (apbDefinition.replacements!.find((r) => r.id === "eoPair")!
+    .strategies[0].phases[0] as { goal: (s: CubeState) => boolean }).goal;
+  const scrambles = [
+    "U2 F' U' F2 R L2 R U B2 U B2 U L' R2 U' L B' L2 U F",
+    "R F B2 U R2 D' F' D' L2 R2 D2 B R2 F2 R' U L' D2 F' U",
+    "D' F2 L2 B2 F2 R' B2 R F2 L' F' L' B",
+    "R U2 F' L2 D R2 B' U F2 L' D2 B2 U'",
+  ];
+  for (const scramble of scrambles) {
+    const r = await apb.solve(scramble, {
+      colorNeutrality: "fixed",
+      lookahead: { depth: 1 },
+      stepOptions: { block223: { forceStrategy: "fbDfdb" } },
+      replacements: { eoPair: { enabled: true, mode: "force" } },
+    }, {});
+    assert(
+      r.solved && isSolved(applyMoves(applyMoves(solvedCube(), parseAlg(scramble)), r.solution)),
+      `eoPair (${scramble}): must solve`,
+    );
+    const seg = r.segments.find((s) => s.unitId === "eoPair");
+    assert(seg?.phases, `eoPair (${scramble}): must fire with phase detail`);
+    const formPairEnd = seg.phases[0].endState;
+    // The pair is genuinely joined at the split — not deferred to the insert.
+    assert(
+      formPairGoal(formPairEnd),
+      `eoPair (${scramble}): formPair must end with the pair joined`,
+    );
+    // When the BR edge is off the U layer, no joining move may be stranded as the
+    // insert's pre-AUF (it would break the just-formed pair and re-make it).
+    const edgeOffU = formPairEnd.ep.indexOf(11) >= 4;
+    if (edgeOffU) {
+      assert(
+        (seg.phases[1].auf?.pre ?? []).length === 0,
+        `eoPair (${scramble}): off-U pair must need no insert pre-AUF`,
+      );
+    }
+  }
+});
+
 Deno.test(
   "replacement/extra sets recognize + solve with their wired signatures",
   async () => {
@@ -747,6 +794,53 @@ Deno.test("compete replacement never worsens a solve; wins only when cheaper", a
     `winning backSlotEoLxs (${c2.cost.toFixed(2)}) must beat pure-core (${k2.cost.toFixed(2)})`,
   );
   assert(isSolved(applyMoves(applyMoves(solvedCube(), parseAlg(winScr)), c2.solution)));
+});
+
+// Regression: winterSummerVariation is a checkpoint extra with NO hand-placed
+// checkpoints — the runner auto-scans every prefix of the LXS alg for the point
+// where the last pair is set up on top and a WV/SV case is recognized, then races
+// each such splice against the normal LXS->ZBLL finish by MCC. Guards the whole
+// path: the wvSvSignature projection recognizes a live mid-insert state, the splice
+// produces a correct solve, the phase breakdown stays consistent, and enabling it
+// never worsens a solve (it only fires when at least as cheap).
+Deno.test("winterSummerVariation auto-scans, fires, and never worsens a solve", async () => {
+  const base = {
+    colorNeutrality: "fixed" as const,
+    lookahead: { depth: 1 },
+    stepOptions: { block223: { forceStrategy: "fbDfdb" } },
+  };
+  // Scrambles on which WV/SV is recognized mid-LXS and wins (or ties) the race.
+  const firing = [
+    "L2 B2 F' L' D' F' D' R2 B' R2 F R U B2 L' D' F2 D R' B",
+    "U L B' D L' U2 B U R' F2 R' U' R' D' U2 R2 F' U' R' U'",
+  ];
+  let everFired = false;
+  for (const scramble of firing) {
+    const on = await apb.solve(scramble, {
+      ...base,
+      extras: { winterSummerVariation: { enabled: true } },
+    }, {});
+    const off = await apb.solve(scramble, base, {});
+    assert(
+      on.solved && isSolved(applyMoves(applyMoves(solvedCube(), parseAlg(scramble)), on.solution)),
+      `wvSv (${scramble}): must solve`,
+    );
+    // Enabling the extra never makes the solve worse (MCC race).
+    assert(
+      on.cost <= off.cost + 1e-9,
+      `wvSv (${scramble}): enabling must not worsen (${on.cost.toFixed(2)} vs ${
+        off.cost.toFixed(2)
+      })`,
+    );
+    const seg = on.segments.find((s) => s.unitId === "winterSummerVariation");
+    if (seg) {
+      everFired = true;
+      // Phase breakdown (LXS setup prefix + wvSv + pll) sums to the whole segment.
+      const phaseMoves = (seg.phases ?? []).reduce((n, p) => n + p.moves.length, 0);
+      assertEquals(phaseMoves, seg.moves.length, "wvSv phase moves must sum to the segment");
+    }
+  }
+  assert(everFired, "winterSummerVariation must fire on at least one of the firing scrambles");
 });
 
 Deno.test("force-mode OLL extra fires when its F2L-solved trigger is met", async () => {
