@@ -63,10 +63,18 @@ export interface BoundaryTrigger {
   test: (state: CubeState, ctx: ExtraContext) => boolean;
 }
 
-/** Scoped to a `checkpoints` label mid-alg (e.g. Winter/Summer Variation). */
+/**
+ * Fires mid-alg, at a split point *inside* a chosen step's algorithm (e.g. Winter/
+ * Summer Variation, spliced into the last-slot insert). With a `label`, it splices
+ * only at a variant's matching named `checkpoints` entry. Without one, the runner
+ * *auto-scans* every move prefix of the step's alg and splices wherever the extra's
+ * first phase recognizes a case — so no alg has to be hand-annotated, and it works
+ * across methods (the last F2L pair in CFOP, say). Every valid splice is raced
+ * against the normal finish by MCC.
+ */
 export interface CheckpointTrigger {
   kind: "checkpoint";
-  label: string;
+  label?: string;
 }
 
 export type ExtraTrigger = BoundaryTrigger | CheckpointTrigger;
@@ -243,7 +251,8 @@ interface CheckpointExtra {
   id: string;
   fromIdx: number;
   toIdx: number;
-  label: string;
+  /** Named checkpoint to splice at; when absent, auto-scan every alg prefix. */
+  label?: string;
   strategies: Strategy[];
 }
 
@@ -687,7 +696,7 @@ export class Method {
           id: e.id,
           fromIdx,
           toIdx,
-          label: e.trigger.label,
+          ...(e.trigger.label !== undefined ? { label: e.trigger.label } : {}),
           strategies: e.strategies,
         });
       } else {
@@ -911,11 +920,37 @@ function walkOne(i: number, state: CubeState, prevMove: Move | null, ctx: RunCtx
   };
 }
 
+/** Cost of solving plain steps `[fromIdx, toIdx]` from `start` (baseline finish). */
+function regionTailCost(
+  fromIdx: number,
+  toIdx: number,
+  start: CubeState,
+  prevMove: Move | null,
+  ctx: RunCtx,
+): number | null {
+  let cost = 0;
+  let state = start;
+  let prev = prevMove;
+  for (let j = fromIdx; j <= toIdx; j++) {
+    const c = chooseStepCand(j, state, prev, ctx);
+    if (!c) return null;
+    cost += c.cost;
+    state = c.endState;
+    prev = c.lastMove;
+  }
+  return cost;
+}
+
 /**
- * If the chosen run for step `i` contains an algorithmic phase segment with a
- * checkpoint matching an enabled checkpoint-extra whose region starts at `i`,
- * splice the extra's continuation in place of the alg's tail and let it consume
- * the rest of the extra's region. Returns `null` if nothing splices.
+ * A checkpoint-triggered extra splices its own continuation *into the middle of*
+ * the chosen step's algorithm, consuming the rest of its region. For each enabled
+ * checkpoint extra whose region starts at `i`, this collects every candidate
+ * splice point in `cand` — at a variant's named `checkpoints` entry when the
+ * trigger has a `label`, or (no label) at EVERY move prefix where the extra's
+ * first phase recognizes a case — and races them against the normal finish of the
+ * region (`cand` + the plain steps after it) by MCC. Returns the cheapest spliced
+ * {@link WalkStep}, or `null` when the normal finish is at least as cheap (or no
+ * splice recognizes) — in which case the caller proceeds with `cand` as usual.
  */
 function spliceCheckpointExtras(
   i: number,
@@ -926,14 +961,25 @@ function spliceCheckpointExtras(
   const extrasHere = ctx.checkpointExtras.filter((e) => e.fromIdx === i);
   if (extrasHere.length === 0) return null;
 
-  // Find the first algorithmic phase segment carrying a matching checkpoint.
-  for (let p = 0; p < cand.phaseSegs.length; p++) {
-    const seg = cand.phaseSegs[p];
-    if (seg.kind === "algorithmic" && seg.checkpoints?.length) {
-      for (const cp of [...seg.checkpoints].sort((a, b) => a.index - b.index)) {
-        const extra = extrasHere.find((e) => e.label === cp.label);
-        if (!extra) continue;
-        const prefix = seg.moves.slice(0, cp.index);
+  let best: { step: WalkStep; cost: number } | null = null;
+
+  for (const extra of extrasHere) {
+    // Baseline: the normal finish of the region — this step's run plus the plain
+    // steps after it, up to the region end. A splice only wins if it beats this.
+    const tail = regionTailCost(i + 1, extra.toIdx, cand.endState, cand.lastMove, ctx);
+    const baseline = tail === null ? Infinity : cand.cost + tail;
+
+    for (let p = 0; p < cand.phaseSegs.length; p++) {
+      const seg = cand.phaseSegs[p];
+      if (seg.kind !== "algorithmic") continue;
+      // Candidate split indices within this phase's moves: the named checkpoints
+      // for a labelled trigger, otherwise every prefix (auto-scan).
+      const indices = extra.label !== undefined
+        ? (seg.checkpoints ?? []).filter((cp) => cp.label === extra.label).map((cp) => cp.index)
+        : Array.from({ length: seg.moves.length + 1 }, (_, k) => k);
+
+      for (const idx of indices) {
+        const prefix = seg.moves.slice(0, idx);
         const stateAtCp = applyMoves(seg.startState, prefix);
         const prefixPrev = prefix.at(-1) ?? cand.phaseSegs[p - 1]?.moves.at(-1) ?? prevMove;
         const cont = regionAltCands(
@@ -955,22 +1001,39 @@ function spliceCheckpointExtras(
         const before = cand.phaseSegs.slice(0, p).flatMap((s: PhaseSegment) => s.moves);
         const moves = [...before, ...prefix, ...chosen.moves];
         const cost = costOf(moves, prevMove, ctx.costModel);
+        // Fire when the splice is at least as cheap as the normal finish (a tie is
+        // a valid win for the variation); among splices, the cheapest-first wins.
+        if (cost > baseline || (best && cost >= best.cost)) continue;
+        // Keep the split phase's kept prefix as its own segment so the phase
+        // breakdown still sums to the whole (it is the extra's "setup" — e.g. the
+        // moves that bring the last pair on top before WV/SV inserts it).
+        const prefixSeg: PhaseSegment[] = prefix.length === 0 ? [] : [{
+          phaseId: seg.phaseId,
+          kind: "algorithmic",
+          moves: prefix,
+          cost: costOf(prefix, cand.phaseSegs[p - 1]?.moves.at(-1) ?? prevMove, ctx.costModel),
+          startState: seg.startState,
+          endState: stateAtCp,
+        }];
         const seg2: SolveSegment = {
           unitId: extra.id,
           kind: "extra",
           strategyId: chosen.strategyId,
           moves,
           cost,
-          phases: [...cand.phaseSegs.slice(0, p), ...chosen.phaseSegs],
+          phases: [...cand.phaseSegs.slice(0, p), ...prefixSeg, ...chosen.phaseSegs],
         };
-        return {
-          segments: [seg2],
-          endState: chosen.endState,
-          lastMove: chosen.lastMove,
-          nextIdx: extra.toIdx + 1,
+        best = {
+          step: {
+            segments: [seg2],
+            endState: chosen.endState,
+            lastMove: chosen.lastMove,
+            nextIdx: extra.toIdx + 1,
+          },
+          cost,
         };
       }
     }
   }
-  return null;
+  return best?.step ?? null;
 }

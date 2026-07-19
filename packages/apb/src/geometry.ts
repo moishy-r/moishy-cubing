@@ -281,6 +281,22 @@ export function zblsSignature(): (s: CubeState) => string {
   return (s) => `${pieceSignature([4], [8])(s)}/${s.eo.join("")}`;
 }
 
+/**
+ * Winter/Summer-Variation recognition: taken mid-LXS, at the moment the last
+ * F2L pair (DFR corner 4 + FR edge 8) is set up on top and about to be inserted.
+ * WV/SV insert that pair *while orienting the last-layer corners* (edges already
+ * oriented), landing at PLL. So recognition keys on the last-layer *orientation*
+ * (corner + edge orientation, by slot — like OLL/OCLL) PLUS the last pair's
+ * location + orientation (which distinguishes the pre-insert setups). It must NOT
+ * pin the last-layer permutation (PLL fixes that), so the algset's default
+ * full-facelet signature never matched an intermediate insert state. Slot-based
+ * orientation, so AUF is handled upstream. Verified collision-free across all
+ * wv + sv cases.
+ */
+export function wvSvSignature(): (s: CubeState) => string {
+  return (s) => `${orientationSignature()(s)}/${pieceSignature([4], [8])(s)}`;
+}
+
 // --- CaseLookup builders ------------------------------------------------------
 
 /**

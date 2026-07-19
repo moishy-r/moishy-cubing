@@ -475,6 +475,43 @@ Deno.test("checkpoint extra (opt-in): splices its continuation mid-alg", async (
   assertEquals(formatAlg(on.segments[0].moves.slice(0, 2)), "R U");
 });
 
+Deno.test("checkpoint extra with no label auto-scans alg prefixes for the splice", async () => {
+  // The step alg declares NO checkpoints and the trigger has NO label: the runner
+  // must scan every prefix and find the point where the extra's first phase
+  // recognizes. The continuation recognizes ONLY at the "R U" prefix (midState),
+  // so a splice can only be found by scanning — not from any pre-declared index.
+  const bareSexy: AlgCase = { id: "sexy", algs: [{ moves: parseAlg("R U R' U'") }] };
+  const contCase: AlgCase = { id: "cont", algs: [{ moves: parseAlg("R' U'") }] };
+  const method = new Method({
+    id: "demo",
+    steps: [{
+      id: "ll",
+      strategies: [{
+        id: "s",
+        phases: [algPhase("p", isSolved, [{ state: caseState, case: bareSexy }])],
+      }],
+    }],
+    extras: [{
+      id: "mid",
+      region: ["ll", "ll"],
+      mode: "force",
+      trigger: { kind: "checkpoint" }, // no label -> auto-scan
+      strategies: [{
+        id: "cont",
+        phases: [algPhase("c", isSolved, [{ state: midState, case: contCase }])],
+      }],
+    }],
+  });
+  const off = await method.solve("U R U' R'");
+  assertEquals(off.segments[0].kind, "step");
+  const on = await method.solve("U R U' R'", { extras: { mid: { enabled: true } } });
+  assertEquals(on.segments[0].kind, "extra");
+  assertEquals(on.segments[0].unitId, "mid");
+  assert(on.solved && isSolved(on.finalState));
+  // Found the mid-alg splice by scanning: kept the "R U" prefix, then continued.
+  assertEquals(formatAlg(on.segments[0].moves.slice(0, 2)), "R U");
+});
+
 Deno.test("recommendedSettings apply by default and are overridable by the caller", async () => {
   const method = new Method({
     id: "demo",
