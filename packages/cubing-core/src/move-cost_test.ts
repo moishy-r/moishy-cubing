@@ -1,6 +1,11 @@
-import { assertAlmostEquals, assertEquals } from "@std/assert";
+import { assert, assertAlmostEquals, assertEquals } from "@std/assert";
 import { parseAlg } from "./notation.ts";
-import { createDefaultMoveCostModel, type MoveCostModel, scoreAlg } from "./move-cost.ts";
+import {
+  createBlockCostModel,
+  createDefaultMoveCostModel,
+  type MoveCostModel,
+  scoreAlg,
+} from "./move-cost.ts";
 
 const twoH = createDefaultMoveCostModel(); // default is 2H
 const oh = createDefaultMoveCostModel({ mode: "OH" });
@@ -105,4 +110,25 @@ Deno.test("the interface is pluggable: a custom flat model works", () => {
   const flat: MoveCostModel = { cost: () => 1 };
   assertEquals(scoreAlg(parseAlg("R U R' U'"), flat), 4);
   assertEquals(scoreAlg(parseAlg("R2 x M' D"), flat), 4);
+});
+
+Deno.test("block cost model: wide b is prohibitive, slices are direction-aware", () => {
+  const block = createBlockCostModel();
+  const c = (alg: string) => block.cost(parseAlg(alg)[0], { prevMove: null, index: 0 });
+  // A wide b costs multiple clean moves — a search will route around it.
+  assert(c("b") > 3 * c("R"), "wide b must be prohibitively expensive vs R");
+  assert(c("b") > c("r"), "wide b must cost far more than the ergonomic wide r");
+  // Direction matters for slices (unlike the default model): M' ≪ M, S' ≪ S.
+  assert(c("M'") < c("M"), "M' is easier than M");
+  assert(c("S'") < c("S"), "S' is far easier than S");
+  // Right-hand/U moves are the cheap baseline; a leading rotation is cheap too.
+  assertAlmostEquals(c("R"), c("U"));
+  assert(c("y") < c("R") + 1, "a re-hold rotation is cheap (block may start rotated)");
+});
+
+Deno.test("block cost model is move-count-biased: fewer clean moves beats more", () => {
+  const block = createBlockCostModel();
+  // Every move carries a floor, so a shorter sequence of clean moves wins even
+  // when a longer one is individually all-cheap.
+  assert(scoreAlg(parseAlg("R U R'"), block) < scoreAlg(parseAlg("R U R' U R"), block));
 });

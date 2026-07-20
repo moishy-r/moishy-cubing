@@ -37,6 +37,15 @@ export interface SearchPhase {
   moves: MoveFamily[];
   /** Admissible lower-bound remaining-cost heuristic (a pruning table). */
   heuristic?: (state: CubeState) => number;
+  /**
+   * Cost model for THIS phase's search (and, by construction, its `heuristic`),
+   * overriding the solve-wide model. Lets a phase optimize a different objective
+   * — e.g. block-building uses a move-count-dominant, wide-averse model
+   * ({@link import("./move-cost.ts").createBlockCostModel}) while last-layer
+   * phases keep the default MCC. The `heuristic` MUST be built with the same
+   * model to stay admissible. Defaults to the context's cost model.
+   */
+  costModel?: MoveCostModel;
   /** Move-ordering constraint passed through to the engine. */
   canFollow?: (prev: Move, next: Move) => boolean;
   /** Maximum length of this phase's sub-solution, in moves. */
@@ -258,6 +267,7 @@ export function runPhase(
   const innerPrev = homeMoves.length > 0 ? homeMoves[homeMoves.length - 1] : prevMove;
 
   if (phase.kind === "search") {
+    const searchModel = phase.costModel ?? costModel;
     const engine = phase.useAStar ? searchAStar : search;
     const result = engine({
       start: homed,
@@ -265,7 +275,7 @@ export function runPhase(
       moves: phase.moves,
       heuristic: phase.heuristic,
       canFollow: phase.canFollow,
-      costModel,
+      costModel: searchModel,
       prevMove: innerPrev,
       stateKey: phase.stateKey,
       maxDepth: phase.maxDepth ?? context.maxDepth,
@@ -277,7 +287,7 @@ export function runPhase(
     // result.cost is threaded from innerPrev (the last homing move); prefix the
     // homing rotations' own cost, threaded from the external prevMove.
     const cost = homeMoves.length > 0
-      ? segmentCost(homeMoves, prevMove, costModel) + result.cost
+      ? segmentCost(homeMoves, prevMove, searchModel) + result.cost
       : result.cost;
     return {
       phaseId: phase.id,
@@ -401,6 +411,10 @@ export function runPhaseCandidates(
       const only = runPhase(phase, start, context);
       return only ? [only] : [];
     }
+    const searchModel = phase.costModel ?? costModel;
+    const searchPrefixCost = phase.costModel && homeMoves.length > 0
+      ? segmentCost(homeMoves, prevMove, searchModel)
+      : homePrefixCost;
     // A* phases pool via the guided `searchAStarMany` (best-first, cost-slack),
     // keyed by `poolStateKey` — which must be fine enough to keep distinct any
     // solutions the downstream phase treats differently (e.g. an FB's DF/DB pair),
@@ -413,7 +427,7 @@ export function runPhaseCandidates(
         moves: phase.moves,
         heuristic: phase.heuristic,
         canFollow: phase.canFollow,
-        costModel,
+        costModel: searchModel,
         prevMove: innerPrev,
         stateKey: phase.poolStateKey ?? phase.stateKey,
         maxDepth: phase.maxDepth ?? context.maxDepth,
@@ -428,7 +442,7 @@ export function runPhaseCandidates(
         moves: phase.moves,
         heuristic: phase.heuristic,
         canFollow: phase.canFollow,
-        costModel,
+        costModel: searchModel,
         prevMove: innerPrev,
         maxDepth: phase.maxDepth ?? context.maxDepth,
         slack: opts.searchSlack,
@@ -442,7 +456,7 @@ export function runPhaseCandidates(
         phaseId: phase.id,
         kind: "search" as const,
         moves,
-        cost: homePrefixCost + r.cost,
+        cost: searchPrefixCost + r.cost,
         startState: start,
         endState: applyMoves(start, moves),
         nodesVisited: r.nodesVisited,

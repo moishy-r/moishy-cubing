@@ -65,6 +65,7 @@
 import {
   type AlgorithmicPhase,
   applyMoves,
+  createBlockCostModel,
   type CubeState,
   isSolved,
   type MethodDefinition,
@@ -183,6 +184,12 @@ const CROSS = { corners: [], edges: [5, 6, 7] }; // DF, DL, DB
 
 type Region = { corners: readonly number[]; edges: readonly number[] };
 
+// Block-building optimizes a different objective than last-layer execution:
+// move-count-dominant, wide-averse, direction-aware (see cubing-core
+// `createBlockCostModel`). It drives both the block search and its pruning
+// heuristic; every other phase keeps the default MCC.
+const blockModel = createBlockCostModel();
+
 /**
  * A block-building search phase. The `goal` is always the full sub-block the
  * phase must reach; `heuristicRegion` (defaulting to `goal`) is what the pruning
@@ -207,7 +214,15 @@ const blockSearch = (
   goal: regionSolvedStrict(goal),
   moves,
   id,
-  heuristic: regionHeuristic([...heuristicRegion.corners], [...heuristicRegion.edges], moves),
+  heuristic: regionHeuristic(
+    [...heuristicRegion.corners],
+    [...heuristicRegion.edges],
+    moves,
+    blockModel,
+  ),
+  // The block cost model (move-count-dominant, wide-averse) — search + heuristic
+  // must share it to stay admissible.
+  costModel: blockModel,
   // A* + the pruning table: cost-optimal without IDA*'s real-cost thrashing.
   useAStar: true,
   // Axis canonicalization collapses the redundant orderings the slice/wide
