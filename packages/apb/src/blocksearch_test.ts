@@ -267,3 +267,28 @@ function invertAlg(moves: Move[]): Move[] {
   return moves.map((m) => ({ family: m.family, amount: ((4 - m.amount) % 4 || 4) as 1 | 2 | 3 }))
     .reverse();
 }
+
+// Regression: the block cost model (cubing-core `createBlockCostModel`, wired via
+// the block phases' `SearchPhase.costModel`) makes block-building move-count-
+// dominant and wide-averse. Above all, a wide `b` — which no one would ever do —
+// must never appear in a first block, and awkward wides/slices should be rare.
+// (The default MCC model, priced flatly, emitted a wide `b` in ~1/4 of solves.)
+Deno.test("block223 never emits a wide b and keeps wides sparse", async () => {
+  let wideB = 0, wides = 0, blocks = 0, moves = 0;
+  for (let i = 0; i < 16; i++) {
+    const scr = scramble(i * 7 + 1, 20).map((m) => `${m.family}${["", "", "2", "'"][m.amount]}`)
+      .join(" ");
+    const r = await apb.solve(scr, {}, { timeBudgetMs: 20_000 });
+    assert(r.solved, `${scr}: must solve`);
+    const block = r.segments[0].moves;
+    blocks++;
+    moves += block.length;
+    for (const m of block) {
+      if (m.family === "b") wideB++;
+      if ("rludfb".includes(m.family)) wides++;
+    }
+  }
+  assertEquals(wideB, 0, "a first block must never contain a wide b");
+  assert(wides / blocks < 3, `too many wide moves per block (${(wides / blocks).toFixed(1)})`);
+  assert(moves / blocks < 12, `blocks unexpectedly long (${(moves / blocks).toFixed(1)} avg)`);
+});

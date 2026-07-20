@@ -27,7 +27,7 @@
 // standard — tune them as real solve data suggests. Every penalty is a
 // deterministic predicate over `(prevMove, move)`.
 
-import { isDouble, type Move, type MoveFamily } from "./notation.ts";
+import { formatMove, isDouble, type Move, type MoveFamily } from "./notation.ts";
 
 /** Context passed to {@link MoveCostModel.cost} for a single move. */
 export interface MoveCostContext {
@@ -187,6 +187,106 @@ export function createDefaultMoveCostModel(
         c += mode === "2H"
           ? destabilizationPenalty2H(prev, move)
           : ohGripFatiguePenalty(prev, move);
+      }
+      return c;
+    },
+  };
+}
+
+// --- Block-building cost model ------------------------------------------------
+//
+// First-block building wants a DIFFERENT cost profile than last-layer execution:
+// move count dominates (a short block is a fast block), ergonomics breaks ties,
+// and a handful of moves are essentially never worth doing — above all a wide `b`
+// (and `f`), which no one recommends. The default MCC model prices wides only
+// slightly above their outer face and is direction-neutral, so a raw-cost search
+// happily piles on wides and awkward slices. This model fixes that for the block
+// phases only (wired via `SearchPhase.costModel`), leaving last-layer scoring and
+// its lookahead untouched.
+//
+// Shape: cost = MOVE_TAX (a per-move floor that biases toward fewer moves, à la
+// onionhoney's `moveCount*100`, but scaled to still let a very awkward move lose
+// to an extra clean one) + an ergonomic term that IS direction-dependent (M' ≪ M,
+// S' ≪ S) + the same additive transition penalties as the default model. The
+// ergonomic term is a plain per-move-name table; unknown names fall back to a
+// middling default. Leading whole-cube rotations (the inspection re-hold) are
+// priced cheaply — the block may be built from any orientation.
+
+const BLOCK_MOVE_TAX = 1.0;
+
+// Ergonomic term (on top of the tax), by canonical move name. Right-hand/U moves
+// are free; wide `b`/`f` and the hard `S` are steep; slices are direction-aware.
+const BLOCK_ERGO: Record<string, number> = {
+  R: 0.0,
+  "R'": 0.0,
+  R2: 0.4,
+  L: 0.2,
+  "L'": 0.2,
+  L2: 0.6,
+  U: 0.0,
+  "U'": 0.0,
+  U2: 0.3,
+  D: 0.6,
+  "D'": 0.6,
+  D2: 1.0,
+  F: 0.6,
+  "F'": 0.6,
+  F2: 1.0,
+  B: 1.1,
+  "B'": 1.1,
+  B2: 1.6,
+  r: 0.4,
+  "r'": 0.4,
+  r2: 0.8,
+  l: 0.6,
+  "l'": 0.6,
+  l2: 1.0,
+  u: 0.7,
+  "u'": 0.7,
+  u2: 1.1,
+  d: 1.1,
+  "d'": 1.1,
+  d2: 1.6,
+  f: 1.2,
+  "f'": 1.2,
+  f2: 1.8,
+  b: 3.0,
+  "b'": 3.0,
+  b2: 3.6, // wide b: essentially never worth it
+  M: 0.7,
+  "M'": 0.3,
+  M2: 0.9,
+  S: 2.2,
+  "S'": 0.6,
+  S2: 1.6,
+  E: 0.9,
+  "E'": 0.9,
+  E2: 1.4,
+  x: 0.6,
+  "x'": 0.6,
+  x2: 0.9,
+  y: 0.3,
+  "y'": 0.3,
+  y2: 0.5,
+  z: 0.6,
+  "z'": 0.6,
+  z2: 0.9,
+};
+
+/**
+ * The block-building {@link MoveCostModel} — move-count-dominant with an honest,
+ * direction-aware ergonomic tiebreaker (see the section header). Use it for the
+ * block phases' search + pruning heuristic; keep {@link createDefaultMoveCostModel}
+ * for last-layer / lookahead scoring.
+ */
+export function createBlockCostModel(): MoveCostModel {
+  return {
+    cost(move: Move, context: MoveCostContext): number {
+      let c = BLOCK_MOVE_TAX + (BLOCK_ERGO[formatMove(move)] ?? 1.4);
+      const prev = context.prevMove;
+      if (prev) {
+        c += overworkPenalty(prev, move);
+        c += destabilizationPenalty2H(prev, move);
       }
       return c;
     },

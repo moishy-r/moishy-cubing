@@ -40,6 +40,7 @@ export {
 } from "./src/cube-state.ts";
 
 export {
+  createBlockCostModel,
   createDefaultMoveCostModel,
   type DefaultMoveCostOptions,
   type MccMode,
