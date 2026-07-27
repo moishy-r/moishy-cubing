@@ -87,6 +87,16 @@ The composition model for "how a method is wired up":
 `Search` vs `Algorithmic` lives at the Phase level, which is what lets one Step blend both
 approaches.
 
+A `SearchPhase` may also declare a **`timeBudgetMs`** - a soft per-invocation wall-clock cap. On
+expiry the phase yields no segment, so its Strategy simply drops out of the Step's race; this is
+distinct from the solve-global time budget, which ends the whole solve. It exists for an opt-in
+Strategy whose search is inherently deep (APB block223's `DirectBlockbuilding`, one search for all 7
+pieces of the 2x2x3), so a pathological scramble costs that Strategy rather than the solve. The
+budget is charged for _searching_ only: a pruning-table heuristic is warmed before the clock starts,
+since building its tables is a one-time, process-wide cost unrelated to the scramble at hand. The
+tradeoff to accept knowingly is that which Strategies finish becomes machine- and load-dependent, so
+it belongs only on a Strategy the solve does not depend on.
+
 A recognized case carries **one or more interchangeable algs** (`AlgCase.algs`), not a single alg.
 `runPhase` tries every variant (and every AUF alignment) and keeps the cheapest that meets the
 goal - this is the hook Lookahead uses: with all variants on the table, the pipeline runner can

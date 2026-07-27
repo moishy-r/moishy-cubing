@@ -25,9 +25,15 @@
 // races the 8 dual-CN orientations. Known follow-ups, none blocking a correct
 // solve: (1) only `fbDfdb` is enabled by default; the pure-search strategies
 // (`cornerFirst*`, `cross1Front`/`cross1Back`, `direct`) are opt-in. cornerFirst
-// and cross1 are now fast (a whole-block `guardGoal` heuristic; cross1 inserts its
-// pairs one at a time and races both orders), but `direct` — a single deep
-// whole-block search — remains slow and is rarely cheaper; (2)
+// and cross1 are fast (a whole-block `guardGoal` heuristic; cross1 inserts its
+// pairs one at a time and races both orders), and `direct` — one search for the
+// whole 7-piece block — is now practical too, guided by a maxed set of overlapping
+// sub-region tables (`DIRECT_GROUPS`, pruning.ts `regionHeuristicMulti`): ~0.1-1.4s
+// per orientation where the old corners-vs-edges split ran past 30s or exhausted
+// the heap. It finds genuinely shorter blocks — over 25 scrambles, dual-CN, shipped
+// defaults: mean 7.4 STM (range 6-8) against fbDfdb's 9.8 (8-11), and it wins the
+// six-way race on all 25 — but costs ~1.4s per dual-CN solve against fbDfdb's ~0.02s
+// warm, so it stays opt-in; (2)
 // winterSummerVariation's checkpoint trigger only fires once the
 // relevant `lxs` variants carry a `preInsert` checkpoint. Replacements/Extras are
 // opt-in (disabled) per project convention.
@@ -118,7 +124,7 @@ import {
   regionSolvedStrict,
   zblsSignature,
 } from "./geometry.ts";
-import { regionHeuristic } from "./pruning.ts";
+import { regionHeuristic, regionHeuristicMulti } from "./pruning.ts";
 
 // Block-building move set: outer faces + slices + wides (no rotations — those
 // require a re-grip, and are handled once, upstream, by color-neutral orientation
@@ -224,6 +230,28 @@ const CROSS_PAIR_BACK = { corners: [6], edges: [5, 6, 7, 10] }; // cross + DBL +
 
 type Region = { corners: readonly number[]; edges: readonly number[] };
 
+// `direct`'s pruning tables: overlapping sub-regions of the 2x2x3, maxed
+// (`regionHeuristicMulti`). The whole 7-piece block cannot be one combined table
+// (8²·3²·12⁵·2⁵ ≈ 4.6e9 entries), and the corners-vs-edges split `regionHeuristic`
+// falls back to never sees a corner↔edge interaction — which is why a single-phase
+// whole-block search used to run for tens of seconds. These six *do*: both block
+// corners appear in every group, paired with each of two 3-edge sets that together
+// cover all five block edges, plus the four 2-edge sets neither triple contains.
+// (The six pairs a triple already contains are dominated by it — a table tracking
+// more pieces of the same goal is a pointwise-larger bound — so including them
+// would cost lookups and build time for nothing.) Measured on 24 scrambles: ~9x
+// fewer nodes than the split fallback and no timeouts, at identical block cost.
+// Two groups have 3 edges (8²·3²·12³·2³ = 7,962,624 entries, just under
+// MAX_COMBINED_SIZE, ~3.5s to build) and four have 2 (331,776 each, ~0.1s).
+const DIRECT_GROUPS: Region[] = [
+  { corners: [5, 6], edges: [5, 6, 7] }, // + the D-layer cross edges DF/DL/DB
+  { corners: [5, 6], edges: [5, 9, 10] }, // + DF and both side edges FL/BL
+  { corners: [5, 6], edges: [6, 9] },
+  { corners: [5, 6], edges: [6, 10] },
+  { corners: [5, 6], edges: [7, 9] },
+  { corners: [5, 6], edges: [7, 10] },
+];
+
 /**
  * A block-building search phase. The `goal` is always the full sub-block the
  * phase must reach; `heuristicRegion` (defaulting to `goal`) is what the pruning
@@ -241,6 +269,13 @@ const blockSearch = (
     // Pieces the pruning table tracks (defaults to `goal`). A second phase should
     // pass just the pieces it *adds* — a tight, combinable table (see doc above).
     heuristicRegion?: Region;
+    // Instead of one table over `heuristicRegion`, max a *set* of overlapping
+    // sub-region tables (`regionHeuristicMulti`). This is what a single-phase
+    // whole-block search needs: no single combined table fits the full 7-piece
+    // 2x2x3, but several overlapping smaller ones do, and their max sees the
+    // corner<->edge interaction the corners-vs-edges split cannot. Strict goals
+    // only (there is no L-R fold for the multi-table form).
+    heuristicGroups?: readonly Region[];
     moves?: MoveFamily[];
     // `lrHome`: use the drift-allowing Roux FB goal (`regionSolvedLRHome`) — block
     // pieces home + L/R centers home, U/F/D/B free — with the matching L–R-folded
@@ -263,24 +298,30 @@ const blockSearch = (
     // nodes. Maxing two admissible tables stays admissible (same optimal block), so
     // this is a large speedup at no cost to quality.
     guardGoal?: boolean;
+    // Soft per-invocation wall-clock budget; on expiry the phase (and so its
+    // strategy) drops out of the step's race instead of failing the solve. Only
+    // `direct` sets it — see SearchPhase.timeBudgetMs.
+    timeBudgetMs?: number;
     // Phase-chaining pool key (only used when this phase feeds a downstream one).
     // Must distinguish candidates by what the *next* phase reads — for a first
     // block, the whole goal block, so the pool offers genuinely different
     // completions rather than near-duplicate first blocks. See SearchPhase.poolStateKey.
-    poolStateKey?: (s: CubeState, last: Move | null) => string;
+    poolStateKey?: (s: CubeState, last: Move | null) => string | number;
   } = {},
 ): SearchPhase => {
   const heuristicRegion = opts.heuristicRegion ?? goal;
   const moves = opts.moves ?? BLOCK_MOVES;
   // block223 is optimized by move count across all strategies (see `costModel` doc).
   const costModel = opts.costModel ?? BLOCK_COST_MODEL;
-  const tight = regionHeuristic(
-    [...heuristicRegion.corners],
-    [...heuristicRegion.edges],
-    moves,
-    costModel,
-    { foldLR: opts.lrHome },
-  );
+  const tight = opts.heuristicGroups
+    ? regionHeuristicMulti(opts.heuristicGroups, moves, costModel)
+    : regionHeuristic(
+      [...heuristicRegion.corners],
+      [...heuristicRegion.edges],
+      moves,
+      costModel,
+      { foldLR: opts.lrHome },
+    );
   // The guard tracks the whole goal block (only meaningful when the tight table
   // tracks a strict subset — i.e. a second phase with an explicit heuristicRegion).
   const guard = opts.guardGoal && opts.heuristicRegion !== undefined
@@ -308,6 +349,7 @@ const blockSearch = (
     stateKey: regionCoordinate(goal),
     poolStateKey: opts.poolStateKey,
     maxDepth: opts.maxDepth,
+    timeBudgetMs: opts.timeBudgetMs,
   };
 };
 
@@ -363,20 +405,29 @@ const block223: MethodDefinition["steps"][number] = {
     },
     // Pure-search strategies (no algs). `direct` searches the whole 2x2x3 at
     // once; the corner-first/cross strategies solve smaller sub-blocks first.
-    // `direct` is registered but disabled by default: a single deep search for the
-    // whole 7-piece block only has the (necessarily looser, un-combined) full-block
-    // heuristic to guide it, so it is far slower than the phase-chained strategies
-    // that build the block from small, tightly-pruned sub-blocks. Opt in via
-    // `enabledStrategies`/`forceStrategy` when a pure-search block is wanted.
+    // `direct` stays disabled by default, but is no longer pathological: guided by
+    // the maxed multi-table bound (`DIRECT_GROUPS`) it finds the block in ~0.1–1.4s
+    // per orientation (mean ~0.35s) where the old split heuristic routinely ran past
+    // 15s or exhausted the heap. It is still the most expensive block223 strategy —
+    // one deep 7-piece search against three or four tiny guarded ones — and it wins
+    // only on the scrambles whose shortest 2x2x3 does not factor as "2x2x2 first" or
+    // "cross first", so it is opt-in via `enabledStrategies`/`forceStrategy`.
     {
       id: "direct",
       label: "Direct blockbuilding",
       enabledByDefault: false,
       // Single deep search for the whole 7-piece block; capped at 14 STM (a
       // direct block is ~7–13 STM in practice, so this admits it with headroom
-      // while still bounding a runaway search). It has only the loose, un-combined
-      // full-block heuristic, so it is slow regardless of the cap — hence opt-in.
-      phases: [blockSearch("full", BLOCK223, { maxDepth: 14 })],
+      // while still bounding a runaway search).
+      phases: [blockSearch("full", BLOCK223, {
+        maxDepth: 14,
+        heuristicGroups: DIRECT_GROUPS,
+        // Firm per-orientation budget. The measured worst case over 24 scrambles is
+        // ~1.4s, so this is ~2x headroom; a scramble that somehow blows past it
+        // costs `direct` its slot in the race (fbDfdb and the other strategies still
+        // answer) instead of consuming the whole solve's time budget.
+        timeBudgetMs: 3_000,
+      })],
     },
     // Corner-first and cross strategies are registered but disabled by default.
     // Their second phase completes the block with another *search* (not a fast alg

@@ -1,4 +1,4 @@
-import { assert, assertEquals } from "@std/assert";
+import { assert, assertEquals, assertThrows } from "@std/assert";
 import {
   applyAlg,
   applyMoves,
@@ -133,6 +133,30 @@ Deno.test("runPhase returns null when the goal is unreachable", () => {
     cases: exactLookup([{ state: caseState, case: sexyCase }]),
   };
   assertEquals(runPhase(algPhase, applyAlg(solvedCube(), "F2")), null); // unrecognized
+});
+
+Deno.test("a phase's timeBudgetMs drops the phase; the solve-global deadline still throws", () => {
+  // An unguided depth-14 full-cube search: certain to outlive any tiny budget.
+  const hopeless: SearchPhase = {
+    kind: "search",
+    id: "solve",
+    goal: isSolved,
+    moves: ["U", "D", "L", "R", "F", "B"],
+    maxDepth: 14,
+  };
+  const start = applyAlg(solvedCube(), "R U2 F' L D B2 R' U F2 D'");
+  // Own budget expired → the phase yields nothing, so its strategy just loses the
+  // race. This must NOT surface as an error.
+  assertEquals(runPhase({ ...hopeless, timeBudgetMs: 20 }, start), null);
+  // The solve-global deadline is a different contract: it ends the whole solve, so
+  // it keeps propagating even when a (looser) phase budget is also set.
+  for (const phase of [hopeless, { ...hopeless, timeBudgetMs: 60_000 }]) {
+    assertThrows(
+      () => runPhase(phase, start, { deadline: performance.now() + 20 }),
+      DOMException,
+      "time budget",
+    );
+  }
 });
 
 const isRotation = (m: Move) => m.family === "x" || m.family === "y" || m.family === "z";

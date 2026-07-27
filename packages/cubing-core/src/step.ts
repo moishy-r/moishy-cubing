@@ -63,7 +63,7 @@ export interface SearchPhase {
    * on the tracked region) is a large speedup — see `SearchParams.stateKey`.
    * Defaults to the full-cube key.
    */
-  stateKey?: (state: CubeState, lastMove: Move | null) => string;
+  stateKey?: (state: CubeState, lastMove: Move | null) => string | number;
   /**
    * State-identity key when this phase feeds a phase-chaining *pool*
    * (multi-candidate generation). Must be *finer* than `stateKey`: it has to keep
@@ -71,7 +71,23 @@ export interface SearchPhase {
    * or the pool collapses to one candidate. Defaults to `stateKey`, then to the
    * full-cube key. See {@link import("./search.ts").searchAStarMany}.
    */
-  poolStateKey?: (state: CubeState, lastMove: Move | null) => string;
+  poolStateKey?: (state: CubeState, lastMove: Move | null) => string | number;
+  /**
+   * Soft wall-clock budget (ms) for *one invocation* of this phase's search. On
+   * expiry the phase yields no segment, so its strategy simply drops out of the
+   * step's race — unlike the solve-global deadline ({@link SolveContext.deadline}),
+   * which ends the whole solve. The solve-global deadline still applies and still
+   * propagates; this only caps how long one expensive phase may spend before the
+   * runner gives up on *it*.
+   *
+   * For an opt-in strategy whose search is inherently deep (APB block223's
+   * `direct`, a single search for the whole 7-piece 2x2x3), this is what makes a
+   * pathological scramble cost one strategy rather than the solve. Note the
+   * consequence: which strategies finish becomes machine- and load-dependent, so
+   * set it generously above the measured worst case, and never on a phase a solve
+   * depends on.
+   */
+  timeBudgetMs?: number;
 }
 
 /**
@@ -278,6 +294,39 @@ function homeStart(start: CubeState): { homed: CubeState; homeMoves: Move[] } {
 }
 
 /**
+ * The deadline a search phase actually runs under — the solve-global one, tightened
+ * by the phase's own `timeBudgetMs` if it declares one — plus a test for whether a
+ * thrown `TimeoutError` came from *that phase's* budget rather than the solve's.
+ *
+ * Only the phase's own expiry may be swallowed (the phase drops out of the race);
+ * a solve-global timeout must keep propagating so the runner ends the solve. When
+ * the phase budget is the tighter of the two, any timeout is necessarily its own.
+ */
+function phaseBudget(
+  phase: SearchPhase,
+  context: SolveContext,
+  warmStart: CubeState,
+): { deadline: number | undefined; isOwnTimeout: (err: unknown) => boolean } {
+  if (phase.timeBudgetMs === undefined) {
+    return { deadline: context.deadline, isOwnTimeout: () => false };
+  }
+  // Charge the budget for searching, not for building. A pruning-table heuristic
+  // materializes its tables on first call, which for a large table is seconds —
+  // one-time, process-wide, and nothing to do with how hard *this* scramble is. Warm
+  // it before starting the clock, or the very first solve would spuriously drop the
+  // phase while every later one sails through.
+  phase.heuristic?.(warmStart);
+  const own = performance.now() + phase.timeBudgetMs;
+  const global = context.deadline;
+  const ownIsTighter = global === undefined || own <= global;
+  return {
+    deadline: ownIsTighter ? own : global,
+    isOwnTimeout: (err) =>
+      ownIsTighter && err instanceof DOMException && err.name === "TimeoutError",
+  };
+}
+
+/**
  * Executes a single phase against `start`, returning its best (cheapest by MCC)
  * segment, or `null` if the phase cannot reach its goal.
  *
@@ -306,19 +355,26 @@ export function runPhase(
 
   if (phase.kind === "search") {
     const engine = phase.useAStar ? searchAStar : search;
-    const result = engine({
-      start: homed,
-      goal: phase.goal,
-      moves: phase.moves,
-      heuristic: phase.heuristic,
-      canFollow: phase.canFollow,
-      costModel,
-      prevMove: innerPrev,
-      stateKey: phase.stateKey,
-      maxDepth: phase.maxDepth ?? context.maxDepth,
-      signal: context.signal,
-      deadline: context.deadline,
-    });
+    const budget = phaseBudget(phase, context, homed);
+    let result;
+    try {
+      result = engine({
+        start: homed,
+        goal: phase.goal,
+        moves: phase.moves,
+        heuristic: phase.heuristic,
+        canFollow: phase.canFollow,
+        costModel,
+        prevMove: innerPrev,
+        stateKey: phase.stateKey,
+        maxDepth: phase.maxDepth ?? context.maxDepth,
+        signal: context.signal,
+        deadline: budget.deadline,
+      });
+    } catch (err) {
+      if (budget.isOwnTimeout(err)) return null; // drop the phase, not the solve
+      throw err;
+    }
     if (!result.found) return null;
     const moves = homeMoves.length > 0 ? [...homeMoves, ...result.moves] : result.moves;
     // result.cost is threaded from innerPrev (the last homing move); prefix the
@@ -459,36 +515,43 @@ export function runPhaseCandidates(
     // solutions the downstream phase treats differently (e.g. an FB's DF/DB pair),
     // or the pool collapses to one. IDA*-based `searchMany` is only for non-A*
     // (heuristic-less) search phases, where its length-slack DFS is affordable.
-    const results = phase.useAStar
-      ? searchAStarMany({
-        start: homed,
-        goal: phase.goal,
-        moves: phase.moves,
-        heuristic: phase.heuristic,
-        canFollow: phase.canFollow,
-        costModel,
-        prevMove: innerPrev,
-        stateKey: phase.poolStateKey ?? phase.stateKey,
-        maxDepth: phase.maxDepth ?? context.maxDepth,
-        costSlack: opts.searchSlack,
-        maxSolutions: opts.max,
-        signal: context.signal,
-        deadline: context.deadline,
-      })
-      : searchMany({
-        start: homed,
-        goal: phase.goal,
-        moves: phase.moves,
-        heuristic: phase.heuristic,
-        canFollow: phase.canFollow,
-        costModel,
-        prevMove: innerPrev,
-        maxDepth: phase.maxDepth ?? context.maxDepth,
-        slack: opts.searchSlack,
-        maxSolutions: opts.max,
-        signal: context.signal,
-        deadline: context.deadline,
-      });
+    const budget = phaseBudget(phase, context, homed);
+    let results;
+    try {
+      results = phase.useAStar
+        ? searchAStarMany({
+          start: homed,
+          goal: phase.goal,
+          moves: phase.moves,
+          heuristic: phase.heuristic,
+          canFollow: phase.canFollow,
+          costModel,
+          prevMove: innerPrev,
+          stateKey: phase.poolStateKey ?? phase.stateKey,
+          maxDepth: phase.maxDepth ?? context.maxDepth,
+          costSlack: opts.searchSlack,
+          maxSolutions: opts.max,
+          signal: context.signal,
+          deadline: budget.deadline,
+        })
+        : searchMany({
+          start: homed,
+          goal: phase.goal,
+          moves: phase.moves,
+          heuristic: phase.heuristic,
+          canFollow: phase.canFollow,
+          costModel,
+          prevMove: innerPrev,
+          maxDepth: phase.maxDepth ?? context.maxDepth,
+          slack: opts.searchSlack,
+          maxSolutions: opts.max,
+          signal: context.signal,
+          deadline: budget.deadline,
+        });
+    } catch (err) {
+      if (budget.isOwnTimeout(err)) return [];
+      throw err;
+    }
     return results.map((r) => {
       const moves = homeMoves.length > 0 ? [...homeMoves, ...r.moves] : r.moves;
       return {

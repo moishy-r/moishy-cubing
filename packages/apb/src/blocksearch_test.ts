@@ -30,7 +30,7 @@ import {
   regionSolvedLRHome,
   regionSolvedStrict,
 } from "./geometry.ts";
-import { regionHeuristic } from "./pruning.ts";
+import { regionHeuristic, regionHeuristicMulti } from "./pruning.ts";
 
 const ROUX_FB = { corners: [5, 6], edges: [6, 9, 10] };
 // Build a synthetic state with solved pieces but a given center permutation, to
@@ -131,6 +131,68 @@ Deno.test("regionHeuristic is admissible, zero on goal, and center-aware", () =>
   assert(!centersSolved(drifted));
   assert(regionSolvedStrict(CROSS)(drifted) === false); // goal rejects drifted centers
   assert(h(drifted) > 0, "center-drifted state must get a positive bound");
+});
+
+// The `direct` strategy's group set (apb.ts DIRECT_GROUPS), duplicated here so the
+// properties it relies on are asserted directly against the heuristic.
+const DIRECT_GROUPS = [
+  { corners: [5, 6], edges: [5, 6, 7] },
+  { corners: [5, 6], edges: [5, 9, 10] },
+  { corners: [5, 6], edges: [6, 9] },
+  { corners: [5, 6], edges: [6, 10] },
+  { corners: [5, 6], edges: [7, 9] },
+  { corners: [5, 6], edges: [7, 10] },
+];
+
+Deno.test("regionHeuristicMulti: admissible on the full 2x2x3, and tighter than the split", () => {
+  const hMulti = regionHeuristicMulti(DIRECT_GROUPS, BLOCK_MOVES);
+  // The bound `direct` used before: one corners+centers table maxed with one
+  // 5-edge table — admissible, but blind to every corner<->edge interaction.
+  const hSplit = regionHeuristic([...BLOCK223.corners], [...BLOCK223.edges], BLOCK_MOVES);
+  const goal = regionSolvedStrict(BLOCK223);
+
+  assertEquals(hMulti(solvedCube()), 0);
+  // Center-aware: the block's pieces home but the centers drifted must still cost.
+  const drifted = applyMoves(solvedCube(), parseAlg("M2"));
+  assert(!goal(drifted));
+  assert(hMulti(drifted) > 0, "center-drifted state must get a positive bound");
+
+  for (let i = 0; i < 4; i++) {
+    // Shallow scrambles keep the ground-truth search (run under the *loose* split
+    // heuristic, so it cannot be biased by the bound under test) tractable.
+    const s = applyMoves(solvedCube(), scramble(i + 60, 5));
+    const opt = searchAStar({
+      start: s,
+      goal,
+      moves: BLOCK_MOVES,
+      heuristic: hSplit,
+      canFollow: axisCanonical,
+      stateKey: regionCoordinate(BLOCK223),
+    });
+    assert(opt.found);
+    assert(
+      hMulti(s) <= opt.cost + 1e-9,
+      `#${i} multi bound ${hMulti(s)} overestimated true ${opt.cost}`,
+    );
+    // ...and it really is the tighter of the two, which is the whole point.
+    assert(hMulti(s) >= hSplit(s) - 1e-9, `#${i} multi bound is looser than the split`);
+  }
+});
+
+Deno.test("regionHeuristicMulti: a group's bound dominates its subsets' bounds", () => {
+  // Why DIRECT_GROUPS lists only the four 2-edge sets neither 3-edge group contains:
+  // tracking *more* pieces of the same goal can only raise the bound, so a group
+  // contained in another is redundant and would cost lookups and build time for
+  // nothing. If this ever fails, the dropped pairs must be restored.
+  const bigger = regionHeuristicMulti([{ corners: [5, 6], edges: [5, 6, 7] }], BLOCK_MOVES);
+  const smaller = regionHeuristicMulti([{ corners: [5, 6], edges: [5, 6] }], BLOCK_MOVES);
+  for (let i = 0; i < 12; i++) {
+    const s = applyMoves(solvedCube(), scramble(i + 80, 8));
+    assert(
+      bigger(s) >= smaller(s) - 1e-9,
+      `superset group bound ${bigger(s)} fell below its subset's ${smaller(s)}`,
+    );
+  }
 });
 
 Deno.test("regionHeuristic (foldLR) is admissible for the drift-allowing FB goal", () => {
@@ -368,20 +430,18 @@ function invertAlg(moves: Move[]): Move[] {
 // per-candidate blowup) and confirm it builds a strict block and completes a full
 // solve within its depth cap.
 //
-// The `seeds` are the scramble offsets each strategy is exercised on. corner-first
-// and cross-1 (three-phase: cross → pair → pair, each guarded) are fast on any
-// scramble. `direct` is a single deep whole-block search under a loose, un-combined
-// heuristic and is *slow* (seconds, sometimes >30s), so it runs on a couple of
-// seeds verified to complete within budget — the test asserts correctness, not
-// speed. (Making `direct` fast needs a tighter full-block pruning table or a
-// decomposition; tracked separately.)
+// corner-first and cross-1 are three-phase (cross → pair → pair, each guarded);
+// `direct` is a single deep whole-block search, guided by the maxed multi-table
+// bound (`DIRECT_GROUPS` in apb.ts). All four run the same scramble set: `direct`
+// used to need a hand-picked pair of seeds because the loose corners-vs-edges split
+// left it timing out (>30s) or exhausting the heap on most scrambles.
 for (
   const { id, seeds } of [
     { id: "cornerFirstFront", seeds: [200, 201, 202, 203, 204] },
     { id: "cornerFirstBack", seeds: [200, 201, 202, 203, 204] },
     { id: "cross1Front", seeds: [200, 201, 202, 203, 204] },
     { id: "cross1Back", seeds: [200, 201, 202, 203, 204] },
-    { id: "direct", seeds: [202, 205] },
+    { id: "direct", seeds: [200, 201, 202, 203, 204] },
   ]
 ) {
   Deno.test(`block223 strategy '${id}' builds a strict 2x2x3 and full solve`, async () => {

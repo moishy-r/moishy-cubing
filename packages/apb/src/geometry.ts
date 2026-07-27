@@ -184,11 +184,70 @@ export function pieceSignature(
  * NOT for phase-chaining pools: it deliberately collapses states that differ only
  * off-region, which is exactly the downstream diversity a pool needs (see the
  * `poolStateKey` note in step.ts). Use a finer key there.
+ *
+ * The key is a *number*, packed as mixed radix — 24 per tracked piece (slot ×
+ * orientation), 36 for the centers, 19 for the last-move family — not a string.
+ * A* evaluates this for every generated child (tens of millions in a deep block
+ * search), and the string form's allocation and hashing measured as the single
+ * largest per-node cost; the packed integer partitions states identically and is
+ * ~10x cheaper (0.40µs -> 0.04µs on the 2x2x3 region).
  */
-export function regionCoordinate(region: Region): (s: CubeState, last: Move | null) => string {
-  const pieces = pieceSignature(region.corners, region.edges);
-  return (s, last) => `${pieces(s)}/${s.cn.join("")}/${last?.family ?? ""}`;
+export function regionCoordinate(region: Region): (s: CubeState, last: Move | null) => number {
+  const corners = new Int8Array(region.corners);
+  const edges = new Int8Array(region.edges);
+  // Guard the packing: each piece contributes a factor of 24, the centers 36 and
+  // the last-move family FAMILY_RADIX. Beyond ~9 tracked pieces the product leaves
+  // float64's exact-integer range and distinct states would silently collide.
+  const span = 24 ** (corners.length + edges.length) * 36 * FAMILY_RADIX;
+  if (!Number.isSafeInteger(span)) {
+    throw new Error(
+      `regionCoordinate: ${corners.length + edges.length} tracked pieces overflow the packed key`,
+    );
+  }
+  const invCp = new Int8Array(8), invEp = new Int8Array(12);
+  return (s, last) => {
+    const cp = s.cp, ep = s.ep;
+    for (let i = 0; i < 8; i++) invCp[cp[i]] = i;
+    for (let i = 0; i < 12; i++) invEp[ep[i]] = i;
+    let key = 0;
+    for (let i = 0; i < corners.length; i++) {
+      const slot = invCp[corners[i]];
+      key = key * 24 + slot * 3 + s.co[slot];
+    }
+    for (let i = 0; i < edges.length; i++) {
+      const slot = invEp[edges[i]];
+      key = key * 24 + slot * 2 + s.eo[slot];
+    }
+    // A center permutation is a whole-cube rotation, so the images of U and R pin
+    // it (see pruning.ts's center coordinate).
+    key = key * 36 + s.cn[0] * 6 + s.cn[1];
+    return key * FAMILY_RADIX + (last === null ? 0 : FAMILY_INDEX[last.family]);
+  };
 }
+
+// Every family gets a distinct 1-based digit (0 means "no previous move", i.e. the
+// search root), so no two last-move families can ever alias.
+const FAMILY_INDEX: Record<MoveFamily, number> = {
+  R: 1,
+  L: 2,
+  U: 3,
+  D: 4,
+  F: 5,
+  B: 6,
+  M: 7,
+  E: 8,
+  S: 9,
+  r: 10,
+  l: 11,
+  u: 12,
+  d: 13,
+  f: 14,
+  b: 15,
+  x: 16,
+  y: 17,
+  z: 18,
+};
+const FAMILY_RADIX = 19;
 
 // --- Move-ordering: axis/commutation canonicalization ------------------------
 
