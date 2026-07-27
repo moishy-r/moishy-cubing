@@ -1,5 +1,8 @@
 # Authoring / scraping algsets — format brief
 
+> **Audience: contributors.** Internal authoring brief, not user documentation. If you are _using_
+> the library, start with the [guides](../../guides/getting-started.md) instead.
+
 Hand this file to Cowork (or any agent). Its job: turn tables of algorithms into typed
 `@moishy/algsets` case-set modules. **It only writes algs** — everything else (recognition, AUF,
 cost) is derived by the engine, so there is nothing else to get right.

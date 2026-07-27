@@ -1,5 +1,8 @@
 # APB method spec
 
+> **Audience: contributors.** Internal method spec, not user documentation. If you are _using_ the
+> library, start with the [guides](../../guides/getting-started.md) instead.
+
 Living, step-by-step spec for `@moishy/apb`, written up incrementally as each Step of the method
 gets discussed. Assumes the mechanisms in the root `/DESIGN.md` (Step/Strategy/Phase, Replacements,
 Extras, MCC, strategy selection/phase-chaining/lookahead) as given - this doc only covers what's

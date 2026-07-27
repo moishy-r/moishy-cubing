@@ -8,12 +8,19 @@
     "test": "deno test -A",
     "fmt": "deno fmt",
     "lint": "deno lint",
-    "check": "deno check packages/*/mod.ts"
+    "check": "deno check packages/*/mod.ts",
+    "bundle": "deno bundle --platform browser --minify -o docs/apb-demo/apb.bundle.js docs/apb-demo/entry.ts",
+    "ok": "deno task check && deno task lint && deno fmt --check && deno task test"
   },
+  "exclude": [
+    ".claude",
+    "docs/apb-demo/apb.bundle.js"
+  ],
   "fmt": {
     "lineWidth": 100
   },
   "imports": {
+    "@deno/dnt": "jsr:@deno/dnt@^0.41",
     "@std/assert": "jsr:@std/assert@^1"
   }
 }
