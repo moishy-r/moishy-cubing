@@ -63,10 +63,18 @@ export interface BoundaryTrigger {
   test: (state: CubeState, ctx: ExtraContext) => boolean;
 }
 
-/** Scoped to a `checkpoints` label mid-alg (e.g. Winter/Summer Variation). */
+/**
+ * Fires mid-alg, at a split point *inside* a chosen step's algorithm (e.g. Winter/
+ * Summer Variation, spliced into the last-slot insert). With a `label`, it splices
+ * only at a variant's matching named `checkpoints` entry. Without one, the runner
+ * *auto-scans* every move prefix of the step's alg and splices wherever the extra's
+ * first phase recognizes a case — so no alg has to be hand-annotated, and it works
+ * across methods (the last F2L pair in CFOP, say). Every valid splice is raced
+ * against the normal finish by MCC.
+ */
 export interface CheckpointTrigger {
   kind: "checkpoint";
-  label: string;
+  label?: string;
 }
 
 export type ExtraTrigger = BoundaryTrigger | CheckpointTrigger;
@@ -250,7 +258,8 @@ interface CheckpointExtra {
   id: string;
   fromIdx: number;
   toIdx: number;
-  label: string;
+  /** Named checkpoint to splice at; when absent, auto-scan every alg prefix. */
+  label?: string;
   strategies: Strategy[];
 }
 
@@ -427,8 +436,13 @@ function regionAltCands(
 /**
  * Peek cost: the minimum achievable cost of solving `depth` consecutive plain
  * Steps starting at `fromIdx`, from `state`. Used by lookahead to compare
- * continuations. Only peeks plain Steps; stops at a region-consumed boundary or
- * the end of the step list. Returns 0 when nothing (more) to peek.
+ * continuations. Peeks *through* an enabled **compete** region using its plain
+ * core Steps: those Steps are a genuine alternative there (the region races core
+ * vs replacement in `solveSpanDP`), so estimating with them is accurate — and it
+ * keeps merely enabling a compete replacement from perturbing/pessimizing
+ * upstream choices like the very first block. Still stops at a **force** region
+ * (its plain Steps never run, so peeking them would mis-estimate — deferred, as
+ * before). Returns 0 when nothing (more) to peek.
  */
 function peekCost(
   fromIdx: number,
@@ -438,8 +452,8 @@ function peekCost(
   ctx: RunCtx,
 ): number {
   if (depth <= 0 || fromIdx >= ctx.def.steps.length) return 0;
-  // If a region alternative starts here, lookahead across it is deferred — stop.
-  if (ctx.regionAlts.some((a) => a.fromIdx === fromIdx)) return 0;
+  // A forced region replaces its plain Steps outright — don't peek past it.
+  if (ctx.regionAlts.some((a) => a.fromIdx === fromIdx && a.mode === "force")) return 0;
   const step = ctx.def.steps[fromIdx];
   const cands = stepCands(step, state, prevMove, ctx, depth > 1);
   if (cands.length === 0) return Infinity;
@@ -462,8 +476,12 @@ function chooseStepCand(
   const step = ctx.def.steps[stepIdx];
   const nextIdx = stepIdx + 1;
   const nextStep = ctx.def.steps[nextIdx];
+  // Look ahead into the next plain step even when a *compete* region starts there
+  // — its core Steps are a real alternative, so peeking them is accurate and keeps
+  // enabling a replacement from changing this step's choice (see `peekCost`). A
+  // *force* region still suppresses lookahead (its plain Steps never run).
   const lookaheadActive = ctx.lookahead.depth > 0 && nextStep !== undefined &&
-    !ctx.regionAlts.some((a) => a.fromIdx === nextIdx) &&
+    !ctx.regionAlts.some((a) => a.fromIdx === nextIdx && a.mode === "force") &&
     ctx.scopeHas(step.id, nextStep.id);
 
   const cands = stepCands(step, start, prevMove, ctx, lookaheadActive);
@@ -526,12 +544,34 @@ function solveSpanDP(
   const best: (Cell | null)[] = Array(n + 1).fill(null);
   best[0] = { cost: 0, state: start, lastMove: prevMove, segments: [] };
 
+  // Choosing the span's FINAL cover by span-cost alone ignores that a pricier
+  // cover — e.g. a compete replacement — may leave a much cheaper continuation
+  // (the reason a replacement can lose a race it should win: it costs a little
+  // more locally but sets up a far easier next step). So the final cover is
+  // scored by span cost PLUS a lookahead into the step right after the span,
+  // mirroring the plain-step path's `chooseStepCand`. Intermediate cells stay
+  // pure-cost (they are prefixes, and their own next step is inside the span).
+  const afterIdx = toIdx + 1;
+  const afterStep = ctx.def.steps[afterIdx];
+  const exitLookahead = ctx.lookahead.depth > 0 && afterStep !== undefined &&
+    !ctx.regionAlts.some((a) => a.fromIdx === afterIdx) &&
+    ctx.scopeHas(ctx.def.steps[toIdx].id, afterStep.id);
+  const coverScore = (cell: Cell, end: number): number => {
+    if (end !== n || !exitLookahead) return cell.cost;
+    const ahead = peekCost(afterIdx, cell.state, cell.lastMove, ctx.lookahead.depth, ctx);
+    return cell.cost + (ahead === Infinity ? 0 : ahead);
+  };
+
   for (let end = 1; end <= n; end++) {
     const pos = fromIdx + end - 1; // absolute index of the block's last step
-    // Option A: a plain Step occupying just `pos`.
+    // Option A: a plain Step occupying just `pos`. Chosen WITH lookahead — the
+    // same way the standalone walk solves it — so the plain-step cover is not
+    // undervalued against a compete replacement. (No-lookahead here made a step
+    // greedily pick a locally-cheap case that wrecks the next step, inflating the
+    // core cover's cost and handing the race to a replacement that shouldn't win.)
     const prev = best[end - 1];
     if (prev) {
-      const cand = chooseStepCandNoLookahead(pos, prev.state, prev.lastMove, ctx);
+      const cand = chooseStepCand(pos, prev.state, prev.lastMove, ctx);
       if (cand) {
         const cell: Cell = {
           cost: prev.cost + cand.cost,
@@ -539,7 +579,7 @@ function solveSpanDP(
           lastMove: cand.lastMove,
           segments: [...prev.segments, toSegment(ctx.def.steps[pos].id, "step", cand)],
         };
-        if (!best[end] || cell.cost < best[end]!.cost) best[end] = cell;
+        if (!best[end] || coverScore(cell, end) < coverScore(best[end]!, end)) best[end] = cell;
       }
     }
     // Option B: a compete region ending exactly at `pos`.
@@ -566,24 +606,13 @@ function solveSpanDP(
           ),
         ],
       };
-      if (!best[end] || cell.cost < best[end]!.cost) best[end] = cell;
+      if (!best[end] || coverScore(cell, end) < coverScore(best[end]!, end)) best[end] = cell;
     }
   }
 
   const final = best[n];
   if (!final) return null;
   return { segments: final.segments, endState: final.state, lastMove: final.lastMove };
-}
-
-/** Plain-step candidate without lookahead (used inside the span DP). */
-function chooseStepCandNoLookahead(
-  stepIdx: number,
-  start: CubeState,
-  prevMove: Move | null,
-  ctx: RunCtx,
-): Cand | null {
-  const cands = stepCands(ctx.def.steps[stepIdx], start, prevMove, ctx, false);
-  return cands[0] ?? null;
 }
 
 // --- Color-neutrality orientations ---
@@ -700,7 +729,7 @@ export class Method {
           id: e.id,
           fromIdx,
           toIdx,
-          label: e.trigger.label,
+          ...(e.trigger.label !== undefined ? { label: e.trigger.label } : {}),
           strategies: e.strategies,
         });
       } else {
@@ -924,11 +953,37 @@ function walkOne(i: number, state: CubeState, prevMove: Move | null, ctx: RunCtx
   };
 }
 
+/** Cost of solving plain steps `[fromIdx, toIdx]` from `start` (baseline finish). */
+function regionTailCost(
+  fromIdx: number,
+  toIdx: number,
+  start: CubeState,
+  prevMove: Move | null,
+  ctx: RunCtx,
+): number | null {
+  let cost = 0;
+  let state = start;
+  let prev = prevMove;
+  for (let j = fromIdx; j <= toIdx; j++) {
+    const c = chooseStepCand(j, state, prev, ctx);
+    if (!c) return null;
+    cost += c.cost;
+    state = c.endState;
+    prev = c.lastMove;
+  }
+  return cost;
+}
+
 /**
- * If the chosen run for step `i` contains an algorithmic phase segment with a
- * checkpoint matching an enabled checkpoint-extra whose region starts at `i`,
- * splice the extra's continuation in place of the alg's tail and let it consume
- * the rest of the extra's region. Returns `null` if nothing splices.
+ * A checkpoint-triggered extra splices its own continuation *into the middle of*
+ * the chosen step's algorithm, consuming the rest of its region. For each enabled
+ * checkpoint extra whose region starts at `i`, this collects every candidate
+ * splice point in `cand` — at a variant's named `checkpoints` entry when the
+ * trigger has a `label`, or (no label) at EVERY move prefix where the extra's
+ * first phase recognizes a case — and races them against the normal finish of the
+ * region (`cand` + the plain steps after it) by MCC. Returns the cheapest spliced
+ * {@link WalkStep}, or `null` when the normal finish is at least as cheap (or no
+ * splice recognizes) — in which case the caller proceeds with `cand` as usual.
  */
 function spliceCheckpointExtras(
   i: number,
@@ -939,14 +994,25 @@ function spliceCheckpointExtras(
   const extrasHere = ctx.checkpointExtras.filter((e) => e.fromIdx === i);
   if (extrasHere.length === 0) return null;
 
-  // Find the first algorithmic phase segment carrying a matching checkpoint.
-  for (let p = 0; p < cand.phaseSegs.length; p++) {
-    const seg = cand.phaseSegs[p];
-    if (seg.kind === "algorithmic" && seg.checkpoints?.length) {
-      for (const cp of [...seg.checkpoints].sort((a, b) => a.index - b.index)) {
-        const extra = extrasHere.find((e) => e.label === cp.label);
-        if (!extra) continue;
-        const prefix = seg.moves.slice(0, cp.index);
+  let best: { step: WalkStep; cost: number } | null = null;
+
+  for (const extra of extrasHere) {
+    // Baseline: the normal finish of the region — this step's run plus the plain
+    // steps after it, up to the region end. A splice only wins if it beats this.
+    const tail = regionTailCost(i + 1, extra.toIdx, cand.endState, cand.lastMove, ctx);
+    const baseline = tail === null ? Infinity : cand.cost + tail;
+
+    for (let p = 0; p < cand.phaseSegs.length; p++) {
+      const seg = cand.phaseSegs[p];
+      if (seg.kind !== "algorithmic") continue;
+      // Candidate split indices within this phase's moves: the named checkpoints
+      // for a labelled trigger, otherwise every prefix (auto-scan).
+      const indices = extra.label !== undefined
+        ? (seg.checkpoints ?? []).filter((cp) => cp.label === extra.label).map((cp) => cp.index)
+        : Array.from({ length: seg.moves.length + 1 }, (_, k) => k);
+
+      for (const idx of indices) {
+        const prefix = seg.moves.slice(0, idx);
         const stateAtCp = applyMoves(seg.startState, prefix);
         const prefixPrev = prefix.at(-1) ?? cand.phaseSegs[p - 1]?.moves.at(-1) ?? prevMove;
         const cont = regionAltCands(
@@ -968,22 +1034,39 @@ function spliceCheckpointExtras(
         const before = cand.phaseSegs.slice(0, p).flatMap((s: PhaseSegment) => s.moves);
         const moves = [...before, ...prefix, ...chosen.moves];
         const cost = costOf(moves, prevMove, ctx.costModel);
+        // Fire when the splice is at least as cheap as the normal finish (a tie is
+        // a valid win for the variation); among splices, the cheapest-first wins.
+        if (cost > baseline || (best && cost >= best.cost)) continue;
+        // Keep the split phase's kept prefix as its own segment so the phase
+        // breakdown still sums to the whole (it is the extra's "setup" — e.g. the
+        // moves that bring the last pair on top before WV/SV inserts it).
+        const prefixSeg: PhaseSegment[] = prefix.length === 0 ? [] : [{
+          phaseId: seg.phaseId,
+          kind: "algorithmic",
+          moves: prefix,
+          cost: costOf(prefix, cand.phaseSegs[p - 1]?.moves.at(-1) ?? prevMove, ctx.costModel),
+          startState: seg.startState,
+          endState: stateAtCp,
+        }];
         const seg2: SolveSegment = {
           unitId: extra.id,
           kind: "extra",
           strategyId: chosen.strategyId,
           moves,
           cost,
-          phases: [...cand.phaseSegs.slice(0, p), ...chosen.phaseSegs],
+          phases: [...cand.phaseSegs.slice(0, p), ...prefixSeg, ...chosen.phaseSegs],
         };
-        return {
-          segments: [seg2],
-          endState: chosen.endState,
-          lastMove: chosen.lastMove,
-          nextIdx: extra.toIdx + 1,
+        best = {
+          step: {
+            segments: [seg2],
+            endState: chosen.endState,
+            lastMove: chosen.lastMove,
+            nextIdx: extra.toIdx + 1,
+          },
+          cost,
         };
       }
     }
   }
-  return null;
+  return best?.step ?? null;
 }

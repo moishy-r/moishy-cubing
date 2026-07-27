@@ -37,19 +37,21 @@ export interface SearchPhase {
   moves: MoveFamily[];
   /** Admissible lower-bound remaining-cost heuristic (a pruning table). */
   heuristic?: (state: CubeState) => number;
+  /**
+   * Cost model for *this phase only* (and, by construction, its `heuristic`),
+   * overriding the solve-global model. The phase's search edge costs and its
+   * `heuristic` must both use it — an admissible pruning table is built for one
+   * specific model. Use when a phase should optimize a different objective than
+   * the rest of the solve: APB's block223 phases rank by move count (matching
+   * OnionHoney's block analyzer) while every later phase keeps the ergonomic MCC.
+   * Applies to algorithmic phases too, so a search+alg strategy can be ranked as
+   * a whole under one objective. Defaults to the solve-global model.
+   */
+  costModel?: MoveCostModel;
   /** Move-ordering constraint passed through to the engine. */
   canFollow?: (prev: Move, next: Move) => boolean;
   /** Maximum length of this phase's sub-solution, in moves. */
   maxDepth?: number;
-  /**
-   * Cost model for *this phase only*, overriding the solve-global model. The
-   * phase's search edge costs and its `heuristic` must both use it (an admissible
-   * pruning table is built for a specific model). Use when a phase should optimize
-   * a different objective than the rest of the solve — e.g. APB's Roux FB ranks by
-   * move count (matching OnionHoney's FB analyzer) while the rest minimizes
-   * ergonomic MCC. Defaults to the solve-global model.
-   */
-  costModel?: MoveCostModel;
   /**
    * Use the best-first A* engine instead of IDA*. Preferred when the phase has a
    * strong `heuristic` (e.g. a pruning table): A* visits each state once and
