@@ -1,12 +1,26 @@
-// @moishy/cubing-core
-//
-// Core cube engine: cubie-level state representation, move application,
-// the Step -> Strategy -> Phase composition model, the generic IDA*-style
-// search engine, the pluggable MoveCostModel (MCC) scorer, and the solver
-// pipeline runner.
-//
-// Implementation is in progress. See /DESIGN.md at the repo root for the
-// architecture this package is built against.
+/**
+ * Cube engine and solver framework for speedsolving methods.
+ *
+ * Cubie-level cube state (corner/edge permutation + orientation + centre
+ * orientation, so slices, wides and rotations are first-class), SiGN notation,
+ * a pluggable ergonomic cost model (MCC), guided search (IDA*, A*, and a
+ * near-optimal solution pool), and the Step -> Strategy -> Phase composition
+ * model plus the pipeline runner that turns a method definition into a solve.
+ *
+ * Methods themselves are pure configuration built on top of this — see
+ * `@moishy/apb` for a complete worked example.
+ *
+ * ```ts
+ * import { applyAlg, createDefaultMoveCostModel, parseAlg, scoreAlg, solvedCube } from "@moishy/cubing-core";
+ *
+ * const state = applyAlg(solvedCube(), "R U R' U'");
+ * scoreAlg(parseAlg("R U R' U'"), createDefaultMoveCostModel()); // 3.6
+ * ```
+ *
+ * See /DESIGN.md in the repository for the architecture and its rationale.
+ *
+ * @module
+ */
 
 export const VERSION = "0.0.1";
 

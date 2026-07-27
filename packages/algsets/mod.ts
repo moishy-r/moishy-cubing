@@ -1,16 +1,26 @@
-// @moishy/algsets
-//
-// Algorithm case data, authored as typed TS modules via defineAlgSet().
-// Each case-set (zbll, ocll, pll, apb-2x2x3-527, ...) will live under
-// ./src/<set-id>/ and get its own subpath export once real data lands,
-// e.g. "@moishy/algsets/zbll", so consumers can import only what they need.
-//
-// This module ships the authoring + validation machinery (roadmap step 7):
-//   - defineAlgSet — build a case-set from algs; recognition is derived from
-//     each alg, never hand-stored (see /DESIGN.md, roadmap step 7).
-//   - validateAlgSet / assertValidAlgSet — the test-time validation harness.
-//
-// See /DESIGN.md at the repo root for the case/data schema.
+/**
+ * Algorithm case data, authored as typed TypeScript modules.
+ *
+ * A case stores **only its algorithms**: recognition is derived by applying the
+ * primary alg to a solved cube and inverting, never hand-written, so it cannot
+ * drift out of sync with the algs. Cost and AUF are computed too — authoring a
+ * set means transcribing algs and nothing else.
+ *
+ * This entrypoint ships the authoring and validation machinery. The data lives
+ * behind subpath exports so consumers import only what they need:
+ * `@moishy/algsets/zbll`, `/pll`, `/oll`, `/dfdb`, and a dozen more (see the
+ * package README for the full list).
+ *
+ * ```ts
+ * import { pll } from "@moishy/algsets/pll";
+ * pll.byId("t-perm")?.algs[0].moves;
+ * ```
+ *
+ * Each `AlgSet` implements `CaseLookup`, so it drops straight into an
+ * `AlgorithmicPhase`. Authoring guide: AUTHORING.md; schema rationale: /DESIGN.md.
+ *
+ * @module
+ */
 
 export const VERSION = "0.0.1";
 

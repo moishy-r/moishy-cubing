@@ -1,5 +1,8 @@
 # Design spec
 
+> **Audience: contributors.** Internal architecture notes, not user documentation. If you are
+> _using_ the library, start with the [guides](./guides/getting-started.md) instead.
+
 Living record of the architecture decisions behind this project. Update this alongside the code -
 it's the source of truth for "why does it work this way," not the chat history that produced it.
 

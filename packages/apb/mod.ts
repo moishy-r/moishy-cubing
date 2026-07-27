@@ -1,13 +1,28 @@
-// @moishy/apb
-//
-// The APB method plugin: a Method subclass wiring up 2x2x3, BR Pair, EO,
-// LXS, and ZBLL as core steps, plus its registered replacements
-// (e.g. BR Pair+EO -> EOPair) and extras (e.g. Winter/Summer Variation),
-// built on @moishy/cubing-core and case data from @moishy/algsets.
-//
-// This is the reference implementation of "how to add a new method" -
-// once it's built out, copying this package's shape is the recipe for
-// a @moishy/cfop, @moishy/roux, @moishy/zz, etc.
+/**
+ * A solver for the APB method (Advanced Petrus Blocks).
+ *
+ * Wires 2x2x3 -> BR Pair -> EO -> LXS -> ZBLL as core steps, plus opt-in
+ * replacements (EO Pair, EODR+LS, COLL+EPLL, OCLL+PLL, back-slot EO/LXS) and
+ * extras (OLL, ZBLS, Winter/Summer Variation), on top of `@moishy/cubing-core`
+ * and case data from `@moishy/algsets`.
+ *
+ * ```ts
+ * import { apb } from "@moishy/apb";
+ *
+ * const res = await apb.solve("R U2 F' L D B2 R' U F2 D' L2 B R2 U' F D2 B' L U2 R'");
+ * res.solutionString;
+ * for (const seg of res.segments) console.log(seg.unitId, seg.strategyId);
+ * ```
+ *
+ * Beta: solves are correct end to end and verified in tests, but some algsets
+ * are still being authored and Winter/Summer Variation is not yet wired up.
+ *
+ * This package is also the reference implementation of "how to add a method" —
+ * copying its shape is the recipe for a `@moishy/cfop`, `@moishy/roux`, etc.
+ * See the repository's guides/adding-a-method.md and this package's SPEC.md.
+ *
+ * @module
+ */
 
 import { Method, VERSION as CUBING_CORE_VERSION } from "@moishy/cubing-core";
 import { apbDefinition } from "./src/apb.ts";

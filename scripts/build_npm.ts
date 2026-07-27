@@ -8,7 +8,7 @@
 // overlays the version passed on the command line (kept as the single
 // source of truth on the JSR side, see /DESIGN.md).
 
-import { build, emptyDir } from "jsr:@deno/dnt@^0.41";
+import { build, emptyDir } from "@deno/dnt";
 
 const version = Deno.args[0];
 if (!version) {
@@ -17,7 +17,6 @@ if (!version) {
 }
 
 const manifest = JSON.parse(await Deno.readTextFile("./deno.json"));
-const npmName = manifest.name.replace(/^@/, "").replace("/", "__"); // fallback, unused if manifest.name is npm-safe
 
 await emptyDir("./npm");
 
@@ -34,19 +33,19 @@ await build({
     description: manifest.description,
     repository: {
       type: "git",
-      url: "git+https://github.com/moishy/moishy-cubing.git",
+      url: "git+https://github.com/moishy-r/moishy-cubing.git",
     },
   },
   postBuild() {
     try {
       Deno.copyFileSync("../../LICENSE", "npm/LICENSE");
     } catch {
-      // LICENSE not present yet, fine for early dev builds
+      // Repo-root LICENSE — only absent if this is run outside the workspace.
     }
     try {
       Deno.copyFileSync("./README.md", "npm/README.md");
     } catch {
-      // per-package README not written yet
+      // Per-package README — every published package has one; guard is belt-and-braces.
     }
   },
 });

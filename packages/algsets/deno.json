@@ -1,6 +1,7 @@
 {
   "name": "@moishy/algsets",
   "version": "0.0.1",
+  "description": "Algorithm case data for Rubik's cube speedsolving methods (ZBLL, PLL, OLL, COLL and more), with case recognition derived from the algorithms themselves.",
   "exports": {
     ".": "./mod.ts",
     "./br-pair": "./src/br-pair/index.ts",
@@ -24,6 +25,8 @@
     "@moishy/cubing-core": "jsr:@moishy/cubing-core@^0.0.1"
   },
   "publish": {
-    "exclude": ["**/*_test.ts"]
+    "exclude": [
+      "**/*_test.ts"
+    ]
   }
 }
