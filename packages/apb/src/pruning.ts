@@ -204,6 +204,13 @@ class CostPatternDB {
     centers: CenterCoord | null,
     moves: Move[],
     model: MoveCostModel,
+    // Center permutations (as `cn` arrays) that count as *goal* states, i.e. seeded
+    // at cost 0. Defaults to just the solved centers. Passing several folds a
+    // rotation-tolerant goal into the table: e.g. the four L–R-axis center states
+    // for the drift-allowing Roux FB, so a block that is home but with U/F/D/B
+    // centers drifted gets a 0 bound (see `regionHeuristic`'s `foldLR`). Only
+    // meaningful when `centers` is set.
+    goalCenters: number[][] | null = null,
   ) {
     this.corners = corners;
     this.edges = edges;
@@ -235,14 +242,20 @@ class CostPatternDB {
     let edgeHome = 0;
     for (const e of edges) edgeHome = edgeHome * 12 + e;
     edgeHome *= 2 ** ne;
-    const start = (cornerHome * this.edgeSubSize + edgeHome) * this.nCenters + startCenter;
-    this.dist[start] = 0;
+    const pieceHome = cornerHome * this.edgeSubSize + edgeHome;
+    // Seed one goal node per accepted center state (just the solved centers unless
+    // a fold was requested); the pieces are home in every seed.
+    const seedCenters = centers && goalCenters
+      ? goalCenters.map((cn) => centers.indexOf(cn)).filter((i) => i !== undefined)
+      : [startCenter];
+    const starts = [...new Set(seedCenters.map((ci) => pieceHome * this.nCenters + ci))];
+    for (const s of starts) this.dist[s] = 0;
 
     const es = new Int8Array(ne), eo = new Int8Array(ne);
     const stride = this.stride, edgeSubSize = this.edgeSubSize, nCenters = this.nCenters;
 
     // Dial's: buckets indexed by (integer) distance, processed ascending.
-    const buckets: number[][] = [[start]];
+    const buckets: number[][] = [[...starts]];
     for (let d = 0; d < buckets.length; d++) {
       const bucket = buckets[d];
       if (!bucket) continue;
@@ -354,13 +367,26 @@ export function regionHeuristic(
   edges: number[],
   moveFamilies: MoveFamily[],
   costModel: MoveCostModel = defaultModel,
+  opts: { foldLR?: boolean } = {},
 ): (s: CubeState) => number {
   const moves = movesOf(moveFamilies);
   const key = `${corners.join(",")}|${edges.join(",")}|${[...moveFamilies].sort().join("")}|${
     modelSignature(costModel, moves)
-  }`;
+  }|fold=${opts.foldLR ? "lr" : ""}`;
   const cached = cache.get(key);
   if (cached) return cached;
+
+  // For the drift-allowing Roux FB goal (`regionSolvedLRHome`), the block is
+  // "solved" with the U/F/D/B centers left in any of the four L–R-axis rotations
+  // (the block still solves the L center, so L and R stay home). Seed those four
+  // center states as goals so the center table returns 0 there instead of charging
+  // to restore U/F/D/B — keeping the heuristic admissible for that goal. (The
+  // subsequent DFDB alg restores the drift.)
+  const goalCenters = opts.foldLR
+    ? ([0, 1, 2, 3] as const).map((amount) =>
+      amount === 0 ? solvedCube().cn : applyMove(solvedCube(), { family: "x", amount }).cn
+    )
+    : null;
 
   const combinedSize = 8 ** corners.length * 3 ** corners.length *
     12 ** edges.length * 2 ** edges.length;
@@ -376,12 +402,14 @@ export function regionHeuristic(
     if (!dbA) {
       if (combinable) {
         // Tight: joint corner+edge pieces (no centers) + a standalone center DB.
+        // The fold (if any) applies to the center DB.
         dbA = new CostPatternDB(corners, edges, null, moves, costModel);
-        dbB = new CostPatternDB([], [], centerCoord, moves, costModel);
+        dbB = new CostPatternDB([], [], centerCoord, moves, costModel, goalCenters);
       } else {
         // Fallback: joint corner+center + edge (the 5-edge block is too large to
-        // combine corners with edges).
-        dbA = new CostPatternDB(corners, [], centerCoord, moves, costModel);
+        // combine corners with edges). The fold (if any) applies to the joint
+        // corner+center DB.
+        dbA = new CostPatternDB(corners, [], centerCoord, moves, costModel, goalCenters);
         dbB = new CostPatternDB([], edges, null, moves, costModel);
       }
       assertNoOverflow(dbA, "pieces");

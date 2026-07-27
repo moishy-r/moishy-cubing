@@ -42,6 +42,15 @@ export interface SearchPhase {
   /** Maximum length of this phase's sub-solution, in moves. */
   maxDepth?: number;
   /**
+   * Cost model for *this phase only*, overriding the solve-global model. The
+   * phase's search edge costs and its `heuristic` must both use it (an admissible
+   * pruning table is built for a specific model). Use when a phase should optimize
+   * a different objective than the rest of the solve — e.g. APB's Roux FB ranks by
+   * move count (matching OnionHoney's FB analyzer) while the rest minimizes
+   * ergonomic MCC. Defaults to the solve-global model.
+   */
+  costModel?: MoveCostModel;
+  /**
    * Use the best-first A* engine instead of IDA*. Preferred when the phase has a
    * strong `heuristic` (e.g. a pruning table): A* visits each state once and
    * avoids IDA*'s re-exploration on every cost-threshold bump, which thrashes
@@ -135,6 +144,28 @@ export interface AlgorithmicPhase {
    * to `["U"]`. Each contributes identity plus its three amounts.
    */
   auf?: MoveFamily[];
+  /**
+   * Skip the {@link homeStart} reorientation and run recognition/alg against the
+   * *raw* input frame. Default (`false`/unset) homes a rotated input to the home
+   * frame first, prepending the rotation — correct for standard algs whose
+   * recognition is frame-relative.
+   *
+   * Set `true` when the phase intentionally consumes a *center-drifted* input and
+   * its alg restores the drift **in place**, so homing would wrongly relocate the
+   * work: APB's DFDB after the drift-allowing Roux FB. There the block sits at
+   * bottom-left with the U/F/D/B centers drifted; the DFDB alg (M/r moves) both
+   * places DF/DB and re-homes those centers without moving the block. Homing
+   * would instead prepend a whole-cube rotation and shift the block off BL. The
+   * phase's recognition must itself read the raw frame (a raw, center-aware
+   * lookup) for this to be meaningful.
+   */
+  frameRelative?: boolean;
+  /**
+   * Cost model for *this phase only*, overriding the solve-global model — e.g. the
+   * whole of APB's block223 (including this DFDB alg) ranks by move count while the
+   * last layer keeps ergonomic MCC. Defaults to the solve-global model.
+   */
+  costModel?: MoveCostModel;
 }
 
 /** A phase is one of the two kinds. */
@@ -149,6 +180,16 @@ export interface Strategy {
   phases: Phase[];
   /** Whether this strategy is enabled unless settings say otherwise (default true). */
   enabledByDefault?: boolean;
+  /**
+   * Opt this strategy out of phase-chaining even when the Step has it on. Set for a
+   * *search→search* strategy, where chaining pools *both* phases and re-generates
+   * the second search's pool per first-phase candidate — a pool×pool blowup that is
+   * far slower than the single-cheapest path and rarely yields a cheaper block. (A
+   * search→*alg* strategy like APB's fbDfdb keeps chaining: its second phase is a
+   * cheap lookup, so the pool is bounded and is exactly what selects a completable
+   * FB.) Default `undefined` = inherit the Step's phase-chaining setting.
+   */
+  phaseChaining?: boolean;
 }
 
 /** A named slot in a method's step list, offering one or more strategies. */
@@ -250,11 +291,17 @@ export function runPhase(
   start: CubeState,
   context: SolveContext = {},
 ): PhaseSegment | null {
-  const costModel = context.costModel ?? createDefaultMoveCostModel();
+  // A search phase may override the cost model for its own objective (e.g. the FB
+  // ranks by move count); everything else uses the solve-global model.
+  const costModel = phase.costModel ?? context.costModel ?? createDefaultMoveCostModel();
   const prevMove = context.prevMove ?? null;
   // Reorient a rotated input to the home frame first; the phase runs against the
-  // homed state and prepends the rotation to its solution (no-op when home).
-  const { homed, homeMoves } = homeStart(start);
+  // homed state and prepends the rotation to its solution (no-op when home). A
+  // `frameRelative` algorithmic phase opts out: it consumes the raw (possibly
+  // center-drifted) frame directly (see AlgorithmicPhase.frameRelative).
+  const { homed, homeMoves } = phase.kind === "algorithmic" && phase.frameRelative
+    ? { homed: start, homeMoves: [] as Move[] }
+    : homeStart(start);
   const innerPrev = homeMoves.length > 0 ? homeMoves[homeMoves.length - 1] : prevMove;
 
   if (phase.kind === "search") {
@@ -387,11 +434,17 @@ export function runPhaseCandidates(
   context: SolveContext = {},
   opts: PhaseCandidateOptions = {},
 ): PhaseSegment[] {
-  const costModel = context.costModel ?? createDefaultMoveCostModel();
+  // A search phase may override the cost model for its own objective (e.g. the FB
+  // ranks by move count); everything else uses the solve-global model.
+  const costModel = phase.costModel ?? context.costModel ?? createDefaultMoveCostModel();
   const prevMove = context.prevMove ?? null;
   // Reorient a rotated input to the home frame (no-op when already home); the
-  // phase runs against `homed` and prepends `homeMoves` to every candidate.
-  const { homed, homeMoves } = homeStart(start);
+  // phase runs against `homed` and prepends `homeMoves` to every candidate. A
+  // `frameRelative` algorithmic phase opts out and consumes the raw frame (see
+  // AlgorithmicPhase.frameRelative).
+  const { homed, homeMoves } = phase.kind === "algorithmic" && phase.frameRelative
+    ? { homed: start, homeMoves: [] as Move[] }
+    : homeStart(start);
   const innerPrev = homeMoves.length > 0 ? homeMoves[homeMoves.length - 1] : prevMove;
   const homePrefixCost = homeMoves.length > 0 ? segmentCost(homeMoves, prevMove, costModel) : 0;
 

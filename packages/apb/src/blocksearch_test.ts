@@ -7,6 +7,7 @@ import { assert, assertAlmostEquals, assertEquals } from "@std/assert";
 import {
   applyMoves,
   createDefaultMoveCostModel,
+  type CubeState,
   isSolved,
   type Move,
   type MoveFamily,
@@ -19,8 +20,25 @@ import {
   toFacelets,
 } from "@moishy/cubing-core";
 import { apb } from "../mod.ts";
-import { axisCanonical, centersSolved, regionCoordinate, regionSolvedStrict } from "./geometry.ts";
+import { dfdb as dfdbSet } from "@moishy/algsets/dfdb";
+import {
+  axisCanonical,
+  BLOCK223,
+  centersSolved,
+  pieceSignature,
+  regionCoordinate,
+  regionSolvedLRHome,
+  regionSolvedStrict,
+} from "./geometry.ts";
 import { regionHeuristic } from "./pruning.ts";
+
+const ROUX_FB = { corners: [5, 6], edges: [6, 9, 10] };
+// Build a synthetic state with solved pieces but a given center permutation, to
+// probe the FB goal/heuristic at exact center-drift states.
+const withCenters = (cn: number[]) => ({ ...solvedCube(), cn });
+// Deterministic string scramble (Move[] → the solver's string input).
+const scrStr = (seed: number, len: number) =>
+  scramble(seed, len).map((m) => m.family + ["", "", "2", "'"][m.amount]).join(" ");
 
 const BLOCK_MOVES: MoveFamily[] = [
   "U",
@@ -113,6 +131,80 @@ Deno.test("regionHeuristic is admissible, zero on goal, and center-aware", () =>
   assert(!centersSolved(drifted));
   assert(regionSolvedStrict(CROSS)(drifted) === false); // goal rejects drifted centers
   assert(h(drifted) > 0, "center-drifted state must get a positive bound");
+});
+
+Deno.test("regionHeuristic (foldLR) is admissible for the drift-allowing FB goal", () => {
+  const hFold = regionHeuristic(ROUX_FB.corners, ROUX_FB.edges, BLOCK_MOVES, undefined, {
+    foldLR: true,
+  });
+  const hStrict = regionHeuristic(ROUX_FB.corners, ROUX_FB.edges, BLOCK_MOVES);
+  const goal = regionSolvedLRHome(ROUX_FB);
+
+  // Zero on all four L–R-axis solved-FB states (id, x, x2, x'); the goal accepts
+  // them and the strict, all-centers-home table charges >0 for the drifted three.
+  assertEquals(hFold(solvedCube()), 0);
+  for (const k of ["x", "x2", "x'"]) {
+    const gs = withCenters(applyMoves(solvedCube(), parseAlg(k)).cn);
+    assert(goal(gs), `LR goal must accept the ${k} center drift`);
+    assertEquals(hFold(gs), 0, `folded heuristic must be 0 on the ${k} drift`);
+    assert(hStrict(gs) > 0, `strict heuristic should charge for the ${k} drift`);
+  }
+
+  // The fold only *adds* goal states, so its bound never exceeds the strict one.
+  for (let i = 0; i < 8; i++) {
+    const s = applyMoves(solvedCube(), scramble(i, 10));
+    assert(hFold(s) <= hStrict(s) + 1e-9, `folded ${hFold(s)} exceeded strict ${hStrict(s)}`);
+  }
+
+  // Admissible: never exceeds the true optimal cost to the LR-home goal. Ground
+  // truth via a *zero* heuristic (IDA* then returns the true optimum, independent
+  // of the folded table); kept cheap with very shallow scrambles + axis
+  // canonicalization so the unguided search still terminates fast.
+  for (let i = 0; i < 4; i++) {
+    const s = applyMoves(solvedCube(), scramble(i, 2));
+    const opt = search({
+      start: s,
+      goal,
+      moves: BLOCK_MOVES,
+      heuristic: () => 0,
+      canFollow: axisCanonical,
+    });
+    assert(opt.found);
+    assert(hFold(s) <= opt.cost + 1e-9, `folded ${hFold(s)} overestimated true ${opt.cost}`);
+  }
+});
+
+Deno.test("dfdb raw (DF,DB,cn) recognition signature is collision-free across all cases", () => {
+  // The drift-allowing FB leaves the centers drifted, so DFDB recognizes on the
+  // raw DF/DB placement + the center permutation (no orientation normalization).
+  // Every one of the 527 cases must get a distinct key, or a drifted input would
+  // mis-recognize. If this ever fails, widen the signature (see apb.ts dfdbSignature).
+  const sig = (s: CubeState) => pieceSignature([], [5, 7])(s) + "/" + s.cn.join("");
+  const seen = new Map<string, string>();
+  for (const c of dfdbSet.cases) {
+    const key = sig(dfdbSet.recognitionState(c.id));
+    const prev = seen.get(key);
+    assert(prev === undefined, `signature collision: ${c.id} vs ${prev} on "${key}"`);
+    seen.set(key, c.id);
+  }
+  assertEquals(seen.size, dfdbSet.cases.length);
+});
+
+Deno.test("fbDfdb: drift-allowing FB + DFDB completes a strict 2x2x3 and full solve", async () => {
+  for (let i = 0; i < 12; i++) {
+    const res = await apb.solve(scrStr(i, 22), {
+      colorNeutrality: "fixed",
+      stepOptions: { block223: { forceStrategy: "fbDfdb" } },
+    }, { timeBudgetMs: 30_000 });
+    const seg = res.segments.find((s) => s.unitId === "block223");
+    assert(seg, `#${i} block223 did not run`);
+    // After DFDB the full 2x2x3 is solved AND all centers are home (drift restored).
+    assert(
+      regionSolvedStrict(BLOCK223)(seg!.phases.at(-1)!.endState),
+      `#${i} block223 not strictly solved (centers or pieces off)`,
+    );
+    assert(res.solved, `#${i} full solve failed`);
+  }
 });
 
 // --- Region-coordinate keying + axis canonicalization stay cost-optimal ------
@@ -267,3 +359,60 @@ function invertAlg(moves: Move[]): Move[] {
   return moves.map((m) => ({ family: m.family, amount: ((4 - m.amount) % 4 || 4) as 1 | 2 | 3 }))
     .reverse();
 }
+
+// --- Phase 2: the opt-in block strategies build a strict 2x2x3 ---------------
+
+// direct / corner-first / cross-1 each build the *full* 2x2x3 (incl. DF/DB and
+// the D center), so they must end fully centers-home (strict). Force each with
+// phase-chaining off (one first-phase candidate → one second search, avoiding the
+// per-candidate blowup) and confirm it builds a strict block and completes a full
+// solve within its depth cap.
+//
+// The `seeds` are the scramble offsets each strategy is exercised on. corner-first
+// and cross-1 (three-phase: cross → pair → pair, each guarded) are fast on any
+// scramble. `direct` is a single deep whole-block search under a loose, un-combined
+// heuristic and is *slow* (seconds, sometimes >30s), so it runs on a couple of
+// seeds verified to complete within budget — the test asserts correctness, not
+// speed. (Making `direct` fast needs a tighter full-block pruning table or a
+// decomposition; tracked separately.)
+for (
+  const { id, seeds } of [
+    { id: "cornerFirstFront", seeds: [200, 201, 202, 203, 204] },
+    { id: "cornerFirstBack", seeds: [200, 201, 202, 203, 204] },
+    { id: "cross1Front", seeds: [200, 201, 202, 203, 204] },
+    { id: "cross1Back", seeds: [200, 201, 202, 203, 204] },
+    { id: "direct", seeds: [202, 205] },
+  ]
+) {
+  Deno.test(`block223 strategy '${id}' builds a strict 2x2x3 and full solve`, async () => {
+    for (const seed of seeds) {
+      const res = await apb.solve(scrStr(seed, 20), {
+        colorNeutrality: "fixed",
+        stepOptions: { block223: { forceStrategy: id, phaseChaining: { enabled: false } } },
+      }, { timeBudgetMs: 60_000 });
+      const seg = res.segments.find((s) => s.unitId === "block223");
+      assert(seg && seg.strategyId === id, `seed ${seed} ${id} did not run`);
+      assert(
+        regionSolvedStrict(BLOCK223)(seg!.phases.at(-1)!.endState),
+        `seed ${seed} ${id} did not build a strict 2x2x3`,
+      );
+      assert(res.solved, `seed ${seed} ${id} full solve failed`);
+    }
+  });
+}
+
+Deno.test("searchMaxDepth override lifts a phase's static cap", async () => {
+  // A pathologically tight cap makes fbDfdb's rouxFB unsolvable → block223 fails.
+  const scr = scrStr(3, 20);
+  const tight = await apb.solve(scr, {
+    colorNeutrality: "fixed",
+    stepOptions: { block223: { forceStrategy: "fbDfdb", searchMaxDepth: { rouxFB: 2 } } },
+  }, { timeBudgetMs: 20_000 });
+  assert(!tight.solved, "a 2-move FB cap should make block223 (hence the solve) fail");
+  // Lifting it back well past the FB length solves normally again.
+  const loose = await apb.solve(scr, {
+    colorNeutrality: "fixed",
+    stepOptions: { block223: { forceStrategy: "fbDfdb", searchMaxDepth: { rouxFB: 20 } } },
+  }, { timeBudgetMs: 20_000 });
+  assert(loose.solved, "raising the cap should solve again");
+});

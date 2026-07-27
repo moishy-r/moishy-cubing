@@ -107,6 +107,32 @@ export function regionSolvedStrict(region: Region): (s: CubeState) => boolean {
     region.edges.every((i) => s.ep[i] === i && s.eo[i] === 0);
 }
 
+/**
+ * Fixed-frame region goal with L–R-axis center *drift* allowed: pieces home in
+ * the raw frame, the L and R centers home, but the U/F/D/B centers left wherever
+ * the block-building slice/wide moves put them.
+ *
+ * This is the goal for the Roux FB (`fbDfdb`'s `rouxFB` phase). A Roux FB solves
+ * its 6 pieces *including the L center*; requiring only L (index 4) and R (index
+ * 1) home — not all six centers as {@link regionSolvedStrict} does — lets the FB
+ * be built the cheap, natural way (M-slice/wide moves that leave U/F/D/B drifted)
+ * instead of spending moves restoring those centers. Because L and R are home,
+ * the residual center permutation is necessarily a rotation about the L–R axis
+ * (one of `{id, x, x2, x'}`), which the *following* DFDB alg restores in place
+ * (its M/r moves cycle exactly U/F/D/B and never touch FB pieces). The block
+ * itself stays physically at bottom-left — no whole-cube reframe.
+ *
+ * The pruning heuristic for this goal must be rotation-folded over those 4 center
+ * states to stay admissible (see `regionHeuristic` in pruning.ts); the strict,
+ * all-centers-home table would over-count the U/F/D/B fix the goal does not require.
+ */
+export function regionSolvedLRHome(region: Region): (s: CubeState) => boolean {
+  return (s) =>
+    s.cn[4] === 4 && s.cn[1] === 1 && // L, R centers home ⇒ drift is L–R-axis only
+    region.corners.every((i) => s.cp[i] === i && s.co[i] === 0) &&
+    region.edges.every((i) => s.ep[i] === i && s.eo[i] === 0);
+}
+
 // --- Recognition signatures ---------------------------------------------------
 //
 // A signature projects a state to just the pieces a step recognizes on, so a
@@ -308,6 +334,35 @@ export function regionLookup(
     if (!bySig.has(key)) bySig.set(key, c);
   }
   return { find: (s) => bySig.get(sig(s)) ?? null };
+}
+
+/**
+ * Like {@link regionLookup} but **raw** — it does *not* normalize orientation, so
+ * the signature sees the actual center permutation. Required by DFDB under the
+ * drift-allowing FB (see {@link regionSolvedLRHome}): the FB leaves U/F/D/B
+ * centers drifted, and which DFDB case applies depends on that drift, not only on
+ * where DF/DB sit relative to the block. `regionLookup` would `normalizeOrientation`
+ * the drift away, collapsing cases that share a block-relative DF/DB placement but
+ * need different center corrections onto one key. The signature passed here must
+ * therefore *include* the center state (e.g. `s.cn`), and it is taken verbatim on
+ * both the stored recognition state and the queried state.
+ *
+ * Safe for DFDB because its algs contain no whole-cube rotations, so each stored
+ * `recognitionState = applyMoves(solved, invert(algs[0]))` is already a valid raw,
+ * fixed-frame key. Do NOT use this for sets whose primaries end tilted.
+ */
+export function regionLookupRaw(
+  algSet: AlgSet,
+  signature: (s: CubeState) => string,
+  caseFilter?: (c: AlgSet["cases"][number]) => boolean,
+): CaseLookup {
+  const bySig = new Map<string, AlgCase>();
+  for (const c of algSet.cases) {
+    if (caseFilter && !caseFilter(c)) continue;
+    const key = signature(algSet.recognitionState(c.id));
+    if (!bySig.has(key)) bySig.set(key, c);
+  }
+  return { find: (s) => bySig.get(signature(s)) ?? null };
 }
 
 // The four AUF states (identity, U, U2, U') as cube states, for building the

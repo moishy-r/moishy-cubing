@@ -784,8 +784,8 @@ Deno.test("force-mode eodrLs fires on real solves and verifies", async () => {
 // matched a live state).
 Deno.test("force-mode zbls extra fires on triggering solves and verifies", async () => {
   const scrambles = [
-    "U L U2 F' L F2 U' L2 U' L U2 F L2 U2 F2 L' F' L U2 F'",
-    "F L2 U F2 L F L' F' U F2 L U2 L2 U2 L F L2 U L' F'",
+    "D F2 L U' B' F2 R D L2 R L D2 L2 U2 B' U L' R2 L' F2",
+    "B L U' D' F2 B' F' D2 L' D L' U' F U2 B R D2 L2 U F'",
   ];
   for (const scramble of scrambles) {
     const r = await apb.solve(scramble, {

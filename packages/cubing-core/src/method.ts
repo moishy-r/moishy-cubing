@@ -120,6 +120,13 @@ export interface StepOptions {
   enabledStrategies?: string[];
   /** Phase-chaining controls for this Step's multi-phase strategies. */
   phaseChaining?: PhaseChainingOptions;
+  /**
+   * Per-search-phase depth cap (STM), keyed by phase id, overriding the phase's
+   * own `maxDepth` for this solve. The escape hatch for the static caps set on a
+   * method's block searches — raise one to let a hard scramble through, or lower
+   * one to bound an experiment. Ignored for algorithmic phases and unknown ids.
+   */
+  searchMaxDepth?: Record<string, number>;
 }
 
 /** Phase-chaining controls (a `SearchPhase` feeding downstream phases). */
@@ -297,8 +304,13 @@ function strategyCands(
   ctx: RunCtx,
   chaining: { enabled: boolean; slack: number },
   branchTailVariants: boolean,
+  phaseMaxDepth?: Record<string, number>,
 ): Cand[] {
   const phases = strategy.phases as Phase[];
+  // A strategy can opt out of phase-chaining (`Strategy.phaseChaining: false`).
+  // search→search strategies do, because their pool needs a bespoke `poolStateKey`
+  // to be effective and is slower than single-cheapest for an opt-in, rarely-best block.
+  const chainEnabled = chaining.enabled && (strategy.phaseChaining ?? true);
   let fold: Cand[] = [{
     strategyId: strategy.id,
     moves: [],
@@ -309,12 +321,23 @@ function strategyCands(
   }];
 
   for (let i = 0; i < phases.length; i++) {
-    const phase = phases[i];
+    const phase0 = phases[i];
+    // Per-solve depth-cap override (search phases only).
+    const phase: Phase = phase0.kind === "search" && phaseMaxDepth?.[phase0.id] !== undefined
+      ? { ...phase0, maxDepth: phaseMaxDepth[phase0.id] }
+      : phase0;
     const isLast = i === phases.length - 1;
     // Decide whether this phase branches into a pool.
     let branch: "search-pool" | "all-variants" | "best" = "best";
     if (phase.kind === "search") {
-      if (chaining.enabled) branch = "search-pool";
+      // Pool only a *non-final* search phase: its candidates feed the downstream
+      // phase, which is scored per candidate (the phase-chaining benefit — try
+      // several first blocks, keep the one with the cheapest completion). A *final*
+      // search phase has nothing downstream, so pooling it would just re-run an
+      // expensive multi-solution search per fold candidate (pool×pool) to no gain —
+      // run it single-cheapest instead. (search→alg strategies like fbDfdb are
+      // unaffected: their alg phase is last and never a search pool.)
+      if (chainEnabled && !isLast) branch = "search-pool";
     } else {
       if (!isLast && ctx.scopeHas(phase.id, phases[i + 1].id)) branch = "all-variants";
       else if (isLast && branchTailVariants) branch = "all-variants";
@@ -367,7 +390,17 @@ function stepCands(
   };
   const cands: Cand[] = [];
   for (const strategy of enabledStrategies(step, opts)) {
-    cands.push(...strategyCands(strategy, start, prevMove, ctx, chaining, branchTailVariants));
+    cands.push(
+      ...strategyCands(
+        strategy,
+        start,
+        prevMove,
+        ctx,
+        chaining,
+        branchTailVariants,
+        opts.searchMaxDepth,
+      ),
+    );
   }
   cands.sort((a, b) => a.cost - b.cost);
   return cands.slice(0, BRANCH_CAP);
