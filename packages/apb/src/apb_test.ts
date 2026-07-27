@@ -785,7 +785,12 @@ Deno.test("compete replacement never worsens a solve; wins only when cheaper", a
 
   // (2) A scramble where backSlotEoLxs genuinely wins: it must be chosen, and the
   // total must strictly beat pure-core (front-pair-first leaves a much cheaper LL).
-  const winScr = "D L F' D2 R U2 R2 F2 L' B D' F L2 R L2 U2 D' B R2 B";
+  // NOTE: this fixture is coupled to what block223 produces — a change to the block
+  // strategies or their cost model shifts the state eo/lxs see, and the scramble may
+  // stop being a win. Re-pick by scanning seeded scrambles for one where enabling
+  // the replacement both fires it and lowers total cost; the invariant in (1) is the
+  // part that must hold universally.
+  const winScr = "L U2 F2 R B2 D' B2 R' U' F2 U2 R B2 R' D' R D2 F L' F2";
   const [c2, k2] = [await withBS(winScr), await pureCore(winScr)];
   assert(c2.solved && k2.solved);
   assert(picked(c2, "backSlotEoLxs"), "compete must pick backSlotEoLxs when it wins overall");
@@ -810,10 +815,13 @@ Deno.test("winterSummerVariation auto-scans, fires, and never worsens a solve", 
     stepOptions: { block223: { forceStrategy: "fbDfdb" } },
   };
   // Scrambles on which WV/SV is recognized mid-LXS and wins (or ties) the race.
+  // Coupled to block223's output, like the backSlotEoLxs fixture above: re-pick by
+  // scanning if a block change stops them firing. The never-worsen assertion below
+  // is the universal part.
   const firing = [
-    "D2 L2 R U2 B' L' D U2 L B2 L D2 L' F2 D R U D' L' F",
-    "L' F' B' R' F2 U2 L' R L2 F R2 D2 R U2 F B2 F2 L2 D' R",
-    "R F R2 U' D B' F2 L F2 U D F' R' F L2 B F U F2 R'",
+    "U2 R' B2 L2 U2 L B F' B2 U F2 U D F2 D U L2 R L' B2",
+    "U' D' L2 F2 L' B' L' U' D2 B F2 U' R2 U F2 U2 L2 R B' L2",
+    "L' U R' L D2 U F' B R' B' D' B L U' B' L U2 D' L2 F",
   ];
   let everFired = false;
   for (const scramble of firing) {
@@ -917,8 +925,8 @@ Deno.test("force-mode eodrLs fires on real solves and verifies", async () => {
 // matched a live state).
 Deno.test("force-mode zbls extra fires on triggering solves and verifies", async () => {
   const scrambles = [
-    "U' F2 L F' R2 B U2 F D' B2 L D2 R' L2 U L' U' D B2 R",
-    "R2 D L2 D2 L' R F R' L B' D' R F R B2 U2 B' F2 U' D2",
+    "D F2 L U' B' F2 R D L2 R L D2 L2 U2 B' U L' R2 L' F2",
+    "B L U' D' F2 B' F' D2 L' D L' U' F U2 B R D2 L2 U F'",
   ];
   for (const scramble of scrambles) {
     const r = await apb.solve(scramble, {

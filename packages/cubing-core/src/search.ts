@@ -68,7 +68,7 @@ export interface SearchParams {
    * full move) suffices, since every penalty keys on family. Only consulted by
    * {@link searchAStar} / {@link searchAStarMany} (the IDA* engine keeps no map).
    */
-  stateKey?: (state: CubeState, lastMove: Move | null) => string;
+  stateKey?: (state: CubeState, lastMove: Move | null) => string | number;
   /** Maximum solution length in moves. Bounds the search; defaults to 20. */
   maxDepth?: number;
   /** Cost ceiling: stop once no solution exists at or below this cost. Defaults to Infinity. */
@@ -260,7 +260,7 @@ export function searchAStar(params: SearchParams): SearchResult {
     return top;
   };
 
-  const bestG = new Map<string, number>(); // state key -> cheapest g reached
+  const bestG = new Map<string | number, number>(); // state key -> cheapest g reached
   let nodesVisited = 0;
   push({ state: start, g: 0, f: heuristic(start), prev: prevMove, moves: [] });
   bestG.set(stateKey(start, prevMove), 0);
@@ -380,7 +380,7 @@ export function searchAStarMany(params: SearchAStarManyParams): SearchResult[] {
     return top;
   };
 
-  const bestG = new Map<string, number>();
+  const bestG = new Map<string | number, number>();
   const solutions: SearchResult[] = [];
   let nodesVisited = 0;
   let cheapest = Infinity;

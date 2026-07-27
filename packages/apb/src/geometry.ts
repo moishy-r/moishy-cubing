@@ -107,6 +107,32 @@ export function regionSolvedStrict(region: Region): (s: CubeState) => boolean {
     region.edges.every((i) => s.ep[i] === i && s.eo[i] === 0);
 }
 
+/**
+ * Fixed-frame region goal with L–R-axis center *drift* allowed: pieces home in
+ * the raw frame, the L and R centers home, but the U/F/D/B centers left wherever
+ * the block-building slice/wide moves put them.
+ *
+ * This is the goal for the Roux FB (`fbDfdb`'s `rouxFB` phase). A Roux FB solves
+ * its 6 pieces *including the L center*; requiring only L (index 4) and R (index
+ * 1) home — not all six centers as {@link regionSolvedStrict} does — lets the FB
+ * be built the cheap, natural way (M-slice/wide moves that leave U/F/D/B drifted)
+ * instead of spending moves restoring those centers. Because L and R are home,
+ * the residual center permutation is necessarily a rotation about the L–R axis
+ * (one of `{id, x, x2, x'}`), which the *following* DFDB alg restores in place
+ * (its M/r moves cycle exactly U/F/D/B and never touch FB pieces). The block
+ * itself stays physically at bottom-left — no whole-cube reframe.
+ *
+ * The pruning heuristic for this goal must be rotation-folded over those 4 center
+ * states to stay admissible (see `regionHeuristic` in pruning.ts); the strict,
+ * all-centers-home table would over-count the U/F/D/B fix the goal does not require.
+ */
+export function regionSolvedLRHome(region: Region): (s: CubeState) => boolean {
+  return (s) =>
+    s.cn[4] === 4 && s.cn[1] === 1 && // L, R centers home ⇒ drift is L–R-axis only
+    region.corners.every((i) => s.cp[i] === i && s.co[i] === 0) &&
+    region.edges.every((i) => s.ep[i] === i && s.eo[i] === 0);
+}
+
 // --- Recognition signatures ---------------------------------------------------
 //
 // A signature projects a state to just the pieces a step recognizes on, so a
@@ -158,11 +184,70 @@ export function pieceSignature(
  * NOT for phase-chaining pools: it deliberately collapses states that differ only
  * off-region, which is exactly the downstream diversity a pool needs (see the
  * `poolStateKey` note in step.ts). Use a finer key there.
+ *
+ * The key is a *number*, packed as mixed radix — 24 per tracked piece (slot ×
+ * orientation), 36 for the centers, 19 for the last-move family — not a string.
+ * A* evaluates this for every generated child (tens of millions in a deep block
+ * search), and the string form's allocation and hashing measured as the single
+ * largest per-node cost; the packed integer partitions states identically and is
+ * ~10x cheaper (0.40µs -> 0.04µs on the 2x2x3 region).
  */
-export function regionCoordinate(region: Region): (s: CubeState, last: Move | null) => string {
-  const pieces = pieceSignature(region.corners, region.edges);
-  return (s, last) => `${pieces(s)}/${s.cn.join("")}/${last?.family ?? ""}`;
+export function regionCoordinate(region: Region): (s: CubeState, last: Move | null) => number {
+  const corners = new Int8Array(region.corners);
+  const edges = new Int8Array(region.edges);
+  // Guard the packing: each piece contributes a factor of 24, the centers 36 and
+  // the last-move family FAMILY_RADIX. Beyond ~9 tracked pieces the product leaves
+  // float64's exact-integer range and distinct states would silently collide.
+  const span = 24 ** (corners.length + edges.length) * 36 * FAMILY_RADIX;
+  if (!Number.isSafeInteger(span)) {
+    throw new Error(
+      `regionCoordinate: ${corners.length + edges.length} tracked pieces overflow the packed key`,
+    );
+  }
+  const invCp = new Int8Array(8), invEp = new Int8Array(12);
+  return (s, last) => {
+    const cp = s.cp, ep = s.ep;
+    for (let i = 0; i < 8; i++) invCp[cp[i]] = i;
+    for (let i = 0; i < 12; i++) invEp[ep[i]] = i;
+    let key = 0;
+    for (let i = 0; i < corners.length; i++) {
+      const slot = invCp[corners[i]];
+      key = key * 24 + slot * 3 + s.co[slot];
+    }
+    for (let i = 0; i < edges.length; i++) {
+      const slot = invEp[edges[i]];
+      key = key * 24 + slot * 2 + s.eo[slot];
+    }
+    // A center permutation is a whole-cube rotation, so the images of U and R pin
+    // it (see pruning.ts's center coordinate).
+    key = key * 36 + s.cn[0] * 6 + s.cn[1];
+    return key * FAMILY_RADIX + (last === null ? 0 : FAMILY_INDEX[last.family]);
+  };
 }
+
+// Every family gets a distinct 1-based digit (0 means "no previous move", i.e. the
+// search root), so no two last-move families can ever alias.
+const FAMILY_INDEX: Record<MoveFamily, number> = {
+  R: 1,
+  L: 2,
+  U: 3,
+  D: 4,
+  F: 5,
+  B: 6,
+  M: 7,
+  E: 8,
+  S: 9,
+  r: 10,
+  l: 11,
+  u: 12,
+  d: 13,
+  f: 14,
+  b: 15,
+  x: 16,
+  y: 17,
+  z: 18,
+};
+const FAMILY_RADIX = 19;
 
 // --- Move-ordering: axis/commutation canonicalization ------------------------
 
@@ -324,6 +409,35 @@ export function regionLookup(
     if (!bySig.has(key)) bySig.set(key, c);
   }
   return { find: (s) => bySig.get(sig(s)) ?? null };
+}
+
+/**
+ * Like {@link regionLookup} but **raw** — it does *not* normalize orientation, so
+ * the signature sees the actual center permutation. Required by DFDB under the
+ * drift-allowing FB (see {@link regionSolvedLRHome}): the FB leaves U/F/D/B
+ * centers drifted, and which DFDB case applies depends on that drift, not only on
+ * where DF/DB sit relative to the block. `regionLookup` would `normalizeOrientation`
+ * the drift away, collapsing cases that share a block-relative DF/DB placement but
+ * need different center corrections onto one key. The signature passed here must
+ * therefore *include* the center state (e.g. `s.cn`), and it is taken verbatim on
+ * both the stored recognition state and the queried state.
+ *
+ * Safe for DFDB because its algs contain no whole-cube rotations, so each stored
+ * `recognitionState = applyMoves(solved, invert(algs[0]))` is already a valid raw,
+ * fixed-frame key. Do NOT use this for sets whose primaries end tilted.
+ */
+export function regionLookupRaw(
+  algSet: AlgSet,
+  signature: (s: CubeState) => string,
+  caseFilter?: (c: AlgSet["cases"][number]) => boolean,
+): CaseLookup {
+  const bySig = new Map<string, AlgCase>();
+  for (const c of algSet.cases) {
+    if (caseFilter && !caseFilter(c)) continue;
+    const key = signature(algSet.recognitionState(c.id));
+    if (!bySig.has(key)) bySig.set(key, c);
+  }
+  return { find: (s) => bySig.get(signature(s)) ?? null };
 }
 
 // The four AUF states (identity, U, U2, U') as cube states, for building the

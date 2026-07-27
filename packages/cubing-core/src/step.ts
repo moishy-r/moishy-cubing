@@ -38,12 +38,14 @@ export interface SearchPhase {
   /** Admissible lower-bound remaining-cost heuristic (a pruning table). */
   heuristic?: (state: CubeState) => number;
   /**
-   * Cost model for THIS phase's search (and, by construction, its `heuristic`),
-   * overriding the solve-wide model. Lets a phase optimize a different objective
-   * — e.g. block-building uses a move-count-dominant, wide-averse model
-   * ({@link import("./move-cost.ts").createBlockCostModel}) while last-layer
-   * phases keep the default MCC. The `heuristic` MUST be built with the same
-   * model to stay admissible. Defaults to the context's cost model.
+   * Cost model for *this phase only* (and, by construction, its `heuristic`),
+   * overriding the solve-global model. The phase's search edge costs and its
+   * `heuristic` must both use it — an admissible pruning table is built for one
+   * specific model. Use when a phase should optimize a different objective than
+   * the rest of the solve: APB's block223 phases rank by move count (matching
+   * OnionHoney's block analyzer) while every later phase keeps the ergonomic MCC.
+   * Applies to algorithmic phases too, so a search+alg strategy can be ranked as
+   * a whole under one objective. Defaults to the solve-global model.
    */
   costModel?: MoveCostModel;
   /** Move-ordering constraint passed through to the engine. */
@@ -63,7 +65,7 @@ export interface SearchPhase {
    * on the tracked region) is a large speedup — see `SearchParams.stateKey`.
    * Defaults to the full-cube key.
    */
-  stateKey?: (state: CubeState, lastMove: Move | null) => string;
+  stateKey?: (state: CubeState, lastMove: Move | null) => string | number;
   /**
    * State-identity key when this phase feeds a phase-chaining *pool*
    * (multi-candidate generation). Must be *finer* than `stateKey`: it has to keep
@@ -71,7 +73,23 @@ export interface SearchPhase {
    * or the pool collapses to one candidate. Defaults to `stateKey`, then to the
    * full-cube key. See {@link import("./search.ts").searchAStarMany}.
    */
-  poolStateKey?: (state: CubeState, lastMove: Move | null) => string;
+  poolStateKey?: (state: CubeState, lastMove: Move | null) => string | number;
+  /**
+   * Soft wall-clock budget (ms) for *one invocation* of this phase's search. On
+   * expiry the phase yields no segment, so its strategy simply drops out of the
+   * step's race — unlike the solve-global deadline ({@link SolveContext.deadline}),
+   * which ends the whole solve. The solve-global deadline still applies and still
+   * propagates; this only caps how long one expensive phase may spend before the
+   * runner gives up on *it*.
+   *
+   * For an opt-in strategy whose search is inherently deep (APB block223's
+   * `direct`, a single search for the whole 7-piece 2x2x3), this is what makes a
+   * pathological scramble cost one strategy rather than the solve. Note the
+   * consequence: which strategies finish becomes machine- and load-dependent, so
+   * set it generously above the measured worst case, and never on a phase a solve
+   * depends on.
+   */
+  timeBudgetMs?: number;
 }
 
 /**
@@ -144,6 +162,28 @@ export interface AlgorithmicPhase {
    * to `["U"]`. Each contributes identity plus its three amounts.
    */
   auf?: MoveFamily[];
+  /**
+   * Skip the {@link homeStart} reorientation and run recognition/alg against the
+   * *raw* input frame. Default (`false`/unset) homes a rotated input to the home
+   * frame first, prepending the rotation — correct for standard algs whose
+   * recognition is frame-relative.
+   *
+   * Set `true` when the phase intentionally consumes a *center-drifted* input and
+   * its alg restores the drift **in place**, so homing would wrongly relocate the
+   * work: APB's DFDB after the drift-allowing Roux FB. There the block sits at
+   * bottom-left with the U/F/D/B centers drifted; the DFDB alg (M/r moves) both
+   * places DF/DB and re-homes those centers without moving the block. Homing
+   * would instead prepend a whole-cube rotation and shift the block off BL. The
+   * phase's recognition must itself read the raw frame (a raw, center-aware
+   * lookup) for this to be meaningful.
+   */
+  frameRelative?: boolean;
+  /**
+   * Cost model for *this phase only*, overriding the solve-global model — e.g. the
+   * whole of APB's block223 (including this DFDB alg) ranks by move count while the
+   * last layer keeps ergonomic MCC. Defaults to the solve-global model.
+   */
+  costModel?: MoveCostModel;
 }
 
 /** A phase is one of the two kinds. */
@@ -158,6 +198,16 @@ export interface Strategy {
   phases: Phase[];
   /** Whether this strategy is enabled unless settings say otherwise (default true). */
   enabledByDefault?: boolean;
+  /**
+   * Opt this strategy out of phase-chaining even when the Step has it on. Set for a
+   * *search→search* strategy, where chaining pools *both* phases and re-generates
+   * the second search's pool per first-phase candidate — a pool×pool blowup that is
+   * far slower than the single-cheapest path and rarely yields a cheaper block. (A
+   * search→*alg* strategy like APB's fbDfdb keeps chaining: its second phase is a
+   * cheap lookup, so the pool is bounded and is exactly what selects a completable
+   * FB.) Default `undefined` = inherit the Step's phase-chaining setting.
+   */
+  phaseChaining?: boolean;
 }
 
 /** A named slot in a method's step list, offering one or more strategies. */
@@ -246,6 +296,39 @@ function homeStart(start: CubeState): { homed: CubeState; homeMoves: Move[] } {
 }
 
 /**
+ * The deadline a search phase actually runs under — the solve-global one, tightened
+ * by the phase's own `timeBudgetMs` if it declares one — plus a test for whether a
+ * thrown `TimeoutError` came from *that phase's* budget rather than the solve's.
+ *
+ * Only the phase's own expiry may be swallowed (the phase drops out of the race);
+ * a solve-global timeout must keep propagating so the runner ends the solve. When
+ * the phase budget is the tighter of the two, any timeout is necessarily its own.
+ */
+function phaseBudget(
+  phase: SearchPhase,
+  context: SolveContext,
+  warmStart: CubeState,
+): { deadline: number | undefined; isOwnTimeout: (err: unknown) => boolean } {
+  if (phase.timeBudgetMs === undefined) {
+    return { deadline: context.deadline, isOwnTimeout: () => false };
+  }
+  // Charge the budget for searching, not for building. A pruning-table heuristic
+  // materializes its tables on first call, which for a large table is seconds —
+  // one-time, process-wide, and nothing to do with how hard *this* scramble is. Warm
+  // it before starting the clock, or the very first solve would spuriously drop the
+  // phase while every later one sails through.
+  phase.heuristic?.(warmStart);
+  const own = performance.now() + phase.timeBudgetMs;
+  const global = context.deadline;
+  const ownIsTighter = global === undefined || own <= global;
+  return {
+    deadline: ownIsTighter ? own : global,
+    isOwnTimeout: (err) =>
+      ownIsTighter && err instanceof DOMException && err.name === "TimeoutError",
+  };
+}
+
+/**
  * Executes a single phase against `start`, returning its best (cheapest by MCC)
  * segment, or `null` if the phase cannot reach its goal.
  *
@@ -259,35 +342,47 @@ export function runPhase(
   start: CubeState,
   context: SolveContext = {},
 ): PhaseSegment | null {
-  const costModel = context.costModel ?? createDefaultMoveCostModel();
+  // A search phase may override the cost model for its own objective (e.g. the FB
+  // ranks by move count); everything else uses the solve-global model.
+  const costModel = phase.costModel ?? context.costModel ?? createDefaultMoveCostModel();
   const prevMove = context.prevMove ?? null;
   // Reorient a rotated input to the home frame first; the phase runs against the
-  // homed state and prepends the rotation to its solution (no-op when home).
-  const { homed, homeMoves } = homeStart(start);
+  // homed state and prepends the rotation to its solution (no-op when home). A
+  // `frameRelative` algorithmic phase opts out: it consumes the raw (possibly
+  // center-drifted) frame directly (see AlgorithmicPhase.frameRelative).
+  const { homed, homeMoves } = phase.kind === "algorithmic" && phase.frameRelative
+    ? { homed: start, homeMoves: [] as Move[] }
+    : homeStart(start);
   const innerPrev = homeMoves.length > 0 ? homeMoves[homeMoves.length - 1] : prevMove;
 
   if (phase.kind === "search") {
-    const searchModel = phase.costModel ?? costModel;
     const engine = phase.useAStar ? searchAStar : search;
-    const result = engine({
-      start: homed,
-      goal: phase.goal,
-      moves: phase.moves,
-      heuristic: phase.heuristic,
-      canFollow: phase.canFollow,
-      costModel: searchModel,
-      prevMove: innerPrev,
-      stateKey: phase.stateKey,
-      maxDepth: phase.maxDepth ?? context.maxDepth,
-      signal: context.signal,
-      deadline: context.deadline,
-    });
+    const budget = phaseBudget(phase, context, homed);
+    let result;
+    try {
+      result = engine({
+        start: homed,
+        goal: phase.goal,
+        moves: phase.moves,
+        heuristic: phase.heuristic,
+        canFollow: phase.canFollow,
+        costModel,
+        prevMove: innerPrev,
+        stateKey: phase.stateKey,
+        maxDepth: phase.maxDepth ?? context.maxDepth,
+        signal: context.signal,
+        deadline: budget.deadline,
+      });
+    } catch (err) {
+      if (budget.isOwnTimeout(err)) return null; // drop the phase, not the solve
+      throw err;
+    }
     if (!result.found) return null;
     const moves = homeMoves.length > 0 ? [...homeMoves, ...result.moves] : result.moves;
     // result.cost is threaded from innerPrev (the last homing move); prefix the
     // homing rotations' own cost, threaded from the external prevMove.
     const cost = homeMoves.length > 0
-      ? segmentCost(homeMoves, prevMove, searchModel) + result.cost
+      ? segmentCost(homeMoves, prevMove, costModel) + result.cost
       : result.cost;
     return {
       phaseId: phase.id,
@@ -397,11 +492,17 @@ export function runPhaseCandidates(
   context: SolveContext = {},
   opts: PhaseCandidateOptions = {},
 ): PhaseSegment[] {
-  const costModel = context.costModel ?? createDefaultMoveCostModel();
+  // A search phase may override the cost model for its own objective (e.g. the FB
+  // ranks by move count); everything else uses the solve-global model.
+  const costModel = phase.costModel ?? context.costModel ?? createDefaultMoveCostModel();
   const prevMove = context.prevMove ?? null;
   // Reorient a rotated input to the home frame (no-op when already home); the
-  // phase runs against `homed` and prepends `homeMoves` to every candidate.
-  const { homed, homeMoves } = homeStart(start);
+  // phase runs against `homed` and prepends `homeMoves` to every candidate. A
+  // `frameRelative` algorithmic phase opts out and consumes the raw frame (see
+  // AlgorithmicPhase.frameRelative).
+  const { homed, homeMoves } = phase.kind === "algorithmic" && phase.frameRelative
+    ? { homed: start, homeMoves: [] as Move[] }
+    : homeStart(start);
   const innerPrev = homeMoves.length > 0 ? homeMoves[homeMoves.length - 1] : prevMove;
   const homePrefixCost = homeMoves.length > 0 ? segmentCost(homeMoves, prevMove, costModel) : 0;
 
@@ -411,52 +512,55 @@ export function runPhaseCandidates(
       const only = runPhase(phase, start, context);
       return only ? [only] : [];
     }
-    const searchModel = phase.costModel ?? costModel;
-    const searchPrefixCost = phase.costModel && homeMoves.length > 0
-      ? segmentCost(homeMoves, prevMove, searchModel)
-      : homePrefixCost;
     // A* phases pool via the guided `searchAStarMany` (best-first, cost-slack),
     // keyed by `poolStateKey` — which must be fine enough to keep distinct any
     // solutions the downstream phase treats differently (e.g. an FB's DF/DB pair),
     // or the pool collapses to one. IDA*-based `searchMany` is only for non-A*
     // (heuristic-less) search phases, where its length-slack DFS is affordable.
-    const results = phase.useAStar
-      ? searchAStarMany({
-        start: homed,
-        goal: phase.goal,
-        moves: phase.moves,
-        heuristic: phase.heuristic,
-        canFollow: phase.canFollow,
-        costModel: searchModel,
-        prevMove: innerPrev,
-        stateKey: phase.poolStateKey ?? phase.stateKey,
-        maxDepth: phase.maxDepth ?? context.maxDepth,
-        costSlack: opts.searchSlack,
-        maxSolutions: opts.max,
-        signal: context.signal,
-        deadline: context.deadline,
-      })
-      : searchMany({
-        start: homed,
-        goal: phase.goal,
-        moves: phase.moves,
-        heuristic: phase.heuristic,
-        canFollow: phase.canFollow,
-        costModel: searchModel,
-        prevMove: innerPrev,
-        maxDepth: phase.maxDepth ?? context.maxDepth,
-        slack: opts.searchSlack,
-        maxSolutions: opts.max,
-        signal: context.signal,
-        deadline: context.deadline,
-      });
+    const budget = phaseBudget(phase, context, homed);
+    let results;
+    try {
+      results = phase.useAStar
+        ? searchAStarMany({
+          start: homed,
+          goal: phase.goal,
+          moves: phase.moves,
+          heuristic: phase.heuristic,
+          canFollow: phase.canFollow,
+          costModel,
+          prevMove: innerPrev,
+          stateKey: phase.poolStateKey ?? phase.stateKey,
+          maxDepth: phase.maxDepth ?? context.maxDepth,
+          costSlack: opts.searchSlack,
+          maxSolutions: opts.max,
+          signal: context.signal,
+          deadline: budget.deadline,
+        })
+        : searchMany({
+          start: homed,
+          goal: phase.goal,
+          moves: phase.moves,
+          heuristic: phase.heuristic,
+          canFollow: phase.canFollow,
+          costModel,
+          prevMove: innerPrev,
+          maxDepth: phase.maxDepth ?? context.maxDepth,
+          slack: opts.searchSlack,
+          maxSolutions: opts.max,
+          signal: context.signal,
+          deadline: budget.deadline,
+        });
+    } catch (err) {
+      if (budget.isOwnTimeout(err)) return [];
+      throw err;
+    }
     return results.map((r) => {
       const moves = homeMoves.length > 0 ? [...homeMoves, ...r.moves] : r.moves;
       return {
         phaseId: phase.id,
         kind: "search" as const,
         moves,
-        cost: searchPrefixCost + r.cost,
+        cost: homePrefixCost + r.cost,
         startState: start,
         endState: applyMoves(start, moves),
         nodesVisited: r.nodesVisited,

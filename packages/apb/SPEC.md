@@ -63,7 +63,21 @@ movecount; nothing extra needed here beyond using it consistently.
 **`direct`** - `[SearchPhase(full 2x2x3, no algs)]`. The "machine" approach: pure search straight to
 a solved 2x2x3. Needs a precomputed pruning table (7-piece pattern database - 2 corners + 5 edges,
 permutation + orientation) to be practical; a naive unpruned search at this piece count is too slow
-to run per-solve. Table generation is a build-time/offline concern, not something computed live.
+to run per-solve.
+
+Implemented (see `pruning.ts` `regionHeuristicMulti` and `apb.ts` `DIRECT_GROUPS`): the full 7-piece
+coordinate is ~4.6e9 states, far too large for one combined table, and splitting it as
+corners-vs-edges gives a bound that never sees a corner<->edge interaction - under that split the
+search routinely ran past 30s or exhausted the heap. Instead the bound is the **max of several
+overlapping sub-region tables**, each small enough to combine corners with edges: two 3-edge groups
+covering all five block edges, plus the four 2-edge groups neither contains, every group carrying
+both block corners. Each tracks a subset of the goal's pieces, so each is a valid lower bound and
+the max is admissible - the block found is unchanged, only the node count drops (~9x, measured over
+24 scrambles; ~0.1-1.4s per orientation). Tables are built lazily on first use and cached for the
+process (~6s, ~34MB for `direct`'s set), so table generation stays live rather than offline.
+Additive (summed) pattern DBs were measured and are **not** admissible here: with slice/wide moves
+in the generator, a single move can advance two disjoint block groups at once, and even a
+`{DLF,DBL} + {DL}` split overestimates.
 
 **`fbDfdb`** - `[SearchPhase(rouxFB), AlgorithmicPhase(dfdb)]`.
 
@@ -111,20 +125,41 @@ Uses the general per-step `StepOptions` shape from `/DESIGN.md` under `stepOptio
   the end of this doc for the full chain.
 - Dual-CN color neutrality (8 orientations) enabled - the runner races each through `block223` and
   commits to the cheapest first block (see `/DESIGN.md` Color neutrality; the search is fast enough
-  to make racing all 8 cheap).
+  to make racing all 8 cheap). Measured mean block STM by CN width (15 scrambles): `fbDfdb` 11.20
+  fixed -> 9.80 dual -> 8.93 full; `direct` 8.20 -> 7.27 -> 7.20. Widening CN is a _cheaper_ lever
+  on block length than switching to a smarter strategy - `fbDfdb` at full-CN reaches 8.93 in 0.06s
+  where `direct` at dual-CN reaches 7.27 in 1.45s - and it helps the shape-committed strategies
+  most, because they gain frames in which their one shape happens to be cheap. `direct` gains least
+  (1.00 move from fixed to full, against 2.27-2.94 for the others): it already searches every shape
+  in every frame, so extra frames add little.
 - **Only `fbDfdb` enabled by default; `direct`/`cornerFirstFront`/`cornerFirstBack`/`cross1` are
   registered but opt-in** (`enabledStrategies`/`forceStrategy`). Originally all five were meant to
   race, but `fbDfdb` is a search→_alg_ chain whose phase-chaining pool races cheaply, whereas the
   pure-search strategies are search→_search_ chains that re-run a second block search per pooled
   first-phase candidate - much slower to race for a block that is rarely cheaper. Revisit if that
   search→search chaining is sped up (e.g. a bounded pool or a lighter second-phase heuristic).
+  `direct` is a different case: it is a _single_ search, now well-guided (above), and it does find
+  blocks the decomposed strategies cannot. Over 25 scrambles, dual-CN, shipped defaults: mean block
+  **7.4 STM** (range 6-8) against `fbDfdb`'s 9.8 (8-11), cornerFirst's 9.7/9.8 and cross1's
+  12.4/13.0 - and it wins the six-way race on all 25. Full-solution mean 38.9 vs 40.8 STM. What
+  keeps it opt-in is cost, not quality: ~1.4s per dual-CN solve against `fbDfdb`'s ~0.02s warm
+  (~70x), since `fbDfdb`'s second phase is an alg lookup while `direct` runs a deep 7-piece search
+  in each of the 8 frames. It also carries a firm per-orientation `timeBudgetMs` so a pathological
+  scramble drops `direct` from the race instead of consuming the solve's whole time budget.
+- **Not done: bounding each orientation's search by the best block cost found so far in the CN
+  race** (`searchAStar`'s `maxCost`). Measured 3x on `direct` - 1.67s -> 0.56s per dual-CN solve
+  over 12 scrambles, with the committed block unchanged. It is left out because the orientation race
+  compares _raw_ first-unit cost while `chooseStepCand` picks among candidates by
+  _lookahead-adjusted_ cost: with lookahead on, a raw-cost ceiling can prune the candidate lookahead
+  would have chosen, so results would shift. Sound to add either with lookahead into the first step
+  off, or once the race and the candidate choice minimize the same quantity.
 
 ### Open / left to implementation
 
 - Exact default `phaseChaining.slack` value - starting guess of 2 in `/DESIGN.md`, tune once real
   solves can be benchmarked.
-- Pruning table size/generation strategy for `direct`'s full-2x2x3 search - implementation detail,
-  not a design decision blocking anything else.
+- ~~Pruning table size/generation strategy for `direct`'s full-2x2x3 search~~ - settled, see the
+  `direct` strategy above.
 
 ## Step: `brPair` (BR Pair)
 
