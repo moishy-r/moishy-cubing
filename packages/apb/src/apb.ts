@@ -33,10 +33,13 @@
 // the heap. It finds genuinely shorter blocks — over 25 scrambles, dual-CN, shipped
 // defaults: mean 7.4 STM (range 6-8) against fbDfdb's 9.8 (8-11), and it wins the
 // six-way race on all 25 — but costs ~1.4s per dual-CN solve against fbDfdb's ~0.02s
-// warm, so it stays opt-in; (2)
-// winterSummerVariation's checkpoint trigger only fires once the
-// relevant `lxs` variants carry a `preInsert` checkpoint. Replacements/Extras are
-// opt-in (disabled) per project convention.
+// warm, so it stays opt-in; (2) winterSummerVariation is wired and does fire — the
+// runner auto-scans every prefix of the chosen LXS alg for an insertable WV/SV case
+// (no hand-placed `preInsert` checkpoints needed, as an earlier note here claimed),
+// and races the splice against the normal LXS->ZBLL finish. It applies only when the
+// last pair and LL orientation allow it, so it lands on a minority of scrambles
+// (measured ~1 in 30 with the extra enabled). Replacements/Extras are opt-in
+// (disabled) per project convention.
 //
 // Orientation. Recognition and goals are evaluated *up to whole-cube rotation*
 // (cubing-core `normalizeOrientation`): a state is matched/solved by its pieces
