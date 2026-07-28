@@ -1,11 +1,23 @@
-// PLL — algorithm case data for @moishy/algsets.
-//
-// Transformed from old/pll.ts via scripts/transform_old_algsets.ts.
-// Every source alg is kept as an interchangeable variant; recognition is
-// derived from the primary (first) alg of each case. See /DESIGN.md.
+/**
+ * PLL — algorithm case data for `@moishy/algsets`.
+ *
+ * Permutation of the Last Layer: the classic 21 cases.
+ *
+ * Transformed from old/pll.ts via scripts/transform_old_algsets.ts. Every source alg is kept as
+ * an interchangeable variant; recognition is derived from the primary (first) alg of each case.
+ * See /DESIGN.md.
+ *
+ * ```ts
+ * import { pll } from "@moishy/algsets/pll";
+ * pll.cases.length;
+ * ```
+ *
+ * @module
+ */
 
 import { type AlgSet, defineAlgSet } from "../define.ts";
 
+/** PLL. Recognition is derived from each case's primary alg. */
 export const pll: AlgSet = defineAlgSet({
   id: "pll",
   name: "PLL",

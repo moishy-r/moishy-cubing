@@ -1,13 +1,24 @@
-// EO Pair — algorithm case data for @moishy/algsets.
-//
-// Transformed from old/eoPair.ts via scripts/transform_old_algsets.ts.
-// Every source alg is kept as an interchangeable variant; recognition is
-// derived from the primary (first) alg of each case. See /DESIGN.md.
-//
-// Source flagged usesMccLookahead: true (a method-runner concern, step 8).
+/**
+ * EO Pair — algorithm case data for `@moishy/algsets`.
+ *
+ * Solves the BR pair and edge orientation together, replacing APB's separate brPair and eo
+ * steps.
+ *
+ * Transformed from old/eoPair.ts via scripts/transform_old_algsets.ts. Every source alg is kept
+ * as an interchangeable variant; recognition is derived from the primary (first) alg of each
+ * case. See /DESIGN.md. Source flagged usesMccLookahead: true (a method-runner concern, step 8).
+ *
+ * ```ts
+ * import { eoPair } from "@moishy/algsets/eo-pair";
+ * eoPair.cases.length;
+ * ```
+ *
+ * @module
+ */
 
 import { type AlgSet, defineAlgSet } from "../define.ts";
 
+/** EO Pair. Recognition is derived from each case's primary alg. */
 export const eoPair: AlgSet = defineAlgSet({
   id: "EOPair",
   name: "EO Pair",

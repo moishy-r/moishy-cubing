@@ -1,55 +1,31 @@
-// DF/DB Pair — algorithm case data for @moishy/algsets.
-//
-// Transformed from old/dfdb.ts via scripts/transform_old_algsets.ts.
-// Every source alg is kept as an interchangeable variant; recognition is
-// derived from the primary (first) alg of each case. See /DESIGN.md.
-//
-// Region mask from the source (for a future signature projection; not yet
-// wired — recognition currently uses the default full-facelet signature):
-//   {
-//     "CORNERS": {
-//       "slots": [
-//         5,
-//         6
-//       ],
-//       "pieces": [
-//         5,
-//         6
-//       ],
-//       "orientation": [
-//         0,
-//         0
-//       ]
-//     },
-//     "EDGES": {
-//       "slots": [
-//         4,
-//         6,
-//         7,
-//         9,
-//         11
-//       ],
-//       "pieces": [
-//         4,
-//         6,
-//         7,
-//         9,
-//         11
-//       ],
-//       "orientation": [
-//         0,
-//         0,
-//         0,
-//         0,
-//         0
-//       ]
-//     }
-//   }
-//
-// Source flagged usesMccLookahead: true (a method-runner concern, step 8).
+/**
+ * DF/DB Pair — algorithm case data for `@moishy/algsets`.
+ *
+ * Places the DF and DB edges onto a solved Roux first block, restoring any L–R centre drift in
+ * the process.
+ *
+ * Transformed from old/dfdb.ts via scripts/transform_old_algsets.ts. Every source alg is kept as
+ * an interchangeable variant; recognition is derived from the primary (first) alg of each case.
+ * See /DESIGN.md. Region mask from the source (for a future signature projection; not yet wired
+ * — recognition currently uses the default full-facelet signature):   {     "CORNERS": {
+ * "slots": [         5,         6       ],       "pieces": [         5,         6       ],
+ * "orientation": [         0,         0       ]     },     "EDGES": {       "slots": [
+ * 4,         6,         7,         9,         11       ],       "pieces": [         4,
+ * 6,         7,         9,         11       ],       "orientation": [         0,         0,
+ * 0,         0,         0       ]     }   } Source flagged usesMccLookahead: true (a method-
+ * runner concern, step 8).
+ *
+ * ```ts
+ * import { dfdb } from "@moishy/algsets/dfdb";
+ * dfdb.cases.length;
+ * ```
+ *
+ * @module
+ */
 
 import { type AlgSet, defineAlgSet } from "../define.ts";
 
+/** DF/DB Pair. Recognition is derived from each case's primary alg. */
 export const dfdb: AlgSet = defineAlgSet({
   id: "dfdb",
   name: "DF/DB Pair",

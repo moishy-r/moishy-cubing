@@ -1,11 +1,23 @@
-// ZBLL — algorithm case data for @moishy/algsets.
-//
-// Transformed from old/zbll.ts via scripts/transform_old_algsets.ts.
-// Every source alg is kept as an interchangeable variant; recognition is
-// derived from the primary (first) alg of each case. See /DESIGN.md.
+/**
+ * ZBLL — algorithm case data for `@moishy/algsets`.
+ *
+ * Solves the whole last layer in one alg, given oriented edges — APB's final step.
+ *
+ * Transformed from old/zbll.ts via scripts/transform_old_algsets.ts. Every source alg is kept as
+ * an interchangeable variant; recognition is derived from the primary (first) alg of each case.
+ * See /DESIGN.md.
+ *
+ * ```ts
+ * import { zbll } from "@moishy/algsets/zbll";
+ * zbll.cases.length;
+ * ```
+ *
+ * @module
+ */
 
 import { type AlgSet, defineAlgSet } from "../define.ts";
 
+/** ZBLL. Recognition is derived from each case's primary alg. */
 export const zbll: AlgSet = defineAlgSet({
   id: "zbll",
   name: "ZBLL",

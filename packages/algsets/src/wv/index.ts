@@ -1,12 +1,23 @@
-// Winter Variation (WV) — algorithm case data for @moishy/algsets.
-//
-// Winter Variation — solves the last pair while orienting last-layer corners.
-// Scraped from https://speedcubedb.com/a/3x3/WV. Every listed alg kept as a variant.
-//
-// Authored per packages/algsets/AUTHORING.md — algs only; recognition/AUF/cost are derived.
+/**
+ * Winter Variation (WV) — algorithm case data for `@moishy/algsets`.
+ *
+ * Solves the last pair while orienting last-layer corners.
+ *
+ * Winter Variation — solves the last pair while orienting last-layer corners. Scraped from
+ * https://speedcubedb.com/a/3x3/WV. Every listed alg kept as a variant. Authored per
+ * packages/algsets/AUTHORING.md — algs only; recognition/AUF/cost are derived.
+ *
+ * ```ts
+ * import { wv } from "@moishy/algsets/wv";
+ * wv.cases.length;
+ * ```
+ *
+ * @module
+ */
 
 import { type AlgSet, defineAlgSet } from "../define.ts";
 
+/** Winter Variation (WV). Recognition is derived from each case's primary alg. */
 export const wv: AlgSet = defineAlgSet({
   id: "wv",
   name: "Winter Variation (WV)",

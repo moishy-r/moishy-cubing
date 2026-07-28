@@ -1,14 +1,24 @@
-// EODR — algorithm case data for @moishy/algsets.
-//
-// EODR — orient all 6 remaining edges and place the DR edge in one step.
-// From the eodr Google Sheet
-// (https://docs.google.com/spreadsheets/d/16YsmMwgk5M4U8HfF6Gbb4_ufzb2SCKKHeJlVUFRlq5o, gid 1684874333).
-// subset = number of misoriented edges (All Oriented / 2 / 4 / 6 Misoriented).
-//
-// Authored per packages/algsets/AUTHORING.md — algs only; recognition/AUF/cost are derived.
+/**
+ * EODR — algorithm case data for `@moishy/algsets`.
+ *
+ * Orients edges while setting up the DR slot, feeding a last-slot alg.
+ *
+ * EODR — orient all 6 remaining edges and place the DR edge in one step. From the eodr Google
+ * Sheet (https://docs.google.com/spreadsheets/d/16YsmMwgk5M4U8HfF6Gbb4_ufzb2SCKKHeJlVUFRlq5o,
+ * gid 1684874333). subset = number of misoriented edges (All Oriented / 2 / 4 / 6 Misoriented).
+ * Authored per packages/algsets/AUTHORING.md — algs only; recognition/AUF/cost are derived.
+ *
+ * ```ts
+ * import { eodr } from "@moishy/algsets/eodr";
+ * eodr.cases.length;
+ * ```
+ *
+ * @module
+ */
 
 import { type AlgSet, defineAlgSet } from "../define.ts";
 
+/** EODR. Recognition is derived from each case's primary alg. */
 export const eodr: AlgSet = defineAlgSet({
   id: "eodr",
   name: "EODR",

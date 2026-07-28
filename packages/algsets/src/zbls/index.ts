@@ -1,14 +1,24 @@
-// ZBLS — algorithm case data for @moishy/algsets.
-//
-// ZBLS — solve the last slot while orienting last-layer edges (ZBLL setup).
-// From the zbls Google Sheet
-// (https://docs.google.com/spreadsheets/d/1s8Q2VM2c1eV3oLIxFfM4exvABO0AcCeMCUdMiYKnzC0).
-// subset = the source's F2L case grouping (F2L 1..41).
-//
-// Authored per packages/algsets/AUTHORING.md — algs only; recognition/AUF/cost are derived.
+/**
+ * ZBLS — algorithm case data for `@moishy/algsets`.
+ *
+ * Solves the last slot while orienting the last-layer edges.
+ *
+ * ZBLS — solve the last slot while orienting last-layer edges (ZBLL setup). From the zbls Google
+ * Sheet (https://docs.google.com/spreadsheets/d/1s8Q2VM2c1eV3oLIxFfM4exvABO0AcCeMCUdMiYKnzC0).
+ * subset = the source's F2L case grouping (F2L 1..41). Authored per
+ * packages/algsets/AUTHORING.md — algs only; recognition/AUF/cost are derived.
+ *
+ * ```ts
+ * import { zbls } from "@moishy/algsets/zbls";
+ * zbls.cases.length;
+ * ```
+ *
+ * @module
+ */
 
 import { type AlgSet, defineAlgSet } from "../define.ts";
 
+/** ZBLS. Recognition is derived from each case's primary alg. */
 export const zbls: AlgSet = defineAlgSet({
   id: "zbls",
   name: "ZBLS",
