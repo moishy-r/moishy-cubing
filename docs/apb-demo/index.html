@@ -228,11 +228,14 @@
       class="sub">Interactive demo of <code>@moishy/apb</code> — the full solver config is exposed below.</p>
 
     <div class="beta-banner">
-    <strong>⚠ Beta software.</strong> This solver is a work in progress. Some algorithm sets
-    are still being authored, and heavier settings can be slow (the solver runs single-threaded,
-    right here in your browser).
+    <strong>⚠ Beta software.</strong> This solver is a work in progress and some algorithm
+    sets are still being authored. It runs entirely in your browser, on a background thread —
+    heavier settings (especially <code>direct</code> blockbuilding) can take many seconds, but
+    the page stays responsive and you can cancel.
     <br>
-    <strong>Note on Winter/Summer Variation:</strong> WV/SV are currently not implemented. Coming soon.
+    <strong>Note on Winter/Summer Variation:</strong> WV/SV are implemented, as an opt-in Extra
+    (off by default). They apply only when the last pair and last-layer orientation allow it, so
+    they fire on a minority of scrambles.
   </div>
 
     <label for="scramble">Scramble</label>
@@ -247,6 +250,7 @@
 
     <div class="row">
       <button id="solve">Solve</button>
+      <button id="cancel" type="button" hidden>Cancel</button>
       <button type="button" id="reset" class="secondary">Reset (fast defaults)</button>
       <button type="button" id="recommended" class="secondary">Library-recommended</button>
       <span id="status" class="muted"></span>
@@ -260,16 +264,10 @@
   </footer>
 
     <script type="module">
-    import {
-      apb,
-      apbDefinition,
-      applyAlg,
-      createDefaultMoveCostModel,
-      formatAlg,
-      isSolved,
-      parseAlg,
-      solvedCube,
-    } from "./apb.bundle.js";
+    // Only what the options form needs: the method definition (to generate the
+    // form) and parseAlg (to validate custom orientations). Solving, verification
+    // and move formatting all happen in the worker — see solver.worker.js.
+    import { apbDefinition, parseAlg } from "./apb.bundle.js";
 
     const $ = (id) => document.getElementById(id);
     const el = (tag, attrs = {}, ...kids) => {
@@ -630,10 +628,9 @@
         settings.colorNeutrality = orientations.length ? orientations : "fixed";
       }
 
-      // moveCostModel
-      settings.moveCostModel = createDefaultMoveCostModel(
-        mccMode.value === "OH" ? { mode: "OH", handedness: mccHand.value } : { mode: "2H" },
-      );
+      // moveCostModel is built in the worker: it is an object with a `cost`
+      // method, and structured clone drops functions. Send the description.
+      const mcc = mccMode.value === "OH" ? { mode: "OH", handedness: mccHand.value } : { mode: "2H" };
 
       // lookahead
       const depth = Number(laDepth.value) || 0;
@@ -682,12 +679,52 @@
       if (oMaxDepth.value !== "") opts.maxDepth = Number(oMaxDepth.value);
       if (oTime.value !== "") opts.timeBudgetMs = Number(oTime.value);
 
-      return { settings, opts };
+      return { settings, mcc, opts };
     }
 
-    // --- Solve ---------------------------------------------------------------
-    let busy = false;
-    async function solve() {
+    // --- Solve (in a worker) -------------------------------------------------
+    //
+    // The search is a long synchronous computation. Run on the main thread it
+    // froze the tab for its whole duration — seconds normally, and well past ten
+    // with `direct` blockbuilding enabled. In a worker the page stays responsive,
+    // an elapsed counter can tick, and cancelling is just terminating the worker.
+    //
+    // One worker is reused across solves so its pruning tables (built on first
+    // use, several seconds) stay warm. Cancelling throws that away, so the next
+    // solve after a cancel pays the build again.
+
+    let worker = null, busy = false, seq = 0, tick = null;
+
+    function spawnWorker() {
+      const w = new Worker("./solver.worker.js", { type: "module" });
+      w.addEventListener("error", (e) => {
+        finish();
+        $("out").innerHTML = `<p class="err">Solver worker failed: ${
+          esc(e.message || "unknown error")
+        }</p><p class="muted">Your browser may not support module workers.</p>`;
+      });
+      return w;
+    }
+
+    function finish() {
+      busy = false;
+      clearInterval(tick);
+      tick = null;
+      $("solve").disabled = false;
+      $("cancel").hidden = true;
+      $("status").textContent = "";
+    }
+
+    $("cancel").addEventListener("click", () => {
+      if (!busy) return;
+      worker.terminate();
+      worker = null; // tables are gone with it; the next solve rebuilds them
+      seq++; // invalidate any in-flight reply
+      finish();
+      $("out").innerHTML = `<p class="muted">Cancelled.</p>`;
+    });
+
+    function solve() {
       if (busy) return;
       const scramble = $("scramble").value.trim();
       const out = $("out"), status = $("status");
@@ -708,69 +745,64 @@
 
       busy = true;
       $("solve").disabled = true;
-      status.textContent = "Solving…";
-      await new Promise((r) => setTimeout(r, 20));
+      $("cancel").hidden = false;
+      const id = ++seq;
+      const t0 = performance.now();
+      const label = () => {
+        const secs = (performance.now() - t0) / 1000;
+        status.textContent = secs < 1.5 ? "Solving…" : `Solving… ${secs.toFixed(1)}s`;
+      };
+      label();
+      tick = setInterval(label, 100);
 
-      let r;
-      try {
-        r = await apb.solve(scramble, cfg.settings, cfg.opts);
-      } catch (e) {
-        status.textContent = "";
-        out.innerHTML = `<p class="err">Could not solve: ${esc(e.message || e)}</p>
-          <p class="muted">Check the scramble notation and options.</p>`;
-        busy = false;
-        $("solve").disabled = false;
-        return;
-      }
-      status.textContent = "";
+      worker ??= spawnWorker();
+      worker.addEventListener("message", function onMsg(ev) {
+        const m = ev.data;
+        if (m?.ready || m?.id !== id) return; // stale reply from a cancelled run
+        worker.removeEventListener("message", onMsg);
+        finish();
+        if (!m.ok) {
+          out.innerHTML = `<p class="err">Could not solve: ${esc(m.message)}</p>
+            <p class="muted">Check the scramble notation and options.</p>`;
+          return;
+        }
+        render(m);
+      });
+      worker.postMessage({ id, scramble, settings: cfg.settings, mcc: cfg.mcc, opts: cfg.opts });
+    }
 
-      let verified = false;
-      try {
-        // The full executable sequence is orientation + solution: the solution is
-        // expressed in the (color-neutral) oriented frame, so the pre-rotation must
-        // be applied first. isSolved is rotation-invariant, so a cube left solved
-        // but held rotated (a rotated orientation) still verifies.
-        verified = isSolved(
-          applyAlg(
-            applyAlg(applyAlg(solvedCube(), scramble), formatAlg(r.orientation)),
-            r.solutionString,
-          ),
-        );
-      } catch { /* leave false */ }
-
-      const rows = r.segments.map((seg) => {
-        const detail = seg.phases.map((p) => {
-          const tag = p.kind === "algorithmic" ? (p.caseId ?? "") : "search";
-          const mv = p.moves.length ? formatAlg(p.moves) : "—";
-          return `<div><span class="muted">${esc(p.phaseId)}${
-            tag ? " · " + esc(tag) : ""
-          }:</span> <span class="mono">${esc(mv)}</span></div>`;
-        }).join("");
-        const alts = seg.alternatives?.length
+    // --- Render --------------------------------------------------------------
+    // Everything here is plain data the worker already formatted; the main thread
+    // never touches the cube engine.
+    function render(m) {
+      const rows = m.segments.map((seg) => {
+        const detail = seg.phases.map((p) =>
+          `<div><span class="muted">${esc(p.phaseId)}${
+            p.tag ? " · " + esc(p.tag) : ""
+          }:</span> <span class="mono">${esc(p.moves)}</span></div>`
+        ).join("");
+        const alts = seg.alternatives.length
           ? `<div class="muted">alts: ${
             seg.alternatives.map((a) => `${esc(a.strategyId)}=${a.cost.toFixed(1)}`).join(", ")
           }</div>`
           : "";
-        const mv = seg.moves.length ? formatAlg(seg.moves) : "—";
         return `<tr>
           <td>${esc(seg.unitId)}<div class="muted">${esc(seg.kind)} · ${esc(seg.strategyId)}</div></td>
-          <td class="mono">${esc(mv)}</td>
+          <td class="mono">${esc(seg.moves)}</td>
           <td>${detail}${alts}</td>
           <td>${seg.cost.toFixed(2)}</td>
         </tr>`;
       }).join("");
 
-      out.innerHTML = `
+      const good = m.solved && m.verified;
+      $("out").innerHTML = `
         <p>
-          <span class="${r.solved && verified ? "ok" : "err"}">${
-        r.solved && verified ? "✓ Solved" : "✗ Not solved"
-      }</span>
-          &nbsp;·&nbsp; ${r.solution.length} moves &nbsp;·&nbsp; cost ${r.cost.toFixed(2)}
+          <span class="${good ? "ok" : "err"}">${good ? "✓ Solved" : "✗ Not solved"}</span>
+          &nbsp;·&nbsp; ${m.moveCount} moves &nbsp;·&nbsp; cost ${m.cost.toFixed(2)}
           ${
-        r.orientation.length
-          ? `&nbsp;·&nbsp; orientation <span class="mono">${esc(formatAlg(r.orientation))}</span>`
-          : ""
+        m.orientation ? `&nbsp;·&nbsp; orientation <span class="mono">${esc(m.orientation)}</span>` : ""
       }
+          &nbsp;·&nbsp; <span class="muted">${(m.elapsedMs / 1000).toFixed(2)}s</span>
         </p>
         <table>
           <thead><tr><th>Step</th><th>Moves</th><th>Detail</th><th>Cost</th></tr></thead>
@@ -778,17 +810,15 @@
         </table>
         <label>Full solution</label>
         <div class="solution">${
-        esc((r.orientation.length ? formatAlg(r.orientation) + " " : "") + r.solutionString)
+        esc((m.orientation ? m.orientation + " " : "") + m.solutionString)
       }</div>
         <p class="muted">${
-        verified
+        m.verified
           ? "Verified: scramble + orientation + solution returns the cube to solved " +
             "(up to a whole-cube rotation)."
           : "⚠ Independent verification did not pass — treat this solution with caution."
       }</p>
       `;
-      busy = false;
-      $("solve").disabled = false;
     }
 
     $("solve").addEventListener("click", solve);
@@ -798,9 +828,10 @@
       if (e.key === "Enter") solve();
     });
 
-    // Warm up on load: the first solve builds a pruning table (a few seconds),
-    // cached for every solve after. Running it against the prefilled scramble
-    // also shows a worked example immediately.
+    // Warm up on load: the first solve builds pruning tables (a few seconds),
+    // cached in the worker for every solve after. Running it against the prefilled
+    // scramble also shows a worked example immediately. This no longer blocks the
+    // page, so the form is usable while it runs.
     applyFastDefaults();
     $("solve").disabled = true;
     $("status").textContent = "Preparing solver (first run builds lookup tables)…";
