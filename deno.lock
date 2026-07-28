@@ -142,13 +142,13 @@
     "members": {
       "packages/algsets": {
         "dependencies": [
-          "jsr:@moishy/cubing-core@0.1"
+          "jsr:@moishy/cubing-core@0.2"
         ]
       },
       "packages/apb": {
         "dependencies": [
-          "jsr:@moishy/algsets@0.2",
-          "jsr:@moishy/cubing-core@0.1"
+          "jsr:@moishy/algsets@~0.2.1",
+          "jsr:@moishy/cubing-core@0.2"
         ]
       }
     }

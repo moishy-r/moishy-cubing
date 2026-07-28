@@ -13,8 +13,9 @@ deno add jsr:@moishy/apb   # Deno
 npx jsr add @moishy/apb    # Node
 ```
 
-> **Beta.** Solves are correct end to end and verified in tests, but some algorithm sets are still
-> being authored and Winter/Summer Variation is not yet wired up.
+> **Beta.** The solver is verified end to end: every algset is audited against the lookup it is used
+> with, and 540 solves across every replacement and extra all completed. What is not yet frozen is
+> the public API — that happens at 1.0.
 
 ## Use
 
@@ -104,8 +105,14 @@ Full reference:
 ## Also exported
 
 `apbDefinition` — the raw `MethodDefinition`, so a UI can generate its options form from the method
-itself and stay in sync (this is what the demo page does). Plus the geometry helpers (`BLOCK223`,
-`regionSolved`, `regionCoordinate`, …) used to define the steps.
+itself and stay in sync (this is what the demo page does). Plus the piece groups APB's steps target
+(`BLOCK223`, `AFTER_BR`, `F2L`, `BR_PAIR`, `LAST_SLOT`, `EO_EDGE_SLOTS`) and the `PieceRegion` type,
+for reading a result.
+
+The method-wiring helpers in `src/geometry.ts` (goal predicates, recognition signatures, lookup
+builders) are deliberately **not** exported: they are internals, and some are specific to APB's
+algsets. To build your own method, read that file as a template — see
+[Adding a method](https://github.com/moishy-r/moishy-cubing/blob/main/guides/adding-a-method.md).
 
 ## Documentation
 

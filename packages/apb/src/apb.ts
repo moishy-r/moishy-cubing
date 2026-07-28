@@ -117,6 +117,7 @@ import {
   F2L,
   fallThrough,
   orientationSignature,
+  type PieceRegion,
   pieceSignature,
   regionCoordinate,
   regionLookup,
@@ -232,8 +233,6 @@ const CROSS = { corners: [], edges: [5, 6, 7] }; // DF, DL, DB
 const CROSS_PAIR_FRONT = { corners: [5], edges: [5, 6, 7, 9] }; // cross + DLF + FL
 const CROSS_PAIR_BACK = { corners: [6], edges: [5, 6, 7, 10] }; // cross + DBL + BL
 
-type Region = { corners: readonly number[]; edges: readonly number[] };
-
 // `direct`'s pruning tables: overlapping sub-regions of the 2x2x3, maxed
 // (`regionHeuristicMulti`). The whole 7-piece block cannot be one combined table
 // (8²·3²·12⁵·2⁵ ≈ 4.6e9 entries), and the corners-vs-edges split `regionHeuristic`
@@ -247,7 +246,7 @@ type Region = { corners: readonly number[]; edges: readonly number[] };
 // fewer nodes than the split fallback and no timeouts, at identical block cost.
 // Two groups have 3 edges (8²·3²·12³·2³ = 7,962,624 entries, just under
 // MAX_COMBINED_SIZE, ~3.5s to build) and four have 2 (331,776 each, ~0.1s).
-const DIRECT_GROUPS: Region[] = [
+const DIRECT_GROUPS: PieceRegion[] = [
   { corners: [5, 6], edges: [5, 6, 7] }, // + the D-layer cross edges DF/DL/DB
   { corners: [5, 6], edges: [5, 9, 10] }, // + DF and both side edges FL/BL
   { corners: [5, 6], edges: [6, 9] },
@@ -268,18 +267,18 @@ const DIRECT_GROUPS: Region[] = [
  */
 const blockSearch = (
   id: string,
-  goal: Region,
+  goal: PieceRegion,
   opts: {
     // Pieces the pruning table tracks (defaults to `goal`). A second phase should
     // pass just the pieces it *adds* — a tight, combinable table (see doc above).
-    heuristicRegion?: Region;
+    heuristicRegion?: PieceRegion;
     // Instead of one table over `heuristicRegion`, max a *set* of overlapping
     // sub-region tables (`regionHeuristicMulti`). This is what a single-phase
     // whole-block search needs: no single combined table fits the full 7-piece
     // 2x2x3, but several overlapping smaller ones do, and their max sees the
     // corner<->edge interaction the corners-vs-edges split cannot. Strict goals
     // only (there is no L-R fold for the multi-table form).
-    heuristicGroups?: readonly Region[];
+    heuristicGroups?: readonly PieceRegion[];
     moves?: MoveFamily[];
     // `lrHome`: use the drift-allowing Roux FB goal (`regionSolvedLRHome`) — block
     // pieces home + L/R centers home, U/F/D/B free — with the matching L–R-folded
