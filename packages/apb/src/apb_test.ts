@@ -4,6 +4,7 @@ import { eoPair as eoPairSet } from "@moishy/algsets/eo-pair";
 import { lxs as lxsSet } from "@moishy/algsets/lxs";
 import { pll as pllSet } from "@moishy/algsets/pll";
 import { zbll as zbllSet } from "@moishy/algsets/zbll";
+import { zbls as zblsSet } from "@moishy/algsets/zbls";
 import {
   type AlgorithmicPhase,
   applyMoves,
@@ -33,6 +34,7 @@ import {
   regionSolved,
   regionSolvedAndEO,
   stripRotations,
+  zblsSignature,
 } from "./geometry.ts";
 
 const U = (n: number): Move[] => n ? [{ family: "U", amount: n as 1 | 2 | 3 }] : [];
@@ -943,4 +945,43 @@ Deno.test("force-mode zbls extra fires on triggering solves and verifies", async
     assert(r.solved && isSolved(applyMoves(framed, r.solution)), `zbls (${scramble}): must solve`);
     assert(r.segments.some((s) => s.unitId === "zbls"), `zbls (${scramble}) must fire`);
   }
+});
+
+// Regression: every zbls case must target the FR slot and be reachable.
+//
+// 32 of the 302 cases were authored against the wrong F2L slot — 22 solved BR and
+// 10 solved FL, carrying a leading `y`/`y'` from whatever the source's working
+// slot was. APB's ZBLS recognition keys on the FR slot (DFR corner 4 + FR edge 8),
+// so those cases' recognition states had the wrong slot open. Worse, being defined
+// early they won the signature for AUF-coset entries belonging to *legitimate* FR
+// cases, hijacking 27 of them: the lookup returned a wrong-slot case whose alg
+// could not solve the state. (This had been recorded as ~32 untranscribable algs;
+// it was not — every stored alg solved its own case correctly, they were simply
+// expressed for another slot. They are now rotated onto FR, 24 of them ending up
+// rotation-free.)
+//
+// Both halves are asserted, because either alone would let the bug back in.
+Deno.test("zbls: every case targets the FR slot, and is recognized and solved", () => {
+  const lookup = aufInvariantLookup(zblsSet, zblsSignature());
+  const goal = regionSolvedAndEO(F2L);
+  const AUF = ["", "U", "U2", "U'"].map((a) => (a ? parseAlg(a) : []));
+  const home = (s: CubeState, corner: number, edge: number) =>
+    s.cp[corner] === corner && s.co[corner] === 0 && s.ep[edge] === edge && s.eo[edge] === 0;
+
+  const wrongSlot: string[] = [], unreachable: string[] = [];
+  for (const c of zblsSet.cases) {
+    const state = zblsSet.recognitionState(c.id);
+    const n = normalizeOrientation(state);
+    // FR open, every other F2L slot already solved — the shape of a real ZBLS input.
+    const frIsTheOpenSlot = !home(n, 4, 8) && home(n, 5, 9) && home(n, 6, 10) && home(n, 7, 11);
+    if (!frIsTheOpenSlot) wrongSlot.push(c.id);
+
+    const hit = lookup.find(state);
+    const solved = hit?.algs.some((v) =>
+      AUF.some((pre) => AUF.some((post) => goal(applyMoves(state, [...pre, ...v.moves, ...post]))))
+    );
+    if (!solved) unreachable.push(`${c.id}${hit && hit.id !== c.id ? ` (matched ${hit.id})` : ""}`);
+  }
+  assertEquals(wrongSlot, [], "zbls cases not targeting the FR slot");
+  assertEquals(unreachable, [], "zbls cases the solver cannot recognize + solve");
 });

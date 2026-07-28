@@ -56,8 +56,9 @@ Known gaps, so you aren't surprised by them:
 
 - **`ocll-pll` is empty.** The set is defined but carries no cases; it is not usable. (APB's
   `ocllPll` replacement doesn't depend on it — it derives OCLL from the OLL set.)
-- **`zbls`**: 32 of its 302 cases don't currently solve up to rotation + AUF — transcription gaps
-  being worked through.
+- **`zbls`** cases are authored for the **front-right** slot. 32 of them were originally expressed
+  against the BR or FL slot and have been conjugated onto FR; a consumer recognizing on a different
+  slot must rotate accordingly.
 
 ## Authoring a set
 
