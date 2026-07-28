@@ -1,61 +1,30 @@
-// BR Pair — algorithm case data for @moishy/algsets.
-//
-// Transformed from old/brPair.ts via scripts/transform_old_algsets.ts.
-// Every source alg is kept as an interchangeable variant; recognition is
-// derived from the primary (first) alg of each case. See /DESIGN.md.
-//
-// Region mask from the source (for a future signature projection; not yet
-// wired — recognition currently uses the default full-facelet signature):
-//   {
-//     "CORNERS": {
-//       "slots": [
-//         5,
-//         6,
-//         7
-//       ],
-//       "pieces": [
-//         5,
-//         6,
-//         7
-//       ],
-//       "orientation": [
-//         0,
-//         0,
-//         0
-//       ]
-//     },
-//     "EDGES": {
-//       "slots": [
-//         4,
-//         6,
-//         7,
-//         9,
-//         10,
-//         11
-//       ],
-//       "pieces": [
-//         4,
-//         6,
-//         7,
-//         9,
-//         10,
-//         11
-//       ],
-//       "orientation": [
-//         0,
-//         0,
-//         0,
-//         0,
-//         0,
-//         0
-//       ]
-//     }
-//   }
-//
-// Source flagged usesMccLookahead: true (a method-runner concern, step 8).
+/**
+ * BR Pair — algorithm case data for `@moishy/algsets`.
+ *
+ * Joins the DRB corner with the BR edge and inserts the pair — APB's step after the 2x2x3 block.
+ *
+ * Transformed from old/brPair.ts via scripts/transform_old_algsets.ts. Every source alg is kept
+ * as an interchangeable variant; recognition is derived from the primary (first) alg of each
+ * case. See /DESIGN.md. Region mask from the source (for a future signature projection; not yet
+ * wired — recognition currently uses the default full-facelet signature):   {     "CORNERS": {
+ * "slots": [         5,         6,         7       ],       "pieces": [         5,         6,
+ * 7       ],       "orientation": [         0,         0,         0       ]     },     "EDGES":
+ * {       "slots": [         4,         6,         7,         9,         10,         11       ],
+ * "pieces": [         4,         6,         7,         9,         10,         11       ],
+ * "orientation": [         0,         0,         0,         0,         0,         0       ]
+ * }   } Source flagged usesMccLookahead: true (a method-runner concern, step 8).
+ *
+ * ```ts
+ * import { brPair } from "@moishy/algsets/br-pair";
+ * brPair.cases.length;
+ * ```
+ *
+ * @module
+ */
 
 import { type AlgSet, defineAlgSet } from "../define.ts";
 
+/** BR Pair. Recognition is derived from each case's primary alg. */
 export const brPair: AlgSet = defineAlgSet({
   id: "brPair",
   name: "BR Pair",

@@ -1,14 +1,25 @@
-// LXS (back slot) — algorithm case data for @moishy/algsets.
-//
-// LXS solved from the BR/back side (the backSlotEoLxs extra); its own dedicated set.
-// From the lxsBackSlot Google Sheet
-// (https://docs.google.com/spreadsheets/d/1Xa6251D9G00g-jMQy0KzUg7xx39rsSjkJLMzsxinC7Q).
-// subset = the sheet's slot-orientation tab (UBR/RBU/BUR/DBR/RBD/BDR); id = case number.
-//
-// Authored per packages/algsets/AUTHORING.md — algs only; recognition/AUF/cost are derived.
+/**
+ * LXS (back slot) — algorithm case data for `@moishy/algsets`.
+ *
+ * Last X-Slot solved in the back slot, for the back-slot EO/LXS route.
+ *
+ * LXS solved from the BR/back side (the backSlotEoLxs extra); its own dedicated set. From the
+ * lxsBackSlot Google Sheet
+ * (https://docs.google.com/spreadsheets/d/1Xa6251D9G00g-jMQy0KzUg7xx39rsSjkJLMzsxinC7Q). subset
+ * = the sheet's slot-orientation tab (UBR/RBU/BUR/DBR/RBD/BDR); id = case number. Authored per
+ * packages/algsets/AUTHORING.md — algs only; recognition/AUF/cost are derived.
+ *
+ * ```ts
+ * import { lxsBackSlot } from "@moishy/algsets/lxs-back-slot";
+ * lxsBackSlot.cases.length;
+ * ```
+ *
+ * @module
+ */
 
 import { type AlgSet, defineAlgSet } from "../define.ts";
 
+/** LXS (back slot). Recognition is derived from each case's primary alg. */
 export const lxsBackSlot: AlgSet = defineAlgSet({
   id: "lxsBackSlot",
   name: "LXS (back slot)",

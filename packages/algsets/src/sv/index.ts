@@ -1,12 +1,23 @@
-// Summer Variation (SV) — algorithm case data for @moishy/algsets.
-//
-// Summer Variation — solves the last pair while influencing last-layer state.
-// Scraped from https://speedcubedb.com/a/3x3/SV. Every listed alg kept as a variant.
-//
-// Authored per packages/algsets/AUTHORING.md — algs only; recognition/AUF/cost are derived.
+/**
+ * Summer Variation (SV) — algorithm case data for `@moishy/algsets`.
+ *
+ * Solves the last pair while orienting last-layer corners, from a mis-oriented pair.
+ *
+ * Summer Variation — solves the last pair while influencing last-layer state. Scraped from
+ * https://speedcubedb.com/a/3x3/SV. Every listed alg kept as a variant. Authored per
+ * packages/algsets/AUTHORING.md — algs only; recognition/AUF/cost are derived.
+ *
+ * ```ts
+ * import { sv } from "@moishy/algsets/sv";
+ * sv.cases.length;
+ * ```
+ *
+ * @module
+ */
 
 import { type AlgSet, defineAlgSet } from "../define.ts";
 
+/** Summer Variation (SV). Recognition is derived from each case's primary alg. */
 export const sv: AlgSet = defineAlgSet({
   id: "sv",
   name: "Summer Variation (SV)",

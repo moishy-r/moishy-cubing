@@ -1,13 +1,24 @@
-// COLL + EPLL — algorithm case data for @moishy/algsets.
-//
-// COLL — corner orientation+permutation of the last layer in one alg (edges already
-// oriented). Scraped from https://speedcubedb.com/a/3x3/COLL; subset = corner-orientation
-// group (Sune/Anti Sune/L/U/T/Pi/H). Every listed alg kept as an interchangeable variant.
-//
-// Authored per packages/algsets/AUTHORING.md — algs only; recognition/AUF/cost are derived.
+/**
+ * COLL + EPLL — algorithm case data for `@moishy/algsets`.
+ *
+ * Orients and permutes the last-layer corners in one alg (COLL), leaving an EPLL case.
+ *
+ * COLL — corner orientation+permutation of the last layer in one alg (edges already oriented).
+ * Scraped from https://speedcubedb.com/a/3x3/COLL; subset = corner-orientation group (Sune/Anti
+ * Sune/L/U/T/Pi/H). Every listed alg kept as an interchangeable variant. Authored per
+ * packages/algsets/AUTHORING.md — algs only; recognition/AUF/cost are derived.
+ *
+ * ```ts
+ * import { collEpll } from "@moishy/algsets/coll-epll";
+ * collEpll.cases.length;
+ * ```
+ *
+ * @module
+ */
 
 import { type AlgSet, defineAlgSet } from "../define.ts";
 
+/** COLL + EPLL. Recognition is derived from each case's primary alg. */
 export const collEpll: AlgSet = defineAlgSet({
   id: "coll",
   name: "COLL + EPLL",

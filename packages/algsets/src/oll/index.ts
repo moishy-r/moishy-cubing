@@ -1,11 +1,23 @@
-// OLL — algorithm case data for @moishy/algsets.
-//
-// Transformed from old/oll.ts via scripts/transform_old_algsets.ts.
-// Every source alg is kept as an interchangeable variant; recognition is
-// derived from the primary (first) alg of each case. See /DESIGN.md.
+/**
+ * OLL — algorithm case data for `@moishy/algsets`.
+ *
+ * Orientation of the Last Layer: the classic 57 cases.
+ *
+ * Transformed from old/oll.ts via scripts/transform_old_algsets.ts. Every source alg is kept as
+ * an interchangeable variant; recognition is derived from the primary (first) alg of each case.
+ * See /DESIGN.md.
+ *
+ * ```ts
+ * import { oll } from "@moishy/algsets/oll";
+ * oll.cases.length;
+ * ```
+ *
+ * @module
+ */
 
 import { type AlgSet, defineAlgSet } from "../define.ts";
 
+/** OLL. Recognition is derived from each case's primary alg. */
 export const oll: AlgSet = defineAlgSet({
   id: "oll",
   name: "OLL",

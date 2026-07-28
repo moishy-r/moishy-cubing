@@ -1,13 +1,23 @@
-// Last X-Slot (LXS) — algorithm case data for @moishy/algsets.
-//
-// Transformed from old/lxs.ts via scripts/transform_old_algsets.ts.
-// Every source alg is kept as an interchangeable variant; recognition is
-// derived from the primary (first) alg of each case. See /DESIGN.md.
-//
-// Source flagged usesMccLookahead: true (a method-runner concern, step 8).
+/**
+ * Last X-Slot (LXS) — algorithm case data for `@moishy/algsets`.
+ *
+ * Places the DFR corner, FR edge and DR edge, finishing F2L with the last layer oriented-ready.
+ *
+ * Transformed from old/lxs.ts via scripts/transform_old_algsets.ts. Every source alg is kept as
+ * an interchangeable variant; recognition is derived from the primary (first) alg of each case.
+ * See /DESIGN.md. Source flagged usesMccLookahead: true (a method-runner concern, step 8).
+ *
+ * ```ts
+ * import { lxs } from "@moishy/algsets/lxs";
+ * lxs.cases.length;
+ * ```
+ *
+ * @module
+ */
 
 import { type AlgSet, defineAlgSet } from "../define.ts";
 
+/** Last X-Slot (LXS). Recognition is derived from each case's primary alg. */
 export const lxs: AlgSet = defineAlgSet({
   id: "lxs",
   name: "Last X-Slot (LXS)",
