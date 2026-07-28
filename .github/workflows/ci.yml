@@ -1,0 +1,116 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: check · lint · fmt · test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      # The same gate you run locally: `deno task ok`.
+      - run: deno task ok
+
+  publish-dry-run:
+    name: publish dry run
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      # Catches publish-blocking problems (slow types in the public API, files
+      # that would be excluded, unresolvable dependency ranges) on every PR
+      # rather than at release time.
+      - name: deno publish --dry-run
+        run: |
+          for pkg in cubing-core algsets apb; do
+            echo "::group::$pkg"
+            (cd "packages/$pkg" && deno publish --dry-run)
+            echo "::endgroup::"
+          done
+
+  npm-build:
+    name: npm build + install smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # The npm artifacts are generated, so nothing else exercises them. Two bugs
+      # shipped past review here before this job existed: a package that declared
+      # no dependency on its workspace sibling (installed fine, then threw
+      # "Cannot find module" on first require), and one that exposed only its root
+      # export while the JSR build exposed sixteen. Both are invisible until you
+      # install the tarball and import it, so that is what this does.
+      - name: Build npm packages
+        run: |
+          set -euo pipefail
+          for pkg in cubing-core algsets apb; do
+            VERSION=$(deno eval "console.log(JSON.parse(Deno.readTextFileSync('packages/$pkg/deno.json')).version)")
+            echo "::group::$pkg@$VERSION"
+            (cd "packages/$pkg" && deno run -A ../../scripts/build_npm.ts "$VERSION")
+            echo "::endgroup::"
+          done
+
+      - name: Pack and install into a clean project
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/npm-smoke/tar && cd /tmp/npm-smoke
+          for pkg in cubing-core algsets apb; do
+            (cd "$GITHUB_WORKSPACE/packages/$pkg/npm" && npm pack --pack-destination /tmp/npm-smoke/tar >/dev/null)
+          done
+          npm init -y >/dev/null
+          npm install --silent ./tar/*.tgz
+
+      - name: Import and solve (ESM + CJS, root and subpath exports)
+        run: |
+          set -euo pipefail
+          cd /tmp/npm-smoke
+          cat > smoke.mjs <<'EOF'
+          import { apb } from "@moishy/apb";
+          import { pll } from "@moishy/algsets/pll";
+          import { createDefaultMoveCostModel, parseAlg, scoreAlg } from "@moishy/cubing-core";
+          const res = await apb.solve("R U2 F' L D B2 R' U F2 D' L2 B R2 U' F D2 B' L U2 R'");
+          if (!res.solved) throw new Error("ESM: solve failed");
+          if (pll.cases.length !== 21) throw new Error("ESM: subpath export broken");
+          if (!(scoreAlg(parseAlg("R U R' U'"), createDefaultMoveCostModel()) > 0)) {
+            throw new Error("ESM: core export broken");
+          }
+          console.log("ESM ok —", res.solution.length, "moves");
+          EOF
+          cat > smoke.cjs <<'EOF'
+          const { apb } = require("@moishy/apb");
+          const { pll } = require("@moishy/algsets/pll");
+          apb.solve("R U R' U' R' F R2 U' R' U' R U R' F'").then((r) => {
+            if (!r.solved) throw new Error("CJS: solve failed");
+            if (pll.cases.length !== 21) throw new Error("CJS: subpath export broken");
+            console.log("CJS ok —", r.solution.length, "moves");
+          });
+          EOF
+          node smoke.mjs
+          node smoke.cjs
