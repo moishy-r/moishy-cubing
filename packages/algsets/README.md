@@ -34,28 +34,28 @@ lookahead worth having.
 
 ## Sets
 
-| Import                          | Cases | Set                                           |
-| ------------------------------- | ----- | --------------------------------------------- |
-| `@moishy/algsets/zbll`          | 472   | ZBLL                                          |
-| `@moishy/algsets/dfdb`          | 527   | DF/DB pair (APB block223)                     |
-| `@moishy/algsets/zbls`          | 302   | ZBLS                                          |
-| `@moishy/algsets/eo-pair`       | 148   | EO Pair                                       |
-| `@moishy/algsets/lxs`           | 116   | Last X-Slot                                   |
-| `@moishy/algsets/lxs-back-slot` | 116   | LXS (back slot)                               |
-| `@moishy/algsets/br-pair`       | 89    | BR Pair                                       |
-| `@moishy/algsets/fr-pair`       | 89    | FR Pair                                       |
-| `@moishy/algsets/oll`           | 57    | OLL                                           |
-| `@moishy/algsets/eodr`          | 55    | EODR                                          |
-| `@moishy/algsets/coll-epll`     | 40    | COLL + EPLL                                   |
-| `@moishy/algsets/sv`            | 27    | Summer Variation                              |
-| `@moishy/algsets/wv`            | 27    | Winter Variation                              |
-| `@moishy/algsets/pll`           | 21    | PLL                                           |
-| `@moishy/algsets/ocll-pll`      | **0** | OCLL + PLL — _empty placeholder, no data yet_ |
+| Import                          | Cases | Set                       |
+| ------------------------------- | ----- | ------------------------- |
+| `@moishy/algsets/zbll`          | 472   | ZBLL                      |
+| `@moishy/algsets/dfdb`          | 527   | DF/DB pair (APB block223) |
+| `@moishy/algsets/zbls`          | 302   | ZBLS                      |
+| `@moishy/algsets/eo-pair`       | 148   | EO Pair                   |
+| `@moishy/algsets/lxs`           | 116   | Last X-Slot               |
+| `@moishy/algsets/lxs-back-slot` | 116   | LXS (back slot)           |
+| `@moishy/algsets/br-pair`       | 89    | BR Pair                   |
+| `@moishy/algsets/fr-pair`       | 89    | FR Pair                   |
+| `@moishy/algsets/oll`           | 57    | OLL                       |
+| `@moishy/algsets/eodr`          | 55    | EODR                      |
+| `@moishy/algsets/coll-epll`     | 40    | COLL + EPLL               |
+| `@moishy/algsets/sv`            | 27    | Summer Variation          |
+| `@moishy/algsets/wv`            | 27    | Winter Variation          |
+| `@moishy/algsets/pll`           | 21    | PLL                       |
 
-Known gaps, so you aren't surprised by them:
+Notes:
 
-- **`ocll-pll` is empty.** The set is defined but carries no cases; it is not usable. (APB's
-  `ocllPll` replacement doesn't depend on it — it derives OCLL from the OLL set.)
+- There is no `ocll-pll` set. OCLL + PLL needs no data of its own: OCLL is the seven `oll` cases
+  21-27 and PLL is the `pll` set, which is how APB's `ocllPll` replacement builds it. An empty
+  placeholder export existed until 0.2.0 and was removed.
 - **`zbls`** cases are authored for the **front-right** slot. 32 of them were originally expressed
   against the BR or FL slot and have been conjugated onto FR; a consumer recognizing on a different
   slot must rotate accordingly.
