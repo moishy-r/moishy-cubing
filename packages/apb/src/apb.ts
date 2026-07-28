@@ -70,9 +70,9 @@
 // `homeStart` is a no-op from brPair onward. The one place a rotated/drifted frame
 // is consumed is DFDB itself, which opts *out* of homing (`frameRelative`) and
 // restores the FB's L–R drift in place — see the block223 step. (`zbls`, an
-// opt-in/incomplete extra, has 32 of its 302 cases still unsolvable up to
-// rotation+AUF — genuine transcription gaps, unrelated to the frame work; see its
-// KNOWN note.)
+// opt-in extra, is now complete: all 302 cases recognize and solve, after 32 of
+// them were conjugated from the BR/FL slots they had been authored against onto
+// APB's FR slot — see the note above zblsExtra.)
 
 import {
   type AlgorithmicPhase,
@@ -802,18 +802,17 @@ const ollExtra = {
 // rotation-invariant); tilted primaries lose the cost race to rotation-free
 // variants where present. See KNOWN below.
 //
-// KNOWN (data, 32 of 302 cases): an audit of every case's own recognition state
-// (both AUFs, up to whole-cube rotation) found 32 cases whose stored algs do not
-// actually reach the ZBLS goal — genuine transcription gaps, NOT a frame/rotation
-// issue (their primaries' tilts are clean whole-cube rotations, like every other
-// last-layer set). Some are the mutually-unsolvable collision pairs first spotted
-// here (f2l-8-4/f2l-35-2, f2l-24-3/f2l-28-2 — one of each is likely mis-
-// transcribed, cf. the eodr case-3 fix); the full list is f2l-{2-1,3-1,3-5,5-3,
-// 6-1,6-2,6-5,6-7,8-1,8-4,8-5,9-1,9-3,11-1,12-5,13-1,18-7,20-3,22-4,24-3,24-6,
-// 24-7,26-4,28-2,28-5,28-7,29-1,32-5,33-7,34-5,35-1,35-2}. Until re-authored,
-// states needing one of these drop out (~10% of triggers); recognition (the
-// zblsSignature projection) is otherwise complete. zbls is opt-in and its set is
-// still being authored, so this does not affect any shipped solve.
+// FIXED (was: 32 of 302 cases unsolvable). The cause was never bad algs — every
+// stored alg solved its own case correctly. 32 cases were authored against the
+// *wrong F2L slot*: 22 solved BR and 10 solved FL, each carrying a leading `y`/`y'`
+// from the source's working slot. APB recognizes ZBLS on the FR slot (DFR corner 4
+// + FR edge 8), so those cases' recognition states had the wrong slot open — and,
+// being defined early, they won AUF-coset signature entries belonging to genuine FR
+// cases, hijacking 27 of them into a lookup hit whose alg could not solve the state.
+// Conjugating the 32 onto FR (24 came out rotation-free, e.g. `y U' L' U L` ->
+// `U' F' U F`) fixes both halves at once: all 302 cases now recognize and solve.
+// Guarded by "zbls: every case targets the FR slot, and is recognized and solved"
+// in apb_test.ts, which asserts the slot invariant *and* end-to-end reachability.
 const zblsExtra = {
   id: "zbls",
   label: "ZBLS",
