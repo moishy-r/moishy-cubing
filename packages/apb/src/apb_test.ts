@@ -1,10 +1,16 @@
 import { brPair as brPairSet } from "@moishy/algsets/br-pair";
+import { collEpll as collSet } from "@moishy/algsets/coll-epll";
 import { eodr as eodrSet } from "@moishy/algsets/eodr";
+import { frPair as frPairSet } from "@moishy/algsets/fr-pair";
 import { eoPair as eoPairSet } from "@moishy/algsets/eo-pair";
 import { lxs as lxsSet } from "@moishy/algsets/lxs";
+import { oll as ollSet } from "@moishy/algsets/oll";
+import { lxsBackSlot as lxsBackSlotSet } from "@moishy/algsets/lxs-back-slot";
 import { pll as pllSet } from "@moishy/algsets/pll";
 import { zbll as zbllSet } from "@moishy/algsets/zbll";
 import { zbls as zblsSet } from "@moishy/algsets/zbls";
+import { sv as svSet } from "@moishy/algsets/sv";
+import { wv as wvSet } from "@moishy/algsets/wv";
 import {
   type AlgorithmicPhase,
   applyMoves,
@@ -26,14 +32,17 @@ import {
   BLOCK223,
   centersSolved,
   cornerSignature,
+  eodrSignature,
   eoSignature,
   F2L,
   fallThrough,
+  orientationSignature,
   pieceSignature,
   regionLookup,
   regionSolved,
   regionSolvedAndEO,
   stripRotations,
+  wvSvSignature,
   zblsSignature,
 } from "./geometry.ts";
 
@@ -984,4 +993,175 @@ Deno.test("zbls: every case targets the FR slot, and is recognized and solved", 
   }
   assertEquals(wrongSlot, [], "zbls cases not targeting the FR slot");
   assertEquals(unreachable, [], "zbls cases the solver cannot recognize + solve");
+});
+
+// Cross-set audit: every algset, against the lookup and goal APB really uses.
+//
+// A set's own tests check that its algs solve its own cases. That is not the
+// property that matters at solve time, and it is not what broke: zbls passed its
+// own tests for months while 27 of its cases were being handed a *different*
+// case's alg by the phase lookup, which uses a coarser signature over the AUF
+// coset with rotation normalized. Nothing tested that end of the pipe.
+//
+// So this walks each set's cases through the real lookup and asserts three
+// things: the case's own algs reach the goal, the lookup finds something, and
+// what it finds actually solves the state. Any future set — or any change to a
+// signature — is checked the same way.
+//
+// It does NOT prove coverage (that a set handles every state a live solve can
+// produce); only running solves can, which the end-to-end tests above do.
+Deno.test("every algset resolves and solves through its production lookup", () => {
+  const AUF = ["", "U", "U2", "U'"].map((a) => (a ? parseAlg(a) : []));
+  const norm = (s: CubeState) => normalizeOrientation(s);
+  const allCornersSolved = (s: CubeState) => {
+    const n = norm(s);
+    return n.cp.every((c, i) => c === i && n.co[i] === 0);
+  };
+  const cornersOriented = (s: CubeState) => norm(s).co.every((o) => o === 0);
+  const drSolved = (s: CubeState) => s.ep[4] === 4 && s.eo[4] === 0;
+  const AFTER_FRONT = { corners: [4, 5, 6], edges: [5, 6, 7, 8, 9, 10] };
+
+  const targets: {
+    name: string;
+    set: typeof pllSet;
+    lookup: { find(s: CubeState): { id: string; algs: { moves: Move[] }[] } | null };
+    goal: (s: CubeState) => boolean;
+    only?: (id: string) => boolean;
+  }[] = [
+    {
+      name: "brPair",
+      set: brPairSet,
+      goal: regionSolved(AFTER_BR),
+      lookup: regionLookup(brPairSet, pieceSignature([7], [11])),
+    },
+    {
+      name: "frPair",
+      set: frPairSet,
+      goal: regionSolved(AFTER_FRONT),
+      lookup: regionLookup(frPairSet, pieceSignature([4], [8])),
+    },
+    {
+      name: "eo",
+      set: eoPairSet,
+      goal: regionSolvedAndEO(AFTER_BR),
+      lookup: regionLookup(eoPairSet, eoSignature(), (c) => c.subset === "dbr-solved-eo-(1)"),
+      only: (id) => eoPairSet.get(id)?.subset === "dbr-solved-eo-(1)",
+    },
+    {
+      name: "eoBackSlot",
+      set: eoPairSet,
+      goal: regionSolvedAndEO(AFTER_FRONT),
+      lookup: regionLookup(eoPairSet, eoSignature(), (c) => c.subset === "dfr"),
+      only: (id) => eoPairSet.get(id)?.subset === "dfr",
+    },
+    {
+      name: "lxs",
+      set: lxsSet,
+      goal: regionSolvedAndEO(F2L),
+      lookup: regionLookup(lxsSet, pieceSignature([4], [8, 4])),
+    },
+    {
+      name: "lxsBackSlot",
+      set: lxsBackSlotSet,
+      goal: regionSolvedAndEO(F2L),
+      lookup: regionLookup(lxsBackSlotSet, pieceSignature([7], [11, 4])),
+    },
+    {
+      name: "ls",
+      set: lxsSet,
+      goal: regionSolvedAndEO(F2L),
+      lookup: regionLookup(
+        lxsSet,
+        pieceSignature([4], [8]),
+        (c) => drSolved(lxsSet.recognitionState(c.id)),
+      ),
+      only: (id) => drSolved(lxsSet.recognitionState(id)),
+    },
+    {
+      name: "zbll",
+      set: zbllSet,
+      goal: isSolved,
+      lookup: aufInvariantLookup(zbllSet, zbllSet.signature),
+    },
+    {
+      name: "pll",
+      set: pllSet,
+      goal: isSolved,
+      lookup: aufInvariantLookup(pllSet, pllSet.signature),
+    },
+    {
+      name: "oll",
+      set: ollSet,
+      goal: (s) => cornersOriented(s) && norm(s).eo.every((o) => o === 0),
+      lookup: aufInvariantLookup(ollSet, orientationSignature()),
+    },
+    {
+      name: "coll",
+      set: collSet,
+      goal: allCornersSolved,
+      lookup: aufInvariantLookup(collSet, cornerSignature()),
+    },
+    {
+      name: "epll",
+      set: pllSet,
+      goal: isSolved,
+      lookup: aufInvariantLookup(
+        pllSet,
+        pllSet.signature,
+        (c) => allCornersSolved(pllSet.recognitionState(c.id)),
+      ),
+      only: (id) => allCornersSolved(pllSet.recognitionState(id)),
+    },
+    {
+      name: "eodr",
+      set: eodrSet,
+      goal: (s) => norm(s).eo.every((o) => o === 0) && drSolved(norm(s)),
+      lookup: regionLookup(eodrSet, eodrSignature()),
+    },
+    {
+      name: "zbls",
+      set: zblsSet,
+      goal: regionSolvedAndEO(F2L),
+      lookup: aufInvariantLookup(zblsSet, zblsSignature()),
+    },
+    {
+      name: "wv",
+      set: wvSet,
+      goal: cornersOriented,
+      lookup: aufInvariantLookup(wvSet, wvSvSignature()),
+    },
+    {
+      name: "sv",
+      set: svSet,
+      goal: cornersOriented,
+      lookup: aufInvariantLookup(svSet, wvSvSignature()),
+    },
+  ];
+
+  const broken: string[] = [];
+  let checked = 0;
+  for (const t of targets) {
+    for (const c of t.set.cases) {
+      if (t.only && !t.only(c.id)) continue;
+      checked++;
+      const state = t.set.recognitionState(c.id);
+      const solves = (algs: { moves: Move[] }[]) =>
+        algs.some((v) =>
+          AUF.some((pre) =>
+            AUF.some((post) => t.goal(applyMoves(state, [...pre, ...v.moves, ...post])))
+          )
+        );
+      if (!solves(c.algs)) {
+        broken.push(`${t.name}/${c.id}: own algs do not reach the goal`);
+        continue;
+      }
+      const hit = t.lookup.find(state);
+      if (!hit) broken.push(`${t.name}/${c.id}: not recognized`);
+      else if (!solves(hit.algs)) {
+        broken.push(`${t.name}/${c.id}: matched ${hit.id}, whose alg does not solve it`);
+      }
+    }
+  }
+  assertEquals(broken, [], `algset/lookup mismatches (checked ${checked} cases)`);
+  assert(checked > 1400, `expected the whole corpus to be audited, only saw ${checked}`);
 });
