@@ -135,6 +135,15 @@ export interface StepOptions {
    * one to bound an experiment. Ignored for algorithmic phases and unknown ids.
    */
   searchMaxDepth?: Record<string, number>;
+  /**
+   * Per-search-phase wall-clock budget (ms), keyed by phase id, overriding the
+   * phase's own `timeBudgetMs` for this solve. A phase that exceeds its budget
+   * drops out of its step's race (see `SearchPhase.timeBudgetMs`), which makes the
+   * outcome depend on how fast the machine is — so raise it when you need a slow
+   * strategy to answer deterministically (a test, a batch analysis, a slow CI
+   * runner) rather than merely quickly. Ignored for algorithmic phases and unknown ids.
+   */
+  searchTimeBudgetMs?: Record<string, number>;
 }
 
 /** Phase-chaining controls (a `SearchPhase` feeding downstream phases). */
@@ -314,6 +323,7 @@ function strategyCands(
   chaining: { enabled: boolean; slack: number },
   branchTailVariants: boolean,
   phaseMaxDepth?: Record<string, number>,
+  phaseTimeBudgetMs?: Record<string, number>,
 ): Cand[] {
   const phases = strategy.phases as Phase[];
   // A strategy can opt out of phase-chaining (`Strategy.phaseChaining: false`).
@@ -331,10 +341,16 @@ function strategyCands(
 
   for (let i = 0; i < phases.length; i++) {
     const phase0 = phases[i];
-    // Per-solve depth-cap override (search phases only).
-    const phase: Phase = phase0.kind === "search" && phaseMaxDepth?.[phase0.id] !== undefined
-      ? { ...phase0, maxDepth: phaseMaxDepth[phase0.id] }
-      : phase0;
+    // Per-solve overrides (search phases only): depth cap and time budget.
+    const overrides = phase0.kind === "search"
+      ? {
+        ...(phaseMaxDepth?.[phase0.id] !== undefined ? { maxDepth: phaseMaxDepth[phase0.id] } : {}),
+        ...(phaseTimeBudgetMs?.[phase0.id] !== undefined
+          ? { timeBudgetMs: phaseTimeBudgetMs[phase0.id] }
+          : {}),
+      }
+      : {};
+    const phase: Phase = Object.keys(overrides).length > 0 ? { ...phase0, ...overrides } : phase0;
     const isLast = i === phases.length - 1;
     // Decide whether this phase branches into a pool.
     let branch: "search-pool" | "all-variants" | "best" = "best";
@@ -408,6 +424,7 @@ function stepCands(
         chaining,
         branchTailVariants,
         opts.searchMaxDepth,
+        opts.searchTimeBudgetMs,
       ),
     );
   }

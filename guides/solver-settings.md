@@ -107,6 +107,19 @@ and picks the pair with the best _combined_ cost. `slack` defaults to 2.
 **`searchMaxDepth`** overrides a specific search phase's built-in depth cap, keyed by phase id.
 Raise it to let a hard scramble through; lower it to bound an experiment.
 
+**`searchTimeBudgetMs`** overrides a search phase's wall-clock budget, same keying. A phase that
+runs out of budget drops out of its step's race rather than failing the solve — which means the
+outcome depends on how fast your machine is. Raise it when you need a slow strategy to answer
+_deterministically_ rather than merely quickly:
+
+```ts
+await apb.solve(scramble, {
+  stepOptions: {
+    block223: { forceStrategy: "direct", searchTimeBudgetMs: { full: 120_000 } },
+  },
+});
+```
+
 ## Lookahead
 
 Choose this step's solution by what it leaves for the _next_ step, not just its own cost.
