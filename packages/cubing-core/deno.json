@@ -1,6 +1,6 @@
 {
   "name": "@moishy/cubing-core",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Cube engine and solver framework for speedsolving methods: cubie-level state, SiGN notation, ergonomic move-cost models, guided search, and a composable step/strategy/phase pipeline.",
   "exports": "./mod.ts",
   "license": "MIT",

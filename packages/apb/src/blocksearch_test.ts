@@ -448,8 +448,19 @@ for (
     for (const seed of seeds) {
       const res = await apb.solve(scrStr(seed, 20), {
         colorNeutrality: "fixed",
-        stepOptions: { block223: { forceStrategy: id, phaseChaining: { enabled: false } } },
-      }, { timeBudgetMs: 60_000 });
+        stepOptions: {
+          block223: {
+            forceStrategy: id,
+            phaseChaining: { enabled: false },
+            // This test is about correctness, not speed. `direct` ships a wall-clock
+            // budget so it can drop out of a race instead of hanging a solve — which
+            // makes it machine-dependent, and a slow CI runner really did drop it
+            // here, failing the run. Lift the budget so the assertion below means
+            // "the strategy is broken", never "the runner was busy".
+            searchTimeBudgetMs: { full: 120_000 },
+          },
+        },
+      }, { timeBudgetMs: 120_000 });
       const seg = res.segments.find((s) => s.unitId === "block223");
       assert(seg && seg.strategyId === id, `seed ${seed} ${id} did not run`);
       assert(

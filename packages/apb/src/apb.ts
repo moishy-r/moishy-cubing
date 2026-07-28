@@ -423,11 +423,14 @@ const block223: MethodDefinition["steps"][number] = {
       phases: [blockSearch("full", BLOCK223, {
         maxDepth: 14,
         heuristicGroups: DIRECT_GROUPS,
-        // Firm per-orientation budget. The measured worst case over 24 scrambles is
-        // ~1.4s, so this is ~2x headroom; a scramble that somehow blows past it
-        // costs `direct` its slot in the race (fbDfdb and the other strategies still
-        // answer) instead of consuming the whole solve's time budget.
-        timeBudgetMs: 3_000,
+        // Firm per-orientation budget. Worst case measured ~1.4s over 24 scrambles on
+        // a fast laptop; a shared CI runner is several times slower, and an initial
+        // 3s cap duly dropped `direct` mid-release on one. 15s keeps the runaway
+        // protection (a pathological scramble costs `direct` its slot in the race
+        // rather than the solve's whole budget) with enough headroom that a merely
+        // slow machine does not change which strategies answer. Raise or lower per
+        // solve with `stepOptions.block223.searchTimeBudgetMs.full`.
+        timeBudgetMs: 15_000,
       })],
     },
     // Corner-first and cross strategies are registered but disabled by default.

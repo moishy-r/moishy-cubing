@@ -45,6 +45,16 @@ authenticate the workflow over OIDC, there are no tokens, and a manual publish b
 number for the automated path. Neither registry lets you republish a version, so a re-run after a
 partial failure needs a fresh bump; npm is a separate job gated on JSR for exactly that reason.
 
+## Wall-clock budgets make tests machine-dependent
+
+`SearchPhase.timeBudgetMs` lets an expensive phase drop out of its step's race instead of hanging a
+solve. The cost is that _which strategies answer_ now depends on machine speed — a budget tuned on a
+fast laptop dropped APB's `direct` on a slower CI runner and failed a release.
+
+Any test that asserts a specific strategy ran must lift the budget with
+`stepOptions.<step>.searchTimeBudgetMs.<phaseId>`, so a failure means "the strategy is broken", not
+"the runner was busy".
+
 ## Search heuristics must never overestimate
 
 Every `SearchPhase.heuristic` is an admissible lower bound on remaining cost. Undershoot and the
