@@ -82,17 +82,36 @@ holds only the demo page, its bundle, and a redirect from the site root.
 
 ## Releasing
 
-Publishing is **manual today**; automation is planned.
+Publishing is automated. Two GitHub Actions workflows:
 
-Each package versions independently. Bump `version` in that package's `deno.json`, merge to `main`,
-then from the package directory:
+- **CI** (`.github/workflows/ci.yml`) — on every push and PR: `deno task ok`, a `deno publish` dry
+  run for all three packages, and an npm build that packs the tarballs, installs them into a clean
+  project and runs a real solve through both ESM and CJS.
+- **Release** (`.github/workflows/release.yml`) — publishes to JSR and npm.
+
+To cut a release:
+
+1. Bump `version` in the package's `deno.json`, **and** the `VERSION` constant in its `mod.ts`,
+   **and** any `jsr:@moishy/...@^x.y.z` range in the packages that depend on it. On a 0.x line
+   `^0.1.0` admits only `0.1.*`, so a minor bump strands dependents on a version that no longer
+   exists. `deno task ok` fails if any of the three drift apart.
+2. Merge to `main`.
+3. Either push a tag `<package-dir>-v<version>` (e.g. `cubing-core-v0.1.0`), or run the Release
+   workflow from the Actions tab and pick a package — or `all`, which publishes every package in
+   dependency order at whatever version its manifest declares.
+
+The workflow re-runs the full gate before publishing anything, and refuses to publish if a tag's
+version disagrees with the manifest.
+
+**Authentication.** JSR uses OIDC — no token, but each package must be linked to this GitHub
+repository in its JSR settings. npm uses an `NPM_TOKEN` repository secret; if it isn't set, the npm
+step is skipped with a notice rather than failing, so JSR releases work on their own.
+
+For a one-off local build of an npm artifact:
 
 ```sh
-deno publish
+cd packages/cubing-core && deno run -A ../../scripts/build_npm.ts 0.1.0
 ```
-
-An npm build exists via [`scripts/build_npm.ts`](./scripts/build_npm.ts) (dnt), but nothing has been
-published to npm yet — the packages are JSR-only so far.
 
 ## License
 
