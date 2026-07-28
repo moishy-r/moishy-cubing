@@ -1,6 +1,7 @@
 name: Release
 
-# Publishes a workspace package to JSR and (if an npm token is configured) to npm.
+# Publishes workspace packages to JSR and npm. No secrets: both registries
+# authenticate this workflow over OIDC.
 #
 # Two ways to trigger:
 #   1. Push a tag `<package-dir>-v<version>`, e.g. `cubing-core-v0.1.0`. The tag's
@@ -9,9 +10,16 @@ name: Release
 #      publishes every package in dependency order at whatever version its
 #      deno.json declares. `all` is the one to use for a coordinated release.
 #
-# JSR authentication is OIDC: no token, but each package must be linked to this
-# GitHub repository in its JSR settings first. npm authentication needs an
-# `NPM_TOKEN` repository secret; without it the npm step is skipped, not failed.
+# JSR and npm are separate jobs on purpose. npm runs only after JSR succeeds, so a
+# problem on the npm side leaves a completed JSR release rather than a half-done
+# one, and you can re-run just the failed job.
+#
+# Registry setup, both one-time:
+#   JSR — link each package to this GitHub repository in its JSR settings.
+#   npm — add this repository + the workflow filename `release.yml` as a trusted
+#         publisher on each package. npm requires a package to already exist
+#         before a trusted publisher can be attached to it, so the very first
+#         version of a new package must be published manually; see the README.
 
 on:
   push:
@@ -27,15 +35,19 @@ on:
 
 permissions:
   contents: read
-  id-token: write # JSR OIDC, and npm provenance
 
 concurrency:
   group: release
   cancel-in-progress: false
 
 jobs:
-  release:
+  # Dependency order matters in both registries: algsets and apb declare
+  # `@moishy/cubing-core@^x.y.z`, and a registry will reject a package whose
+  # dependencies do not resolve.
+  targets:
     runs-on: ubuntu-latest
+    outputs:
+      packages: ${{ steps.resolve.outputs.packages }}
     steps:
       - uses: actions/checkout@v4
 
@@ -43,16 +55,7 @@ jobs:
         with:
           deno-version: v2.x
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          registry-url: https://registry.npmjs.org
-
-      # Work out which packages to publish, and in what order. Dependency order
-      # matters: algsets and apb declare `jsr:@moishy/cubing-core@^x.y.z`, and JSR
-      # rejects a package whose dependencies do not resolve.
-      - name: Resolve targets
-        id: targets
+      - id: resolve
         run: |
           set -euo pipefail
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
@@ -62,74 +65,93 @@ jobs:
             esac
           else
             TAG="${GITHUB_REF_NAME}"
-            PACKAGES="${TAG%-v*}"          # cubing-core-v0.1.0 -> cubing-core
-            TAG_VERSION="${TAG##*-v}"      # cubing-core-v0.1.0 -> 0.1.0
-            echo "tag_version=$TAG_VERSION" >> "$GITHUB_OUTPUT"
+            PACKAGES="${TAG%-v*}"      # cubing-core-v0.1.0 -> cubing-core
+            TAG_VERSION="${TAG##*-v}"  # cubing-core-v0.1.0 -> 0.1.0
             if [ ! -d "packages/$PACKAGES" ]; then
               echo "::error::Tag '$TAG' does not name a package directory under packages/"
+              exit 1
+            fi
+            # A tag that disagrees with the manifest would publish a version nobody
+            # can find from the tag. Fail before anything reaches a registry.
+            MANIFEST=$(deno eval "console.log(JSON.parse(Deno.readTextFileSync('packages/$PACKAGES/deno.json')).version)")
+            if [ "$MANIFEST" != "$TAG_VERSION" ]; then
+              echo "::error::Tag says $TAG_VERSION but packages/$PACKAGES/deno.json says $MANIFEST"
               exit 1
             fi
           fi
           echo "packages=$PACKAGES" >> "$GITHUB_OUTPUT"
           echo "Publishing: $PACKAGES"
 
-      # A tag that disagrees with the manifest would publish a version nobody
-      # can find from the tag. Fail loudly instead.
-      - name: Verify tag matches deno.json
-        if: github.event_name == 'push'
-        run: |
-          set -euo pipefail
-          PKG="${{ steps.targets.outputs.packages }}"
-          MANIFEST=$(deno eval "console.log(JSON.parse(Deno.readTextFileSync('packages/$PKG/deno.json')).version)")
-          if [ "$MANIFEST" != "${{ steps.targets.outputs.tag_version }}" ]; then
-            echo "::error::Tag says ${{ steps.targets.outputs.tag_version }} but packages/$PKG/deno.json says $MANIFEST"
-            exit 1
-          fi
+  jsr:
+    needs: targets
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # JSR OIDC
+    steps:
+      - uses: actions/checkout@v4
 
-      # Never publish something that does not pass the gate. `deno task ok` also
-      # runs the version-consistency test, which checks each package's exported
-      # VERSION against its deno.json and that inter-package ranges still resolve.
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      # Never publish something that does not pass the gate. This also runs the
+      # version-consistency test, which checks each package's exported VERSION
+      # against its deno.json and that inter-package ranges still resolve.
       - name: Verify
         run: deno task ok
 
       - name: Publish to JSR
         run: |
           set -euo pipefail
-          for pkg in ${{ steps.targets.outputs.packages }}; do
+          for pkg in ${{ needs.targets.outputs.packages }}; do
             echo "::group::jsr publish $pkg"
             (cd "packages/$pkg" && deno publish)
             echo "::endgroup::"
           done
 
-      - name: Check for npm credentials
-        id: npm
-        env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          if [ -n "${NPM_TOKEN:-}" ]; then
-            echo "configured=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "configured=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::NPM_TOKEN is not set — published to JSR only. Add the secret to enable npm."
-          fi
+  npm:
+    needs: [targets, jsr]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # npm trusted publishing (and the provenance it generates)
+    steps:
+      - uses: actions/checkout@v4
 
-      # dnt transpiles the Deno sources into a dual ESM/CJS npm package, taking
-      # name/license/description from the package's own deno.json and the version
-      # from the manifest.
-      - name: Publish to npm
-        if: steps.npm.outputs.configured == 'true'
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24 # trusted publishing needs Node >= 22.14
+          registry-url: https://registry.npmjs.org
+
+      # Trusted publishing needs npm >= 11.5.1, which is newer than the npm
+      # bundled with any current Node release.
+      - name: Ensure npm supports trusted publishing
         run: |
           set -euo pipefail
-          for pkg in ${{ steps.targets.outputs.packages }}; do
+          npm install -g npm@latest
+          npm --version
+
+      # dnt transpiles the Deno sources into a dual ESM/CJS package, taking
+      # name/license/description/exports and the workspace dependency ranges from
+      # the package's own deno.json.
+      - name: Build and publish to npm
+        run: |
+          set -euo pipefail
+          for pkg in ${{ needs.targets.outputs.packages }}; do
             VERSION=$(deno eval "console.log(JSON.parse(Deno.readTextFileSync('packages/$pkg/deno.json')).version)")
             echo "::group::npm publish $pkg@$VERSION"
             (
               cd "packages/$pkg"
               deno run -A ../../scripts/build_npm.ts "$VERSION"
               cd npm
-              npm publish --access public --provenance
+              # No token and no --provenance: trusted publishing authenticates over
+              # OIDC and attaches a provenance attestation automatically.
+              npm publish --access public
             )
             echo "::endgroup::"
           done

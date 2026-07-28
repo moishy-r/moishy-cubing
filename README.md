@@ -103,9 +103,25 @@ To cut a release:
 The workflow re-runs the full gate before publishing anything, and refuses to publish if a tag's
 version disagrees with the manifest.
 
-**Authentication.** JSR uses OIDC — no token, but each package must be linked to this GitHub
-repository in its JSR settings. npm uses an `NPM_TOKEN` repository secret; if it isn't set, the npm
-step is skipped with a notice rather than failing, so JSR releases work on their own.
+**Authentication.** No secrets: both registries authenticate the workflow over OIDC.
+
+- **JSR** — each package must be linked to this GitHub repository in its JSR settings.
+- **npm** — each package needs this repository and the workflow filename `release.yml` registered as
+  a _trusted publisher_. npm requires a package to already exist before a trusted publisher can be
+  attached, so **the first ever version of a new package must be published manually**:
+
+  ```sh
+  npm login
+  cd packages/<pkg> && deno run -A ../../scripts/build_npm.ts <version>
+  cd npm && npm publish --access public
+  npm trust github @moishy/<pkg> --file release.yml --repo moishy-r/moishy-cubing --allow-publish
+  ```
+
+  (`npm trust` needs npm >= 11.15.0 and account-level 2FA; the npm website's package settings page
+  does the same thing.) Every later release then goes through the workflow with no token involved.
+
+JSR and npm are separate jobs, npm gated on JSR succeeding — so an npm-side problem leaves a
+completed JSR release rather than a half-finished one, and you can re-run just the failed job.
 
 For a one-off local build of an npm artifact:
 
