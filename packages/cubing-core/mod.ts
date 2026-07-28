@@ -19,10 +19,16 @@
  *
  * See /DESIGN.md in the repository for the architecture and its rationale.
  *
+ * Note on surface: the runner's own plumbing (`movesFromFamilies`,
+ * `runPhaseCandidates`, `PhaseCandidateOptions`, `homingRotation`) is deliberately
+ * not exported — `Method` drives those, and a method author never calls them.
+ * `runPhase` *is* exported: unit-testing one phase in isolation is a real workflow,
+ * and this repository's own suites rely on it.
+ *
  * @module
  */
 
-export const VERSION = "0.1.1";
+export const VERSION = "0.2.0";
 
 export {
   formatAlg,
@@ -44,7 +50,6 @@ export {
   cloneState,
   compose,
   type CubeState,
-  homingRotation,
   isSolved,
   normalizeOrientation,
   SOLVED,
@@ -65,7 +70,6 @@ export {
 } from "./src/move-cost.ts";
 
 export {
-  movesFromFamilies,
   search,
   searchAStar,
   searchAStarMany,
@@ -83,11 +87,9 @@ export {
   type CaseLookup,
   type Checkpoint,
   type Phase,
-  type PhaseCandidateOptions,
   type PhaseKind,
   type PhaseSegment,
   runPhase,
-  runPhaseCandidates,
   type SearchPhase,
   type SolveContext,
   type Step,

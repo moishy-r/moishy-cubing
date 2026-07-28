@@ -54,8 +54,13 @@ export const EO_EDGE_SLOTS = [0, 1, 2, 3, 8, 4] as const;
 
 // --- Goal predicates ---------------------------------------------------------
 
-/** A region (which corner and edge *slots* must hold their home cubie, oriented). */
-export interface Region {
+/**
+ * A set of cube pieces: which corner and edge *slots* must hold their home cubie,
+ * oriented. Named `PieceRegion` rather than `Region` because `@moishy/cubing-core`
+ * exports an unrelated `Region` (a `[fromStepId, toStepId]` step range for
+ * Replacements), and a method module imports from both.
+ */
+export interface PieceRegion {
   corners: readonly number[];
   edges: readonly number[];
 }
@@ -78,7 +83,7 @@ export function centersSolved(s: CubeState): boolean {
  * so normalizing the centers leaves the region's pieces off their home slots.
  * Every step therefore still has to net-preserve the colours, not just the slots.
  */
-export function regionSolved(region: Region): (s: CubeState) => boolean {
+export function regionSolved(region: PieceRegion): (s: CubeState) => boolean {
   return (s) => {
     const n = normalizeOrientation(s);
     return region.corners.every((i) => n.cp[i] === i && n.co[i] === 0) &&
@@ -87,7 +92,7 @@ export function regionSolved(region: Region): (s: CubeState) => boolean {
 }
 
 /** True iff `region` is solved *and* all 12 edges are oriented (EO's goal). */
-export function regionSolvedAndEO(region: Region): (s: CubeState) => boolean {
+export function regionSolvedAndEO(region: PieceRegion): (s: CubeState) => boolean {
   const solved = regionSolved(region);
   return (s) => solved(s) && normalizeOrientation(s).eo.every((o) => o === 0);
 }
@@ -100,7 +105,7 @@ export function regionSolvedAndEO(region: Region): (s: CubeState) => boolean {
  * loses its cost-ordering. Everywhere else the rotation-invariant
  * {@link regionSolved} is correct; APB's block step is intentionally fixed-frame.
  */
-export function regionSolvedStrict(region: Region): (s: CubeState) => boolean {
+export function regionSolvedStrict(region: PieceRegion): (s: CubeState) => boolean {
   return (s) =>
     centersSolved(s) &&
     region.corners.every((i) => s.cp[i] === i && s.co[i] === 0) &&
@@ -126,7 +131,7 @@ export function regionSolvedStrict(region: Region): (s: CubeState) => boolean {
  * states to stay admissible (see `regionHeuristic` in pruning.ts); the strict,
  * all-centers-home table would over-count the U/F/D/B fix the goal does not require.
  */
-export function regionSolvedLRHome(region: Region): (s: CubeState) => boolean {
+export function regionSolvedLRHome(region: PieceRegion): (s: CubeState) => boolean {
   return (s) =>
     s.cn[4] === 4 && s.cn[1] === 1 && // L, R centers home ⇒ drift is L–R-axis only
     region.corners.every((i) => s.cp[i] === i && s.co[i] === 0) &&
@@ -192,7 +197,7 @@ export function pieceSignature(
  * largest per-node cost; the packed integer partitions states identically and is
  * ~10x cheaper (0.40µs -> 0.04µs on the 2x2x3 region).
  */
-export function regionCoordinate(region: Region): (s: CubeState, last: Move | null) => number {
+export function regionCoordinate(region: PieceRegion): (s: CubeState, last: Move | null) => number {
   const corners = new Int8Array(region.corners);
   const edges = new Int8Array(region.edges);
   // Guard the packing: each piece contributes a factor of 24, the centers 36 and
