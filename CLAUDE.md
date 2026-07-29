@@ -1,9 +1,9 @@
-# Working in this repo
+# Working in This Repo
 
 Conventions and traps that aren't obvious from the code. For what the project _is_, see
 [README.md](./README.md); for why it's built this way, [DESIGN.md](./DESIGN.md).
 
-## Before you finish
+## Before You Finish
 
 ```sh
 deno task ok        # check · lint · fmt --check · test  — must be green
@@ -21,7 +21,7 @@ deno task bundle    # then commit docs/apb-demo/apb.bundle.js
 Nothing enforces that — a commit once shipped solver changes without it and the live site was a
 version behind until someone noticed.
 
-## Releasing: bump three things, not one
+## Releasing: Bump Three Things, Not One
 
 A version lives in **three** places per package. Changing only the manifest ships a broken release.
 
@@ -45,7 +45,7 @@ authenticate the workflow over OIDC, there are no tokens, and a manual publish b
 number for the automated path. Neither registry lets you republish a version, so a re-run after a
 partial failure needs a fresh bump; npm is a separate job gated on JSR for exactly that reason.
 
-## Wall-clock budgets make tests machine-dependent
+## Wall-Clock Budgets Make Tests Machine-Dependent
 
 `SearchPhase.timeBudgetMs` lets an expensive phase drop out of its step's race instead of hanging a
 solve. The cost is that _which strategies answer_ now depends on machine speed — a budget tuned on a
@@ -55,7 +55,7 @@ Any test that asserts a specific strategy ran must lift the budget with
 `stepOptions.<step>.searchTimeBudgetMs.<phaseId>`, so a failure means "the strategy is broken", not
 "the runner was busy".
 
-## Search heuristics must never overestimate
+## Search Heuristics Must Never Overestimate
 
 Every `SearchPhase.heuristic` is an admissible lower bound on remaining cost. Undershoot and the
 search just does more work; **overshoot and it silently returns non-optimal solutions** — no error,
@@ -68,7 +68,7 @@ once (see `regionHeuristicMulti` in `packages/apb/src/pruning.ts`).
 A heuristic must be built for the same cost model as the phase that uses it, or admissibility is
 lost.
 
-## Algset data: only algs
+## Algset Data: Only Algs
 
 A case stores `id` + `algs` and nothing else. Recognition is _derived_ by inverting the primary alg;
 cost and AUF are computed. Never hand-write recognition state, AUF or cost — see
@@ -85,10 +85,10 @@ Two things to check whenever you touch a set:
   derived recognition state has the wrong slot open. That was the actual zbls bug, long mis-recorded
   as bad transcription.
 
-## Verify claims against the code
+## Verify Claims Against the Code
 
 Comments here are unusually load-bearing and several have been wrong. Measure before you write a
-number down, and prefer a test over a comment. When a doc and the behaviour disagree, fix the doc in
+number down, and prefer a test over a comment. When a doc and the behavior disagree, fix the doc in
 the same change.
 
 Throwaway experiment scripts go in `packages/apb/_*.ts` and are deleted before committing.

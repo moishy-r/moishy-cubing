@@ -1,5 +1,5 @@
 /**
- * A solver for the APB method (Advanced Petrus Blocks).
+ * A solver for the APB method (Athefre's Pair & Block).
  *
  * Wires 2x2x3 -> BR Pair -> EO -> LXS -> ZBLL as core steps, plus opt-in
  * replacements (EO Pair, EODR+LS, COLL+EPLL, OCLL+PLL, back-slot EO/LXS) and
@@ -28,7 +28,7 @@
 import { Method, VERSION as CUBING_CORE_VERSION } from "@moishy/cubing-core";
 import { apbDefinition } from "./src/apb.ts";
 
-export const VERSION = "0.2.0";
+export const VERSION = "0.2.1";
 export const CUBING_CORE_VERSION_USED = CUBING_CORE_VERSION;
 
 export { apbDefinition } from "./src/apb.ts";

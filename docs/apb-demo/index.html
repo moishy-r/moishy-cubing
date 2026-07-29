@@ -721,7 +721,7 @@
       worker = null; // tables are gone with it; the next solve rebuilds them
       seq++; // invalidate any in-flight reply
       finish();
-      $("out").innerHTML = `<p class="muted">Cancelled.</p>`;
+      $("out").innerHTML = `<p class="muted">Canceled.</p>`;
     });
 
     function solve() {
@@ -758,7 +758,7 @@
       worker ??= spawnWorker();
       worker.addEventListener("message", function onMsg(ev) {
         const m = ev.data;
-        if (m?.ready || m?.id !== id) return; // stale reply from a cancelled run
+        if (m?.ready || m?.id !== id) return; // stale reply from a canceled run
         worker.removeEventListener("message", onMsg);
         finish();
         if (!m.ok) {

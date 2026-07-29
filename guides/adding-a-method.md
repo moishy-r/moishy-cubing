@@ -1,12 +1,12 @@
-# Adding a method
+# Adding a Method
 
 The engine has no idea what APB is. A method is pure configuration: you describe your steps, hand
-the description to `Method`, and the runner does the racing, lookahead, colour neutrality and
-scoring for you.
+the description to `Method`, and the runner does the racing, lookahead, color neutrality and scoring
+for you.
 
 `@moishy/apb` is the worked example — copying its shape is the recipe. This guide is the map.
 
-## The composition model
+## The Composition Model
 
 Three nested concepts:
 
@@ -39,7 +39,7 @@ export const cfop = new Method(myMethod);
 
 That's the whole integration surface. `Method` provides `.solve()`.
 
-## Search phases
+## Search Phases
 
 A search phase configures the generic engine. You supply _what done looks like_ and _what moves are
 allowed_; the engine finds the cheapest way there.
@@ -71,7 +71,7 @@ redundant move orderings), `stateKey` (merge search states that differ only in p
 track), and `timeBudgetMs` (let an expensive phase drop out of its race instead of failing the
 solve).
 
-## Algorithmic phases
+## Algorithmic Phases
 
 For steps solved by known algorithms:
 
@@ -92,7 +92,7 @@ the goal. Multiple algs per case is what lookahead exploits.
 Case data comes from `@moishy/algsets`, where recognition is _derived from the algs_ rather than
 hand-stored. See [AUTHORING.md](../packages/algsets/AUTHORING.md).
 
-## Recognition and goals
+## Recognition and Goals
 
 The fiddly part of a new method is not the pipeline — it's saying precisely which pieces a step
 cares about. APB does this in `geometry.ts`, and the patterns transfer:
@@ -100,7 +100,7 @@ cares about. APB does this in `geometry.ts`, and the patterns transfer:
 - **Region** — the corner and edge slots a step must fill.
   `{ corners: [5, 6], edges: [5, 6, 7, 9, 10] }` is APB's 2x2x3.
 - **Goal predicate** — `regionSolved(region)` checks a region up to whole-cube rotation (right for
-  most steps); `regionSolvedStrict` additionally pins the centres, which a slice/wide-inclusive
+  most steps); `regionSolvedStrict` additionally pins the centers, which a slice/wide-inclusive
   _search_ needs so its home-frame heuristic stays valid.
 - **Recognition signature** — projects a state down to just the pieces a step reads, so a case
   matches regardless of the scrambled pieces around it.
@@ -109,7 +109,7 @@ Get the signature wrong and you get silent mis-recognition, so verify it: APB's 
 case in a set produces a distinct signature, and that each recognized state is actually solved by
 its alg.
 
-## Replacements and extras
+## Replacements and Extras
 
 Both are opt-in, both default to off, and neither is needed to ship a working method.
 
@@ -126,11 +126,11 @@ Winter Variation fires part-way through the last slot only when the case allows.
 2. Author or reuse algsets for the algorithmic steps; verify recognition is collision-free.
 3. Build pruning heuristics for the search steps.
 4. Assemble steps → strategies → phases into a `MethodDefinition`.
-5. Set `recommendedSettings` — colour neutrality and lookahead scope.
+5. Set `recommendedSettings` — color neutrality and lookahead scope.
 6. Test end to end: apply the solution to the scramble and assert the cube is solved. Do it across
    many seeded scrambles, not one.
 
-## Where to look in the code
+## Where to Look in the Code
 
 | For                            | Read                                                                          |
 | ------------------------------ | ----------------------------------------------------------------------------- |
