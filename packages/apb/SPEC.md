@@ -1,4 +1,4 @@
-# APB method spec
+# APB Method Spec
 
 > **Audience: contributors.** Internal method spec, not user documentation. If you are _using_ the
 > library, start with the [guides](../../guides/getting-started.md) instead.
@@ -10,7 +10,7 @@ specific to APB itself. Read `/DESIGN.md` first.
 
 Background: https://apbmethod.net and https://cubinghistory.com/3x3/Methods/APB
 
-## Method overview
+## Method Overview
 
 Core Steps, in order: `block223` (2x2x3) -> `brPair` (BR Pair) -> `eo` (EO) -> `lxs` (LXS) -> `zbll`
 (ZBLL). Details on `brPair` onward TBD in later sections of this doc.
@@ -122,7 +122,7 @@ Uses the general per-step `StepOptions` shape from `/DESIGN.md` under `stepOptio
 `forceStrategy` (one of `direct`, `fbDfdb`, `cornerFirstFront`, `cornerFirstBack`, `cross1`),
 `enabledStrategies`, and `phaseChaining` (`enabled`, `slack`) for the multi-phase Strategies above.
 
-### Recommended defaults (this Method's own settings, overridable by the caller)
+### Recommended Defaults (This Method's Own Settings, Overridable by the Caller)
 
 - Lookahead into `brPair` enabled - see the method-wide Recommended lookahead defaults section at
   the end of this doc for the full chain.
@@ -157,7 +157,7 @@ Uses the general per-step `StepOptions` shape from `/DESIGN.md` under `stepOptio
   would have chosen, so results would shift. Sound to add either with lookahead into the first step
   off, or once the race and the candidate choice minimize the same quantity.
 
-### Open / left to implementation
+### Open / Left to Implementation
 
 - Exact default `phaseChaining.slack` value - starting guess of 2 in `/DESIGN.md`, tune once real
   solves can be benchmarked.
@@ -246,7 +246,7 @@ real last-layer states unsolvable in the fixed frame:
 With these, ZBLL is complete: an APB test enumerates all 7775 EO-solved last-layer states and solves
 every one.
 
-## Recommended lookahead defaults (method-wide)
+## Recommended Lookahead Defaults (Method-Wide)
 
 APB's `Method` subclass should ship Lookahead enabled by default, depth 1, scoped to every adjacent
 Core Step pair that has a downstream Step to peek into:
@@ -338,7 +338,7 @@ Since `eoPair`'s region (`[brPair, eo]`) and `eodrLs`'s region (`[eo, lxs]`) ove
 both enabled invokes the region-covering DP from `/DESIGN.md` rather than a simple independent
 race - correct, not just tolerable, per that section.
 
-### Settings recap
+### Settings Recap
 
 All four replacements surface through the general
 `replacements: { [replacementId]: { enabled, mode } }` settings shape from `/DESIGN.md`. Every one

@@ -1,4 +1,4 @@
-# Solver settings
+# Solver Settings
 
 Everything you can change about how a solve is produced. `solve()` takes two objects:
 
@@ -29,7 +29,7 @@ const res = await apb.solve(scramble, {
 
 ---
 
-## Move cost model
+## Move Cost Model
 
 The objective function. Defaults to the built-in two-handed MCC model.
 
@@ -50,7 +50,7 @@ Note that some steps deliberately override this: APB's block-building phases ran
 (matching how blockbuilders think) while the last layer keeps ergonomic MCC. That's a property of
 the method, not something you set here.
 
-## Colour neutrality
+## Color Neutrality
 
 Which starting orientations to race. The winner is chosen on the **first step only** and then
 committed, so the cost is one extra first-step search per orientation, not a full extra solve.
@@ -61,7 +61,7 @@ await apb.solve(scramble, { colorNeutrality: "full" }); // 24 — every orientat
 await apb.solve(scramble, { colorNeutrality: [[], parseAlg("y"), parseAlg("z2")] }); // custom
 ```
 
-APB recommends **dual-CN** by default: 8 orientations — either of the two opposite colours of one
+APB recommends **dual-CN** by default: 8 orientations — either of the two opposite colors of one
 axis on the bottom, times the four choices of front face.
 
 Widening this is usually the cheapest way to get a better first block. Measured on APB, mean 2x2x3
@@ -69,7 +69,7 @@ length: 11.2 moves fixed → 9.8 dual → 8.9 full, for `fbDfdb` — a bigger ga
 more expensive strategy. The chosen rotation comes back as `res.orientation` and is free (it models
 inspection, not turning).
 
-## Step options
+## Step Options
 
 Keyed by step id. For APB: `block223`, `brPair`, `eo`, `lxs`, `zbll`.
 
@@ -90,12 +90,12 @@ await apb.solve(scramble, {
 disabled by default because they're slow or rarely win — APB's `block223` registers six and enables
 only `fbDfdb`:
 
-| strategy                               | default | note                                                           |
-| -------------------------------------- | ------- | -------------------------------------------------------------- |
-| `fbDfdb`                               | **on**  | Roux first block search + a 527-case DF/DB algorithm           |
-| `direct`                               | off     | one search for the whole 2x2x3; shortest blocks, ~70× the time |
-| `cornerFirstFront` / `cornerFirstBack` | off     | 2x2x2 first, then extend                                       |
-| `cross1Front` / `cross1Back`           | off     | bottom line first, then two pairs                              |
+| Strategy                               | Note                                                                              |
+| -------------------------------------- | --------------------------------------------------------------------------------- |
+| `fbDfdb`                               | Roux first block search + a 527-case DF/DB algorithm — the only one on by default |
+| `direct`                               | one search for the whole 2x2x3; shortest blocks, ~70× the time                    |
+| `cornerFirstFront` / `cornerFirstBack` | 2x2x2 first, then extend                                                          |
+| `cross1Front` / `cross1Back`           | bottom line first, then two pairs                                                 |
 
 **`forceStrategy`** pins one, skipping racing entirely — useful for demos and for comparing
 strategies head to head.
@@ -169,7 +169,7 @@ await apb.solve(scramble, { extras: { winterSummerVariation: { enabled: true } }
 Same `enabled` / `mode` shape as replacements. APB registers `oll`, `zbls`, and
 `winterSummerVariation`.
 
-## Bounding the work (`SolveOptions`)
+## Bounding the Work (`SolveOptions`)
 
 ```ts
 await apb.solve(scramble, settings, {
@@ -188,7 +188,7 @@ A phase may also declare its own `timeBudgetMs`; when that expires the _phase_ d
 step's race and the other strategies still answer, rather than the solve failing. APB's `direct`
 uses this so a pathological scramble costs one strategy, not the solve.
 
-## Recommended defaults
+## Recommended Defaults
 
 Omitting a setting takes the method's recommendation, not a library-wide default. APB recommends
 dual-CN plus `depth: 1` lookahead across its adjacent step pairs. Passing `{}` gets you those;

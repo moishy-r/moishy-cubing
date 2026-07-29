@@ -1023,7 +1023,7 @@ function spliceCheckpointExtras(
       const seg = cand.phaseSegs[p];
       if (seg.kind !== "algorithmic") continue;
       // Candidate split indices within this phase's moves: the named checkpoints
-      // for a labelled trigger, otherwise every prefix (auto-scan).
+      // for a labeled trigger, otherwise every prefix (auto-scan).
       const indices = extra.label !== undefined
         ? (seg.checkpoints ?? []).filter((cp) => cp.label === extra.label).map((cp) => cp.index)
         : Array.from({ length: seg.moves.length + 1 }, (_, k) => k);

@@ -1,4 +1,4 @@
-# Authoring / scraping algsets — format brief
+# Authoring / Scraping Algsets — Format Brief
 
 > **Audience: contributors.** Internal authoring brief, not user documentation. If you are _using_
 > the library, start with the [guides](../../guides/getting-started.md) instead.
@@ -11,7 +11,7 @@ cost) is derived by the engine, so there is nothing else to get right.
 output shape, one `index.ts` + `index_test.ts` per set — so fill them all, then run the whole
 `packages/algsets/` test suite once at the end.
 
-## The one output shape
+## The One Output Shape
 
 Each set is a single file `packages/algsets/src/<set>/index.ts` that calls `defineAlgSet`:
 
@@ -52,7 +52,7 @@ Rules the data must follow (the whole contract):
 - **No `mcc`, no `auf`, no recognition/state data.** Those were dropped on purpose — cost is
   computed, AUF and recognition are derived. Do not add them.
 
-## SiGN move notation (what an alg string may contain)
+## SiGN Move Notation (What an Alg String May Contain)
 
 Space-separated tokens. Each token is one family letter, an optional `2` (half turn) and/or an
 optional `'` (prime / counter-clockwise):
@@ -67,7 +67,7 @@ accepted and means the same as `R2`. `defineAlgSet` throws at author time on any
 bad scrape fails loudly rather than silently — good. Convert any non-SiGN source notation (WCA wide
 `Rw` → `r`, `Uw` → `u`, etc.) during scraping.
 
-## Every set gets a test
+## Every Set Gets a Test
 
 Alongside `index.ts`, create `packages/algsets/src/<set>/index_test.ts`:
 
@@ -88,7 +88,7 @@ Run `deno test packages/algsets/` — it must pass. `assertValidAlgSet` with no 
 notation, unique ids, and that no two cases collapse to the same recognition signature. (Deeper goal
 checks are the method's job, not the set's.)
 
-## The six pending sets + their sources
+## The Six Pending Sets + Their Sources
 
 Fill the `cases: []` in each existing file (all already stubbed empty). Keep the `id` / `name` /
 `export const` as-is. `count` is the number of cases you should end up with — set the test's count
@@ -117,7 +117,7 @@ Not pending — already derived from existing sets, **do not author these**: `eo
 subsets of `eo-pair` (`dbr-solved-eo-(1)` and `dfr`); `ls` is the `lxs` subset where DR is already
 solved; `epll` is the `pll` subset where corners are already solved; OCLL is `oll` cases 21–27.
 
-## (Follow-up, not part of this batch) Winter/Summer Variation checkpoints on `lxs`
+## (Follow-Up, Not Part of This Batch) Winter/Summer Variation Checkpoints on `lxs`
 
 Filling the `wv`/`sv` sets above is all this batch needs. Separately, for the WV/SV _extra_ to
 actually fire, the relevant `lxs` variants need a `checkpoint` — WV/SV splice in mid-LXS, right

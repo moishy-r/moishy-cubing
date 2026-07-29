@@ -1,4 +1,4 @@
-# Design spec
+# Design Spec
 
 > **Audience: contributors.** Internal architecture notes, not user documentation. If you are
 > _using_ the library, start with the [guides](./guides/getting-started.md) instead.
@@ -19,7 +19,7 @@ see `scripts/build_npm.ts`), triggered by pushing a tag `<package-dir>-v<version
 `.github/workflows/release.yml`). Versions are NOT kept in lockstep across packages - `algsets` will
 move much faster than `cubing-core`.
 
-## Cube representation
+## Cube Representation
 
 Cubie-level state: permutation + orientation vectors for corners/edges (and centers if a future
 method needs them, e.g. for tracking mid-solve reduction). Facelet/sticker arrays are derived only
@@ -29,7 +29,7 @@ A single generic IDA*-style search engine lives in `cubing-core`, parameterized 
 predicate and a pruning table. Search phases (see below) configure this engine rather than each
 strategy hand-rolling its own search.
 
-## Move representation
+## Move Representation
 
 One canonical `Move` type, shared by move application (permutation composition) and cost scoring
 (MCC) - not two parallel representations that can drift:
@@ -126,7 +126,7 @@ row, and this applies across phase/step boundaries too - so a unit that must _be
 family the previous unit _ended_ on can be over-pruned. Safe in practice (same-family pairs are
 dominated by a single combined move, e.g. `R R` by `R2`), revisit if a real method needs it.
 
-## Algset schema & authoring
+## Algset Schema & Authoring
 
 Cases are authored via `defineAlgSet({ id, cases: [{ id, algs, ... }] })`. Each case's `algs` is one
 or more interchangeable solutions - a bare SiGN string (shorthand), or
@@ -250,7 +250,7 @@ interface ReplacementOptions {
 v1 constraint: Replacements are defined against the base Method's core-step sequence only - no
 replacement-of-a-replacement. Revisit if a real method needs that nesting.
 
-### Overlapping regions
+### Overlapping Regions
 
 Two `compete`-mode Replacements can have regions that overlap without being identical (e.g. one
 covering `[brPair, eo]`, another covering `[eo, lxs]`). When more than one enabled Replacement's
@@ -306,7 +306,7 @@ structurally match the live state simply fails to produce a candidate at all, th
 normal case-lookup miss would - a candidate that can't produce a result just doesn't participate in
 the comparison.
 
-## MCC (move cost) scoring
+## MCC (Move Cost) Scoring
 
 Pluggable, not hardcoded:
 
@@ -360,7 +360,7 @@ Three changes happen regardless of those two decisions:
    `scoreAlg(moves, model)` helper (starts at `null`); the pipeline runner threads `prevMove` across
    phases itself for a real solve.
 
-## Color neutrality
+## Color Neutrality
 
 Setting: fixed color, some-neutrality subset, or full neutrality. Given "commit early": the solver
 evaluates all applicable rotations through the _first_ core step only, picks the cheapest, and
@@ -374,7 +374,7 @@ can still finish) and lets the unchanged canonical goals apply, while the move _
 therefore the MCC cost - reflect the held frame. The reported solution solves the cube held in
 orientation `o`; `full` neutrality is the 24 orientations (BFS-generated). See `allOrientations()`.
 
-## Solver settings: strategy selection, phase-chaining, and lookahead
+## Solver Settings: Strategy Selection, Phase-Chaining, and Lookahead
 
 Three related-but-distinct mechanisms, each independently configurable. Easy to conflate since
 they're all "consider more than one candidate and pick the cheapest" - kept separate because they
@@ -471,7 +471,7 @@ Lookahead on between `block223` and `brPair`, since the r/M final-move substitut
 DFDB `AlgVariant`s depends on it to do anything) - the solve caller's explicit settings always
 override the Method's recommended defaults, which override the library's own defaults.
 
-## Solver API shape
+## Solver API Shape
 
 Async-first from v1, even though the initial implementation may just be synchronous-between-awaits
 under the hood:
@@ -495,12 +495,12 @@ cube-state snapshots per segment, color-neutrality decision, tags). A thin rende
 subset/format on top of that - output format is not locked in yet and is cheap to change since it's
 just a projection, not core solver logic.
 
-## Reference materials
+## Reference Materials
 
 - `reference/mcc.ts` - the user's original MCC implementation. Source of truth for the
   `MoveCostModel` default port described above. Not wired into any package yet.
 
-## Implementation roadmap
+## Implementation Roadmap
 
 Rough build order, each step depending on the last:
 
@@ -526,7 +526,7 @@ Rough build order, each step depending on the last:
    strategies), BR Pair, EO, LXS, ZBLL, plus the BR-Pair+EO<->EOPair (compete) and ZBLL<->OCLL+PLL
    (force) replacements.
 
-## Open questions (not yet resolved)
+## Open Questions (Not Yet Resolved)
 
 - **Recognition/Lookahead safety for real algset data** (see the flagged concern in "Algset schema &
   authoring"): confirm, per algorithmic Step, that its variants' actual relationship (exact-state /

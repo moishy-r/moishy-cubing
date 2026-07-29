@@ -319,7 +319,7 @@ export function homingRotation(s: CubeState): Move[] {
 
 /**
  * True iff the state is solved **up to a whole-cube rotation** — i.e. every face
- * is a single colour, regardless of which way the cube is being held. A cube that
+ * is a single color, regardless of which way the cube is being held. A cube that
  * a rotation-containing alg (or a `z2` inspection) left tilted is still solved.
  * Slice/wide center drift is correctly *not* solved (see {@link normalizeOrientation}).
  * For an exact, frame-sensitive check use {@link statesEqual} against {@link SOLVED}.

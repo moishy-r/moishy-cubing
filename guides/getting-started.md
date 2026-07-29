@@ -1,4 +1,4 @@
-# Getting started
+# Getting Started
 
 Install a method package and solve a scramble. This guide covers installation, your first solve, and
 how to read what comes back.
@@ -8,21 +8,26 @@ how to read what comes back.
 
 ## Install
 
-The packages live on [JSR](https://jsr.io/@moishy). Install the method you want; it pulls in
+Every package is published to both [JSR](https://jsr.io/@moishy) and
+[npm](https://www.npmjs.com/org/moishy). Install the method you want; it pulls in
 `@moishy/cubing-core` and `@moishy/algsets` itself.
 
-**Deno**
+**Deno** — [jsr.io/@moishy/apb](https://jsr.io/@moishy/apb)
 
 ```sh
 deno add jsr:@moishy/apb
 ```
 
-**Node** (npm, pnpm, yarn, bun — see
-[jsr.io/docs/npm-compatibility](https://jsr.io/docs/npm-compatibility))
+**Node** — [npmjs.com/package/@moishy/apb](https://www.npmjs.com/package/@moishy/apb). Dual ESM/CJS,
+so `import` and `require` both work.
 
 ```sh
-npx jsr add @moishy/apb
+npm install @moishy/apb
 ```
+
+pnpm, yarn and bun take the same package name. To pull the JSR build instead of the npm one, use
+`npx jsr add @moishy/apb` (see
+[JSR's npm compatibility notes](https://jsr.io/docs/npm-compatibility)).
 
 **Browser** — bundle it yourself; the library is dependency-free and runs client-side:
 
@@ -30,7 +35,7 @@ npx jsr add @moishy/apb
 deno bundle --platform browser --minify -o apb.bundle.js entry.ts
 ```
 
-## Your first solve
+## Your First Solve
 
 `apb.solve()` takes a scramble in [SiGN notation](#notation) and returns a `Promise<SolveResult>`.
 
@@ -48,7 +53,7 @@ console.log(res.cost); // 46.45 (MCC — see below)
 Nothing is required beyond the scramble; every setting has a default, and each method ships its own
 recommended ones.
 
-## Reading the result
+## Reading the Result
 
 The interesting part is `segments` — one entry per solved _unit_ (a step, or a replacement spanning
 several steps), in execution order:
@@ -80,7 +85,7 @@ algorithm that make up `block223`), `startState`/`endState` snapshots, and `alte
 strategies that lost the race and what they would have cost. That last one is what makes the result
 useful for a trainer UI: you can show the road not taken.
 
-### `cost` is not move count
+### `cost` Is Not Move Count
 
 `cost` is the **MCC** (move-cost model) score: an ergonomic estimate of how hard the sequence is to
 execute, not how long it is. Regrips, awkward faces and wide/slice moves cost more than a clean `R`
@@ -95,11 +100,11 @@ scoreAlg(parseAlg("R U R' U'"), createDefaultMoveCostModel()); // 3.60
 ```
 
 To optimize for one-handed instead, pass a different model — see
-[Solver settings](./solver-settings.md#move-cost-model).
+[Solver Settings](./solver-settings.md#move-cost-model).
 
-### Verifying a solution
+### Verifying a Solution
 
-`orientation` is the free pre-rotation colour neutrality picked. It is **not** part of the solution
+`orientation` is the free pre-rotation color neutrality picked. It is **not** part of the solution
 and costs nothing — it models turning the cube over during inspection. To check a solution against
 the original scramble, conjugate by it:
 
@@ -117,7 +122,7 @@ isSolved(applyMoves(framed, res.solution)); // true
 
 If you solve with `colorNeutrality: "fixed"` the orientation is always empty and you can skip this.
 
-## Cube primitives
+## Cube Primitives
 
 `@moishy/cubing-core` is usable on its own for cube manipulation, independent of any solver:
 
@@ -138,7 +143,7 @@ toFacelets(state); // 54-char facelet string
 formatAlg(invert(parseAlg("R U R' U'"))); // "U R U' R'"
 ```
 
-State is stored at the **cubie** level (corner/edge permutation + orientation + centre orientation),
+State is stored at the **cubie** level (corner/edge permutation + orientation + center orientation),
 so slice and wide moves and whole-cube rotations are all first-class.
 
 ### Notation
@@ -147,7 +152,7 @@ SiGN style: `R L U D F B` faces, `M E S` slices, lowercase `r l u d f b` wides, 
 with `'` for counter-clockwise and `2` for a half turn. `parseAlg` throws `NotationError` on
 anything it doesn't recognize.
 
-## Bounding the work
+## Bounding the Work
 
 Searching is capped so a solve cannot run away:
 
@@ -164,6 +169,6 @@ it committed, rather than throwing.
 
 ## Next
 
-- [Solver settings](./solver-settings.md) — every knob: colour neutrality, strategy selection,
+- [Solver Settings](./solver-settings.md) — every knob: color neutrality, strategy selection,
   lookahead, replacements, extras
-- [Adding a method](./adding-a-method.md) — build a CFOP/Roux/ZZ plugin on the same engine
+- [Adding a Method](./adding-a-method.md) — build a CFOP/Roux/ZZ plugin on the same engine

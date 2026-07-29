@@ -8,8 +8,8 @@ the primary alg to a solved cube and inverting — never hand-written, so it can
 with the algs, and authoring a set means transcribing algs and nothing else.
 
 ```sh
-deno add jsr:@moishy/algsets   # Deno
-npx jsr add @moishy/algsets    # Node
+deno add jsr:@moishy/algsets    # Deno — https://jsr.io/@moishy/algsets
+npm  install @moishy/algsets    # Node — https://www.npmjs.com/package/@moishy/algsets
 ```
 
 ## Use
@@ -40,8 +40,8 @@ lookahead worth having.
 | `@moishy/algsets/dfdb`          | 527   | DF/DB pair (APB block223) |
 | `@moishy/algsets/zbls`          | 302   | ZBLS                      |
 | `@moishy/algsets/eo-pair`       | 148   | EO Pair                   |
-| `@moishy/algsets/lxs`           | 116   | Last X-Slot               |
-| `@moishy/algsets/lxs-back-slot` | 116   | LXS (back slot)           |
+| `@moishy/algsets/lxs`           | 116   | Last Extended Slot        |
+| `@moishy/algsets/lxs-back-slot` | 116   | Last Extended Slot (back) |
 | `@moishy/algsets/br-pair`       | 89    | BR Pair                   |
 | `@moishy/algsets/fr-pair`       | 89    | FR Pair                   |
 | `@moishy/algsets/oll`           | 57    | OLL                       |
@@ -60,7 +60,7 @@ Notes:
   against the BR or FL slot and have been conjugated onto FR; a consumer recognizing on a different
   slot must rotate accordingly.
 
-## Authoring a set
+## Authoring a Set
 
 ```ts
 import { type AlgSet, defineAlgSet } from "@moishy/algsets";

@@ -1,7 +1,7 @@
 /**
  * Cube engine and solver framework for speedsolving methods.
  *
- * Cubie-level cube state (corner/edge permutation + orientation + centre
+ * Cubie-level cube state (corner/edge permutation + orientation + center
  * orientation, so slices, wides and rotations are first-class), SiGN notation,
  * a pluggable ergonomic cost model (MCC), guided search (IDA*, A*, and a
  * near-optimal solution pool), and the Step -> Strategy -> Phase composition
@@ -28,7 +28,7 @@
  * @module
  */
 
-export const VERSION = "0.2.0";
+export const VERSION = "0.2.1";
 
 export {
   formatAlg,

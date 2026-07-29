@@ -587,7 +587,7 @@ Deno.test(
 // The general rotation architecture end-to-end: solve a cube whose *frame is
 // rotated* (a z2 "inspection" rotation up front, a y "mid-solve" rotation at the
 // end) so the first phase's INPUT has drifted centers. APB's own solves never hit
-// this — colour-neutrality is realized by conjugation, which keeps centers home —
+// this — color-neutrality is realized by conjugation, which keeps centers home —
 // so a rotation baked into the scramble is how we exercise the per-phase
 // reorient-to-home (cubing-core `homeStart`). The solve must still verify, and it
 // must reorient (emit whole-cube rotations) rather than fail.

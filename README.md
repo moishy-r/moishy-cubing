@@ -23,18 +23,18 @@ for (const seg of res.segments) {
 }
 ```
 
-## What makes it different
+## What Makes It Different
 
 - **Method-shaped, not god's-algorithm.** A solve is a pipeline of named steps (`block223` →
   `brPair` → `eo` → `lxs` → `zbll`), each solved by a _strategy_ — either a search or a lookup into
-  a real algorithm set. The output is a solve you could learn from, with every step labelled.
+  a real algorithm set. The output is a solve you could learn from, with every step labeled.
 - **Ergonomics are the objective.** Solutions are ranked by a pluggable move-cost model (MCC), not
   by move count, so a longer smooth solution can legitimately beat a shorter awkward one. Two-handed
   and one-handed models ship in the box.
 - **Every step races alternatives.** Multiple strategies per step, multiple algs per case, and
   optional _lookahead_ that picks the choice minimizing this step **plus** the next.
-- **Colour neutrality is close to free.** Racing 8 (or 24) starting orientations costs only the
-  first step's search; the winner is committed and the rest of the solve runs once.
+- **Color neutrality is close to free.** Racing 8 (or 24) starting orientations costs only the first
+  step's search; the winner is committed and the rest of the solve runs once.
 
 ## Packages
 
@@ -44,16 +44,16 @@ for (const seg of res.segments) {
 | [`@moishy/algsets`](./packages/algsets)         | `deno add jsr:@moishy/algsets`     | Algorithm case data (ZBLL, PLL, OLL, COLL, …) with recognition derived from the algs |
 | [`@moishy/apb`](./packages/apb)                 | `deno add jsr:@moishy/apb`         | The APB method — and the reference implementation for adding your own                |
 
-On Node, use `npx jsr add @moishy/apb` (see [Getting started](./guides/getting-started.md)).
+On Node, use `npx jsr add @moishy/apb` (see [Getting Started](./guides/getting-started.md)).
 
 ## Documentation
 
 **Using the library**
 
-- [Getting started](./guides/getting-started.md) — install, first solve, reading a `SolveResult`
-- [Solver settings](./guides/solver-settings.md) — colour neutrality, strategy selection, lookahead,
+- [Getting Started](./guides/getting-started.md) — install, first solve, reading a `SolveResult`
+- [Solver Settings](./guides/solver-settings.md) — color neutrality, strategy selection, lookahead,
   replacements and extras
-- [Adding a method](./guides/adding-a-method.md) — build your own CFOP/Roux/ZZ plugin
+- [Adding a Method](./guides/adding-a-method.md) — build your own CFOP/Roux/ZZ plugin
 
 **Internals** — design notes for people working _on_ the library, not with it:
 

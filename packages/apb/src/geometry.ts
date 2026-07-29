@@ -81,7 +81,7 @@ export function centersSolved(s: CubeState): boolean {
  * check wrongly rejected. But it still rejects slice/wide *center drift* (e.g. an
  * M-slice DF/DB alg): there the pieces did not rotate together with the centers,
  * so normalizing the centers leaves the region's pieces off their home slots.
- * Every step therefore still has to net-preserve the colours, not just the slots.
+ * Every step therefore still has to net-preserve the colors, not just the slots.
  */
 export function regionSolved(region: PieceRegion): (s: CubeState) => boolean {
   return (s) => {

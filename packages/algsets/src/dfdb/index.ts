@@ -1,7 +1,7 @@
 /**
  * DF/DB Pair — algorithm case data for `@moishy/algsets`.
  *
- * Places the DF and DB edges onto a solved Roux first block, restoring any L–R centre drift in
+ * Places the DF and DB edges onto a solved Roux first block, restoring any L–R center drift in
  * the process.
  *
  * Transformed from old/dfdb.ts via scripts/transform_old_algsets.ts. Every source alg is kept as

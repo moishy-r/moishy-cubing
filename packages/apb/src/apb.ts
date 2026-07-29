@@ -46,7 +46,7 @@
 // relative to the centers, so a cube rotation never breaks a step (see
 // geometry.ts `regionSolved` / cubing-core `isSolved`). Crucially this still
 // rejects slice/wide *center drift* — where the pieces did NOT rotate with the
-// centers — so the colours must genuinely match, not just the slots. Algs are
+// centers — so the colors must genuinely match, not just the slots. Algs are
 // used verbatim: an imported primary that ends tilted (a net `y`) simply leaves
 // the cube solved-up-to-rotation, which the goal accepts; and where a case also
 // has a rotation-free variant, the cost race naturally prefers it (no move
@@ -69,7 +69,7 @@
 // reconcile it — cases like coll `t-3`/`t-4`, whose only alg ends tilted, now
 // solve (the tilted result feeds the next phase, which homes it). APB's downstream
 // steps still never trigger homing: after DFDB the cube is genuinely centers-home,
-// and colour-neutrality is realized by conjugation (centers stay home), so
+// and color-neutrality is realized by conjugation (centers stay home), so
 // `homeStart` is a no-op from brPair onward. The one place a rotated/drifted frame
 // is consumed is DFDB itself, which opts *out* of homing (`frameRelative`) and
 // restores the FB's L–R drift in place — see the block223 step. (`zbls`, an
@@ -187,8 +187,8 @@ const BLOCK_COST_MODEL: MoveCostModel = {
 const LL_AUF: MoveFamily[] = ["U"];
 
 // Dual-CN default orientation set (SPEC "Recommended lookahead defaults" / DESIGN
-// "Color neutrality"): the 8 orientations that keep the U/D-axis colour pair on
-// the D axis — either of the two opposite bottom colours (`z2` flips them), times
+// "Color neutrality"): the 8 orientations that keep the U/D-axis color pair on
+// the D axis — either of the two opposite bottom colors (`z2` flips them), times
 // the 4 front-face rotations (`y`). The runner races each through block223 and
 // commits to the cheapest first block (block search is fast enough to make racing
 // all 8 cheap). Fully overridable per solve via `settings.colorNeutrality`.
