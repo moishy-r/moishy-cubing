@@ -3,6 +3,38 @@
 Conventions and traps that aren't obvious from the code. For what the project _is_, see
 [README.md](./README.md); for why it's built this way, [DESIGN.md](./DESIGN.md).
 
+## Packages and What Belongs Where
+
+Dependency order is **`cubing-core` → `algsets` → `apb`**; nothing may point back up.
+
+- **`@moishy/cubing-core`** — cube state, notation, MCC cost models, the search engines, and the
+  Step/Strategy/Phase runner. Knows nothing about any method.
+- **`@moishy/algsets`** — algorithm case data plus `defineAlgSet`/validation. Owns the `AlgSet`
+  type, which is why the `AlgSet` → `CaseLookup` adapters cannot live in cubing-core (that would
+  cycle).
+- **`@moishy/apb`** — the APB method. Pure configuration on top of the other two.
+
+`apb`'s public surface is deliberately 10 symbols. `src/geometry.ts` (goal predicates, recognition
+signatures, lookup builders) and `src/pruning.ts` (pattern databases) are internal — much of it is
+generic and would serve other methods, but it is not published from a _method_ package. See
+[the API-surface entry in CHANGELOG.md](./CHANGELOG.md).
+
+## The Demo, and Testing Every Setting
+
+`docs/apb-demo/index.html` generates its whole options form from `apbDefinition` at runtime, so a
+Step/Strategy/Replacement/Extra **`label` in `apb.ts` is what the site displays** — fix labels
+there, not in the HTML. The solve runs in `solver.worker.js`; `moveCostModel` cannot cross the
+worker boundary (structured clone drops its `cost` method), so the page sends a description and the
+worker rebuilds it.
+
+Two things that look like bugs when sweeping the settings space and are not:
+
+- **Two enabled `force`-mode Replacements with overlapping regions throw `SettingsError`** — by
+  design. `ocllPll` and `collEpll` both cover `[zbll]`, so enabling both in force mode is a hard
+  conflict. Sweep them one at a time, or use `compete`.
+- **The `oll` extra fires on ~0 random scrambles.** Its boundary trigger wants F2L already solved,
+  which in APB only happens for last-layer-only inputs. There is a test covering that case.
+
 ## Before You Finish
 
 ```sh
