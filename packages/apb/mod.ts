@@ -14,9 +14,9 @@
  * for (const seg of res.segments) console.log(seg.unitId, seg.strategyId);
  * ```
  *
- * Beta: the solver is verified end to end — every algset is audited against the
- * lookup it is used with, and 540 solves across every replacement and extra all
- * completed — but the public API is not frozen until 1.0.
+ * Pre-1.0: the solver is verified end to end — every algset is audited against
+ * the lookup it is used with, and 540 solves across every replacement and extra
+ * all completed — but the public API is not frozen until 1.0.
  *
  * This package is also the reference implementation of "how to add a method" —
  * copying its shape is the recipe for a `@moishy/cfop`, `@moishy/roux`, etc.
@@ -28,7 +28,7 @@
 import { Method, VERSION as CUBING_CORE_VERSION } from "@moishy/cubing-core";
 import { apbDefinition } from "./src/apb.ts";
 
-export const VERSION = "0.2.1";
+export const VERSION = "0.2.2";
 export const CUBING_CORE_VERSION_USED = CUBING_CORE_VERSION;
 
 export { apbDefinition } from "./src/apb.ts";
