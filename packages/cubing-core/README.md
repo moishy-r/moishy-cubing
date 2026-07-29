@@ -115,6 +115,7 @@ Full walkthrough:
 - [Adding a Method](https://github.com/moishy-r/moishy-cubing/blob/main/guides/adding-a-method.md)
 - [DESIGN.md](https://github.com/moishy-r/moishy-cubing/blob/main/DESIGN.md) — the architecture and
   the reasoning behind it
+- [CHANGELOG.md](https://github.com/moishy-r/moishy-cubing/blob/main/CHANGELOG.md) — release history
 
 ## License
 

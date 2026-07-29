@@ -13,9 +13,10 @@ deno add jsr:@moishy/apb    # Deno — https://jsr.io/@moishy/apb
 npm  install @moishy/apb    # Node — https://www.npmjs.com/package/@moishy/apb
 ```
 
-> **Beta.** The solver is verified end to end: every algset is audited against the lookup it is used
-> with, and 540 solves across every replacement and extra all completed. What is not yet frozen is
-> the public API — that happens at 1.0.
+> **Pre-1.0.** The solver is verified end to end — every algset is audited against the lookup it is
+> used with, and 540 solves across every replacement and extra all completed. What is not frozen yet
+> is the public API; it settles at 1.0. See the
+> [changelog](https://github.com/moishy-r/moishy-cubing/blob/main/CHANGELOG.md).
 
 ## Use
 
@@ -123,6 +124,7 @@ algsets. To build your own method, read that file as a template — see
   spec, step by step
 - [Adding a Method](https://github.com/moishy-r/moishy-cubing/blob/main/guides/adding-a-method.md) —
   this package is the reference implementation
+- [CHANGELOG.md](https://github.com/moishy-r/moishy-cubing/blob/main/CHANGELOG.md) — release history
 
 ## License
 

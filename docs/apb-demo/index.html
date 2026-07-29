@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>APB Solver — Beta Demo</title>
+    <title>APB Solver — Interactive Demo</title>
     <!--
       BUILD: this page loads ./apb.bundle.js, a self-contained browser bundle of
       @moishy/apb + @moishy/cubing-core. To regenerate it after changing the
@@ -39,27 +39,16 @@
       font-size: 0.85rem;
       margin-top: 0;
     }
-    .beta-banner {
-      border: 1px solid #e0c000;
-      background: #fffbe6;
+    .notice {
+      border: 1px solid #cfd8e3;
+      background: #f6f8fa;
       border-radius: 6px;
       padding: 0.6rem 0.8rem;
       margin: 1rem 0;
       font-size: 0.9rem;
     }
-    .beta-banner strong {
-      color: #8a6d00;
-    }
-    .badge {
-      display: inline-block;
-      background: #8a6d00;
-      color: #fff;
-      font-size: 0.7rem;
-      font-weight: 700;
-      letter-spacing: 0.05em;
-      padding: 0.1rem 0.4rem;
-      border-radius: 4px;
-      vertical-align: middle;
+    .notice strong {
+      color: #24292f;
     }
     label {
       display: block;
@@ -223,19 +212,17 @@
     </style>
   </head>
   <body>
-    <h1>APB Solver <span class="badge">BETA</span></h1>
+    <h1>APB Solver</h1>
     <p
       class="sub">Interactive demo of <code>@moishy/apb</code> — the full solver config is exposed below.</p>
 
-    <div class="beta-banner">
-    <strong>⚠ Beta software.</strong> This solver is a work in progress and some algorithm
-    sets are still being authored. It runs entirely in your browser, on a background thread —
-    heavier settings (especially <code>direct</code> blockbuilding) can take many seconds, but
-    the page stays responsive and you can cancel.
+    <div class="notice">
+    <strong>Everything runs in your browser</strong>, on a background thread — no server. Heavier
+    settings (especially <code>direct</code> blockbuilding) can take many seconds; the page stays
+    responsive and you can cancel.
     <br>
-    <strong>Note on Winter/Summer Variation:</strong> WV/SV are implemented, as an opt-in Extra
-    (off by default). They apply only when the last pair and last-layer orientation allow it, so
-    they fire on a minority of scrambles.
+    <strong>Winter/Summer Variation</strong> is an opt-in Extra, off by default. It applies only
+    when the last pair and last-layer orientation allow it, so it fires on a minority of scrambles.
   </div>
 
     <label for="scramble">Scramble</label>
@@ -259,8 +246,8 @@
     <div id="out"></div>
 
     <footer>
-    Runs entirely in your browser — no server. Built on
-    <code>@moishy/cubing-core</code> + <code>@moishy/algsets</code>. Beta demo.
+    Built on <code>@moishy/cubing-core</code> + <code>@moishy/algsets</code>.
+    <a href="https://github.com/moishy-r/moishy-cubing">Source on GitHub</a>.
   </footer>
 
     <script type="module">

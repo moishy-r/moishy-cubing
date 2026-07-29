@@ -96,6 +96,11 @@ one of them will be silently mis-recognized at solve time. The harness catches i
 Full brief, including per-set conventions and sourcing notes:
 [AUTHORING.md](https://github.com/moishy-r/moishy-cubing/blob/main/packages/algsets/AUTHORING.md).
 
+## Changelog
+
+[CHANGELOG.md](https://github.com/moishy-r/moishy-cubing/blob/main/CHANGELOG.md) — release history
+for all three packages.
+
 ## License
 
 MIT © Moshe Rosenberg. Algorithms themselves are community knowledge; where a source is known it is
