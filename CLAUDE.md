@@ -11,15 +11,16 @@ deno task ok        # check · lint · fmt --check · test  — must be green
 
 CI runs exactly this, plus a `deno publish` dry run and an npm build/install smoke test.
 
-If you changed anything under `packages/`, also rebuild the browser demo bundle, or
-cubing.moishy.dev silently keeps serving the old solver:
+You do **not** need to rebuild the demo bundle. `docs/apb-demo/apb.bundle.js` is gitignored and
+compiled at deploy time by `.github/workflows/pages.yml`, so cubing.moishy.dev always runs the
+solver that is on `main`. It used to be committed, and a change once shipped without a rebuild — the
+live site ran an old solver until someone noticed.
+
+To preview the page locally, build it once and serve `docs/`:
 
 ```sh
-deno task bundle    # then commit docs/apb-demo/apb.bundle.js
+deno task bundle
 ```
-
-Nothing enforces that — a commit once shipped solver changes without it and the live site was a
-version behind until someone noticed.
 
 ## Releasing: Bump Three Things, Not One
 
@@ -44,6 +45,11 @@ the Actions tab (choose a package, or `all`). **Don't publish by hand** — JSR 
 authenticate the workflow over OIDC, there are no tokens, and a manual publish burns the version
 number for the automated path. Neither registry lets you republish a version, so a re-run after a
 partial failure needs a fresh bump; npm is a separate job gated on JSR for exactly that reason.
+
+Both registries attach Sigstore provenance automatically — no flag. Don't be misled by JSR's API
+reporting `rekorLogId: null` and `hasProvenance: false`: the attestation is real and in the public
+transparency log (the publish step prints its `search.sigstore.dev` link, and the Rekor entry
+resolves), JSR just isn't surfacing it. Nothing to fix on our side; the score is 100 regardless.
 
 ## Wall-Clock Budgets Make Tests Machine-Dependent
 

@@ -1,0 +1,70 @@
+name: Deploy site
+
+# Builds and deploys cubing.moishy.dev from `docs/`.
+#
+# The demo bundle used to be a committed build artifact, which meant the site
+# could silently go stale: change solver code, forget `deno task bundle`, and the
+# live page kept running the old solver. That happened once and went unnoticed
+# until someone checked. Guarding it in CI proved unreliable — `deno bundle`
+# output shifts between Deno versions, so a rebuild-and-diff check failed
+# spuriously, and "packages changed but the bundle didn't" false-positives on
+# comment-only edits (minification strips them, so the bundle legitimately does
+# not change).
+#
+# Building here removes the failure mode instead of policing it: the deployed
+# bundle is compiled from whatever is on `main` at deploy time, so it cannot
+# disagree with the source. `docs/apb-demo/apb.bundle.js` is gitignored.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Never run two deploys at once; let a newer push supersede an in-flight one.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+
+      - name: Build the demo bundle
+        run: deno task bundle
+
+      - name: Fail if the bundle is missing or implausibly small
+        run: |
+          set -euo pipefail
+          f=docs/apb-demo/apb.bundle.js
+          test -f "$f" || { echo "::error::$f was not produced"; exit 1; }
+          size=$(wc -c < "$f")
+          echo "bundle: $size bytes"
+          # A real bundle is ~440KB. Anything tiny means the build silently
+          # produced a stub, which would deploy a broken page.
+          if [ "$size" -lt 100000 ]; then
+            echo "::error::bundle is only $size bytes — refusing to deploy"
+            exit 1
+          fi
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+
+      - id: deployment
+        uses: actions/deploy-pages@v4

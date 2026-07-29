@@ -71,14 +71,14 @@ deno task fmt     # format
 deno task lint    # lint
 ```
 
-Rebuild the browser demo bundle after changing solver code:
+`docs/` is the source for [cubing.moishy.dev](https://cubing.moishy.dev/apb-demo/): the demo page
+and a redirect from the site root. Its bundle is **built at deploy time** by
+`.github/workflows/pages.yml` and is gitignored, so the live site can never drift from the solver on
+`main`. To preview locally, build it once and serve `docs/`:
 
 ```sh
-deno bundle --platform browser --minify -o docs/apb-demo/apb.bundle.js docs/apb-demo/entry.ts
+deno task bundle
 ```
-
-`docs/` is the GitHub Pages source for [cubing.moishy.dev](https://cubing.moishy.dev/apb-demo/) — it
-holds only the demo page, its bundle, and a redirect from the site root.
 
 ## Releasing
 

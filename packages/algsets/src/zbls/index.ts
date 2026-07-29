@@ -1083,7 +1083,11 @@ export const zbls: AlgSet = defineAlgSet({
       ],
     },
     { id: "f2l-33-1", subset: "F2L 33", algs: ["U' R U' R' U2 R U' R'"] },
-    { id: "f2l-33-2", subset: "F2L 33", algs: ["R U M U' R' U r U' R'"] },
+    {
+      id: "f2l-33-2",
+      subset: "F2L 33",
+      algs: ["R U M U' R' U r U' R'", "U' R U' R' F' U' F R U2 R'"],
+    },
     {
       id: "f2l-33-3",
       subset: "F2L 33",
@@ -1111,7 +1115,6 @@ export const zbls: AlgSet = defineAlgSet({
       algs: ["U' F R' F' R2 U2' R2' F R F'", "D' r U' r' F2 U R' F R F2 D"],
     },
     { id: "f2l-34-1", subset: "F2L 34", algs: ["U R' D' R U' R' D R", "U' R' D' R U R' D R"] },
-    { id: "f2l-34-2", subset: "F2L 34", algs: ["U' R U' R' F' U' F R U2 R'"] },
     {
       id: "f2l-34-3",
       subset: "F2L 34",
