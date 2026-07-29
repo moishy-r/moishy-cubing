@@ -6,3 +6,7 @@ packages/*/npm/
 
 # Editor / misc
 *.log
+
+# Generated demo bundle — built at deploy time by .github/workflows/pages.yml,
+# so it is never committed and can never go stale against the source.
+docs/apb-demo/apb.bundle.js

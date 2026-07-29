@@ -73,7 +73,7 @@
 // `homeStart` is a no-op from brPair onward. The one place a rotated/drifted frame
 // is consumed is DFDB itself, which opts *out* of homing (`frameRelative`) and
 // restores the FB's L–R drift in place — see the block223 step. (`zbls`, an
-// opt-in extra, is now complete: all 302 cases recognize and solve, after 32 of
+// opt-in extra, is now complete: all 301 cases recognize and solve, after 32 of
 // them were conjugated from the BR/FL slots they had been authored against onto
 // APB's FR slot — see the note above zblsExtra.)
 
@@ -815,7 +815,11 @@ const ollExtra = {
 // being defined early, they won AUF-coset signature entries belonging to genuine FR
 // cases, hijacking 27 of them into a lookup hit whose alg could not solve the state.
 // Conjugating the 32 onto FR (24 came out rotation-free, e.g. `y U' L' U L` ->
-// `U' F' U F`) fixes both halves at once: all 302 cases now recognize and solve.
+// `U' F' U F`) fixes both halves at once: all cases now recognize and solve. (The set
+// is 301, not 302: f2l-34-2 was the same ZBLS case as f2l-33-2 — the two differ only in
+// last-layer corner state, which ZBLS does not touch, so each one's alg solved the
+// other's state and only the first-defined was ever reachable. Merged, keeping both
+// algs as variants of f2l-33-2 so the cost race can still pick either.)
 // Guarded by "zbls: every case targets the FR slot, and is recognized and solved"
 // in apb_test.ts, which asserts the slot invariant *and* end-to-end reachability.
 const zblsExtra = {
