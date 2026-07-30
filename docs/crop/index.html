@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0e1014">
+<title>CROP — Random Orientation Trainer</title>
+<meta name="description" content="A speedcubing timer that prompts a random starting cube orientation after every solve. Full 24, x2y, or your own fixed set.">
+<link rel="icon" href="icons/icon32.png">
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="crop-overlay.css">
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-logo" aria-hidden="true"></span>
+    <span class="brand-name">CROP</span>
+    <span class="brand-sub">random orientation trainer</span>
+  </div>
+  <button class="ghost" id="btnPanel" type="button" aria-expanded="false" aria-controls="panel">Settings</button>
+</header>
+
+<main class="stage">
+  <p class="scramble" id="scramble">—</p>
+
+  <div class="lcd" id="lcd" data-state="idle" aria-live="off">0.00</div>
+
+  <p class="cue" id="cue">Hold <kbd>space</kbd> to start</p>
+
+  <div class="stats" id="stats">
+    <div class="stat"><span class="stat-k">solves</span><span class="stat-v" id="stCount">0</span></div>
+    <div class="stat"><span class="stat-k">best</span><span class="stat-v" id="stBest">—</span></div>
+    <div class="stat"><span class="stat-k">ao5</span><span class="stat-v" id="stAo5">—</span></div>
+    <div class="stat"><span class="stat-k">ao12</span><span class="stat-v" id="stAo12">—</span></div>
+  </div>
+</main>
+
+<aside class="panel" id="panel" hidden>
+  <div class="panel-head">
+    <h2>Settings</h2>
+    <button class="ghost" id="btnClose" type="button" aria-label="Close settings">Done</button>
+  </div>
+
+  <div class="field">
+    <div class="field-label">Orientation pool</div>
+    <div class="modes" id="modes"></div>
+  </div>
+
+  <div class="field" id="fixedWrap" hidden>
+    <div class="field-label row">
+      <span>Pairs — top face, then front face</span>
+      <span class="grow"></span>
+      <button class="mini" id="btnDefault" type="button">Default 4</button>
+      <button class="mini" id="btnNone" type="button">None</button>
+    </div>
+    <div id="picker"></div>
+  </div>
+
+  <div class="field">
+    <div class="field-label">Prompt position</div>
+    <div class="seg" id="positions"></div>
+  </div>
+
+  <div class="field">
+    <div class="field-label">Inspection</div>
+    <div class="seg" id="inspection"></div>
+  </div>
+
+  <div class="field">
+    <label class="check">
+      <input type="checkbox" id="optEnabled">
+      <span>Show the orientation prompt</span>
+    </label>
+    <label class="check">
+      <input type="checkbox" id="optScramble">
+      <span>Show a random scramble</span>
+    </label>
+  </div>
+
+  <div class="field">
+    <div class="field-label row">
+      <span id="poolCount"></span>
+      <span class="grow"></span>
+      <button class="mini" id="btnReset" type="button">Clear session</button>
+    </div>
+  </div>
+
+  <p class="foot">
+    Settings and times are kept in this browser only. Nothing is uploaded.
+  </p>
+</aside>
+
+<script src="crop-core.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
