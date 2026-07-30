@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>CROP settings</title>
+<!-- the real overlay stylesheet, so the preview below is pixel-identical to
+     what gets injected into csTimer -->
+<link rel="stylesheet" href="crop-overlay.css">
+<style>
+  :root {
+    --bg: #101216;
+    --panel: #191c22;
+    --line: #2a2f38;
+    --ink: #eef1f6;
+    --muted: #8b93a1;
+    --accent: #4c8dff;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    width: 328px;
+    background: var(--bg);
+    color: var(--ink);
+    font: 13px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  header {
+    display: flex; align-items: center; gap: 9px;
+    padding: 13px 14px 11px;
+    border-bottom: 1px solid var(--line);
+  }
+  header h1 { margin: 0; font-size: 13px; font-weight: 700; letter-spacing: .02em; }
+  header .sub { margin: 0; font-size: 11px; color: var(--muted); }
+  .logo {
+    width: 22px; height: 22px; border-radius: 5px; flex: 0 0 auto;
+    background:
+      linear-gradient(135deg, #f4f4f4 0 50%, #00a651 50% 100%);
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,.4);
+  }
+  .spacer { flex: 1; }
+
+  /* on/off switch */
+  .switch { position: relative; display: inline-block; width: 38px; height: 21px; flex: 0 0 auto; }
+  .switch input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+  .switch .track {
+    position: absolute; inset: 0; border-radius: 999px;
+    background: #333944; transition: background 120ms ease; pointer-events: none;
+  }
+  .switch .track::after {
+    content: ""; position: absolute; top: 3px; left: 3px;
+    width: 15px; height: 15px; border-radius: 50%; background: #fff;
+    transition: transform 120ms ease;
+  }
+  .switch input:checked + .track { background: var(--accent); }
+  .switch input:checked + .track::after { transform: translateX(17px); }
+  .switch input:focus-visible + .track { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  section { padding: 13px 14px; border-bottom: 1px solid var(--line); }
+  section:last-of-type { border-bottom: 0; }
+  .label {
+    font-size: 10px; font-weight: 700; letter-spacing: .13em;
+    text-transform: uppercase; color: var(--muted); margin-bottom: 9px;
+  }
+
+  .modes { display: flex; flex-direction: column; gap: 6px; }
+  .mode {
+    display: flex; align-items: baseline; gap: 9px;
+    padding: 8px 10px; border: 1px solid var(--line); border-radius: 9px;
+    background: var(--panel); cursor: pointer;
+  }
+  .mode:hover { border-color: #39404c; }
+  .mode input { margin: 0; accent-color: var(--accent); flex: 0 0 auto; }
+  .mode.on { border-color: var(--accent); background: #1b2432; }
+  .mode .name { font-weight: 650; }
+  .mode .blurb { font-size: 11px; color: var(--muted); }
+
+  .seg { display: flex; gap: 4px; }
+  .seg label {
+    flex: 1; text-align: center; padding: 6px 0; cursor: pointer;
+    border: 1px solid var(--line); border-radius: 7px; background: var(--panel);
+    font-size: 11px; color: var(--muted);
+  }
+  .seg label.on { border-color: var(--accent); color: var(--ink); background: #1b2432; }
+  .seg input { display: none; }
+
+  #fixedWrap[hidden] { display: none; }
+  .rowbar { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .rowbar .label { margin: 0; }
+  .rowbar .spacer { flex: 1; }
+  .mini {
+    padding: 4px 8px; font-size: 10.5px; cursor: pointer;
+    border: 1px solid var(--line); border-radius: 6px;
+    background: var(--panel); color: var(--muted);
+  }
+  .mini:hover { color: var(--ink); border-color: #39404c; }
+
+  /* pair picker (markup produced by CROP.renderPairPicker) */
+  .crop-pp-group { margin-bottom: 9px; }
+  .crop-pp-head {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 11px; font-weight: 650; color: var(--muted); margin-bottom: 5px;
+  }
+  .crop-pp-dot {
+    width: 11px; height: 11px; border-radius: 3px; display: inline-block;
+    box-shadow: inset 0 0 0 1px rgba(0,0,0,.45);
+  }
+  .crop-pp-dot-sm { width: 9px; height: 9px; border-radius: 2px; }
+  .crop-pp-chips { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; }
+  .crop-pp-chip {
+    display: flex; align-items: center; gap: 6px;
+    padding: 5px 7px; border: 1px solid var(--line); border-radius: 7px;
+    background: var(--panel); cursor: pointer; font-size: 11.5px; color: var(--muted);
+  }
+  .crop-pp-chip input { display: none; }
+  .crop-pp-chip.crop-pp-on { border-color: var(--accent); background: #1b2432; color: var(--ink); }
+
+  footer {
+    display: flex; align-items: center; gap: 9px;
+    padding: 10px 14px; border-top: 1px solid var(--line); background: #0c0e12;
+  }
+  #poolCount { font-size: 11px; color: var(--muted); }
+  #poolCount b { color: var(--ink); }
+  #warn { color: #ffb02e; font-size: 11px; }
+
+  /* live preview of the actual overlay card, scaled down.
+     The card renders inline via createOverlay({container}) — see .crop-inline
+     in crop-overlay.css. */
+  #previewBox {
+    margin-top: 4px; padding: 10px; border: 1px dashed var(--line);
+    border-radius: 9px; display: flex; justify-content: center; min-height: 96px;
+    align-items: center; cursor: pointer;
+  }
+  #previewBox .crop-card { transform: scale(.78); transform-origin: center; }
+
+  /* connection status */
+  .status {
+    display: flex; align-items: center; gap: 7px;
+    padding: 8px 10px; border-radius: 8px; font-size: 11.5px;
+    background: #14171d; border: 1px solid var(--line);
+  }
+  .status .dot {
+    width: 7px; height: 7px; border-radius: 50%; flex: 0 0 auto; background: var(--muted);
+  }
+  .status.good .dot { background: #35d07f; }
+  .status.warn .dot { background: #ffb02e; }
+  .status.good { border-color: #24503c; }
+  .status.warn { border-color: #4d3a16; }
+  .status .txt { color: var(--muted); }
+  .status.good .txt, .status.warn .txt { color: var(--ink); }
+  #btnTest { margin-left: auto; flex: 0 0 auto; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo" aria-hidden="true"></div>
+  <div>
+    <h1>CROP</h1>
+    <p class="sub">Random orientation after each solve</p>
+  </div>
+  <div class="spacer"></div>
+  <span id="onoff" class="sub" style="margin-right:2px"></span>
+  <label class="switch" title="Enable on cstimer.net">
+    <input type="checkbox" id="enabled">
+    <span class="track"></span>
+  </label>
+</header>
+
+<section>
+  <div class="status" id="status">
+    <span class="dot"></span>
+    <span class="txt" id="statusTxt">checking…</span>
+    <button class="mini" id="btnTest" type="button">Test</button>
+  </div>
+</section>
+
+<section>
+  <div class="label">Orientation pool</div>
+  <div class="modes" id="modes"></div>
+</section>
+
+<section id="fixedWrap" hidden>
+  <div class="rowbar">
+    <div class="label">Pairs — top face, then front face</div>
+    <div class="spacer"></div>
+    <button class="mini" id="btnDefault" type="button">Default 4</button>
+    <button class="mini" id="btnNone" type="button">None</button>
+  </div>
+  <div id="picker"></div>
+</section>
+
+<section>
+  <div class="label">Prompt position</div>
+  <div class="seg" id="positions"></div>
+  <div id="previewBox"></div>
+</section>
+
+<footer>
+  <span id="poolCount"></span>
+  <span class="spacer" style="flex:1"></span>
+  <span id="warn"></span>
+</footer>
+
+<script src="crop-core.js"></script>
+<script src="popup.js"></script>
+</body>
+</html>

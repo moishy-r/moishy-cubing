@@ -1,0 +1,37 @@
+{
+  "manifest_version": 3,
+  "name": "CROP — Random Orientation Prompt for csTimer",
+  "version": "1.0.0",
+  "description": "After every csTimer solve, prompts a random starting cube orientation. Full 24, x2y, or your own fixed set.",
+  "homepage_url": "https://cubing.moishy.dev/crop/",
+  "permissions": ["storage"],
+  "action": {
+    "default_title": "CROP settings",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://cstimer.net/*",
+        "*://*.cstimer.net/*",
+        "*://cstimer.github.io/*"
+      ],
+      "js": ["crop-core.js", "content.js"],
+      "css": ["crop-overlay.css"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ]
+}

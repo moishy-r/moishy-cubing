@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>CROP — detector test harness</title>
+<!-- Loads the REAL extension files (not copies) against a DOM replica of
+     csTimer's verified structure, so the detector is exercised as shipped. -->
+<link rel="stylesheet" href="../core/crop-overlay.css">
+<style>
+  body { margin:0; padding:24px; background:#0e1014; color:#eef1f6;
+         font:13px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+  h1 { font-size:15px; margin:0 0 4px; }
+  p.sub { margin:0 0 18px; color:#8b93a1; font-size:12px; }
+  #mock { border:1px dashed #2a2f38; border-radius:10px; padding:14px; margin-bottom:18px; }
+  #lcd { font-size:40px; font-variant-numeric:tabular-nums; }
+  .insplabel, .difflabel { display:inline; font-size:14px; color:#8b93a1; }
+  #scrambleTxt { font-family:ui-monospace, Menlo, monospace; color:#8b93a1; font-size:12px; }
+  #avgstr { color:#8b93a1; font-size:12px; }
+  #out { font-family:ui-monospace, Menlo, monospace; font-size:12px; white-space:pre-wrap; }
+  .pass { color:#35d07f; } .fail { color:#ff4d4d; } .note { color:#8b93a1; }
+  #summary { margin-top:14px; font-weight:700; }
+</style>
+</head>
+<body>
+
+<h1>CROP detector test harness</h1>
+<p class="sub">Runs the shipped <code>crop-core.js</code> + <code>content.js</code> against a replica of csTimer's DOM.</p>
+
+<!-- Replica of the structure verified live on cstimer.net -->
+<div id="mock">
+  <table id="timer"><tbody><tr><td id="container">
+    <div id="lcd" class="activetimer insp">0.<span>00</span><div class="insplabel"></div><div class="difflabel"></div></div>
+    <textarea id="inputTimer"></textarea>
+    <div id="avgstr">ao12: 24.86 ao50: 24.30</div>
+  </td></tr></tbody></table>
+  <div id="scrambleDiv"><span id="scrambleTxt">R U R' U' F2 L D2 B</span></div>
+</div>
+
+<div id="out"></div>
+<div id="summary"></div>
+
+<script>
+/* chrome.storage shim so content.js runs outside an extension context.
+   This is a REAL in-memory store that dispatches onChanged, because the content
+   script writes its own _status heartbeat on every prompt — if that write were
+   treated as a settings change it would hide the prompt it just showed. A
+   no-op shim would hide that class of bug. */
+window.__store = {};
+window.chrome = (function () {
+  var listeners = [];
+  return {
+    storage: {
+      local: {
+        get: function (keys, cb) {
+          var out = {};
+          if (keys === null || keys === undefined) out = Object.assign({}, window.__store);
+          else if (typeof keys === 'string') { if (keys in window.__store) out[keys] = window.__store[keys]; }
+          else out = Object.assign({}, window.__store);
+          setTimeout(function () { cb(out); }, 0);
+        },
+        set: function (obj, cb) {
+          var changes = {};
+          Object.keys(obj).forEach(function (k) {
+            changes[k] = { oldValue: window.__store[k], newValue: obj[k] };
+            window.__store[k] = obj[k];
+          });
+          setTimeout(function () {
+            listeners.forEach(function (l) { l(changes, 'local'); });
+            if (cb) cb();
+          }, 0);
+        }
+      },
+      onChanged: { addListener: function (fn) { listeners.push(fn); } }
+    }
+  };
+})();
+</script>
+<script src="../core/crop-core.js"></script>
+<script src="../extension/content.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var out = document.getElementById('out');
+  var lcd = document.getElementById('lcd');
+  var span = lcd.querySelector('span');
+  var diff = lcd.querySelector('.difflabel');
+  var insp = lcd.querySelector('.insplabel');
+  var scr = document.getElementById('scrambleTxt');
+  var avg = document.getElementById('avgstr');
+
+  var results = [];
+  function ok(pass, msg, detail) {
+    results.push({ pass: !!pass, msg: msg, detail: detail || '' });
+    var d = document.createElement('div');
+    d.className = pass ? 'pass' : 'fail';
+    d.textContent = (pass ? '  ok  ' : 'FAIL  ') + msg + (detail ? '   [' + detail + ']' : '');
+    out.appendChild(d);
+  }
+  function note(msg) {
+    var d = document.createElement('div');
+    d.className = 'note';
+    d.textContent = '· ' + msg;
+    out.appendChild(d);
+  }
+  var sleep = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+
+  /* write the display the way csTimer does: text node + <span> for centis */
+  function paint(text) {
+    var m = /^(.*\.)(\d+)$/.exec(text);
+    if (m) { lcd.firstChild.nodeValue = m[1]; span.textContent = m[2]; }
+    else { lcd.firstChild.nodeValue = text; span.textContent = ''; }
+  }
+
+  function overlayEl() { return document.querySelector('.crop-overlay'); }
+  function visible() {
+    var o = overlayEl();
+    return !!(o && o.classList.contains('crop-visible'));
+  }
+  function shownColors() {
+    var n = document.querySelectorAll('.crop-overlay .crop-color');
+    return n.length === 2 ? (n[0].textContent + '/' + n[1].textContent) : '';
+  }
+
+  /* a fake solve: rapid repaints, then a settled time */
+  async function fakeSolve(finalText, ms) {
+    ms = ms || 700;
+    var t0 = performance.now();
+    while (performance.now() - t0 < ms) {
+      paint(((performance.now() - t0) / 1000).toFixed(2));
+      await sleep(16);
+    }
+    paint(finalText);
+  }
+
+  async function cooldown() { paint('0.00'); await sleep(1100); }
+
+  /* dispatch a space keydown the way a real key press would */
+  function key() {
+    var ev = new KeyboardEvent('keydown', {
+      key: ' ', code: 'Space', keyCode: 32, bubbles: true, cancelable: true
+    });
+    document.body.dispatchEvent(ev);
+    return ev;
+  }
+
+  async function run() {
+    await sleep(300);   // let content.js attach
+
+    /* -- 1. attaches to #lcd ------------------------------------------------ */
+    var st = window.CROP_DEBUG && window.CROP_DEBUG.state();
+    ok(!!st, 'content.js booted and exposed its state');
+    ok(st && st.poolSize === 24, 'default pool is the full 24', st && ('poolSize=' + st.poolSize));
+
+    /* -- 2. inspection tick (1/sec) must NOT count as running --------------- */
+    for (var i = 15; i >= 12; i--) { insp.textContent = String(i); paint(String(i)); await sleep(350); }
+    await sleep(600);
+    ok(!visible(), 'slow inspection ticks do not trigger a prompt');
+    insp.textContent = '';
+    await cooldown();
+
+    /* -- 3. #avgstr churn must NOT trigger anything (proves we watch #lcd) -- */
+    for (var j = 0; j < 8; j++) { avg.textContent = 'ao12: 24.' + j + ' ao50: 24.30'; await sleep(20); }
+    await sleep(600);
+    ok(!visible(), '#avgstr (rolling averages) churn does not trigger a prompt');
+    await cooldown();
+
+    /* -- 4. a real solve fires the prompt ---------------------------------- */
+    var before = { h: document.body.scrollHeight, rect: lcd.getBoundingClientRect().top };
+    document.body.focus && document.body.focus();
+    var activeBefore = document.activeElement;
+
+    await fakeSolve('19.47');
+    await sleep(600);
+    ok(visible(), 'running -> stopped fires the prompt', 'showed ' + shownColors());
+
+    /* -- 5. focus and layout are untouched --------------------------------- */
+    ok(document.activeElement === activeBefore, 'focus did not move when the overlay appeared',
+       'activeElement=' + (document.activeElement && document.activeElement.tagName));
+    ok(document.body.scrollHeight === before.h && lcd.getBoundingClientRect().top === before.rect,
+       'no layout shift of the host page');
+
+    /* -- 6. defensive CSS -------------------------------------------------- */
+    var cs = getComputedStyle(overlayEl());
+    ok(cs.position === 'fixed', 'overlay is position:fixed', cs.position);
+    ok(cs.zIndex === '999999', 'overlay z-index is 999999', cs.zIndex);
+    ok(cs.pointerEvents === 'none', 'overlay wrapper is pointer-events:none', cs.pointerEvents);
+    ok(getComputedStyle(document.querySelector('.crop-card')).pointerEvents === 'none',
+       'card is pointer-events:none too');
+    ok(document.querySelectorAll('.crop-overlay [tabindex], .crop-overlay button, .crop-overlay input, .crop-overlay a').length === 0,
+       'overlay contains nothing focusable');
+    if (typeof document.elementFromPoint === 'function') {
+      var hit = document.elementFromPoint(window.innerWidth / 2, window.innerHeight / 2);
+      ok(!hit || !hit.closest('.crop-overlay'),
+         'clicks at the overlay centre land on the page underneath',
+         hit ? hit.tagName + '.' + hit.className : 'null');
+    } else {
+      note('hit-testing skipped (no elementFromPoint in this runtime)');
+    }
+
+    /* -- 7. space dismisses it, and is NOT swallowed ----------------------- */
+    var ev = new KeyboardEvent('keydown', { key: ' ', code: 'Space', keyCode: 32, bubbles: true, cancelable: true });
+    var reachedWindow = false;
+    var probe = function () { reachedWindow = true; };
+    window.addEventListener('keydown', probe);
+    document.body.dispatchEvent(ev);
+    window.removeEventListener('keydown', probe);
+
+    ok(!visible(), 'space keydown dismisses the prompt');
+    ok(ev.defaultPrevented === false, 'CROP did not call preventDefault on the space bar');
+    ok(reachedWindow, 'the space keydown still propagated (csTimer would receive it)');
+
+    /* -- 8. scramble accelerator beats the settle window ------------------- */
+    /* csTimer's real order on a stop: record the time, regenerate the scramble,
+       paint the final display. So the scramble changes while the detector still
+       believes the timer is running — that is the accelerator's trigger. */
+    await cooldown();
+    await fakeSolve('21.08', 600);                 // ends painting, as csTimer does
+    scr.textContent = "D2 F R2 U' L B2 R";         // regenerated on record
+    await sleep(120);                              // well under the 380ms settle
+    ok(visible(), 'a new scramble at the stop fires the prompt before the 380ms settle');
+
+    /* -- 9. a manual scramble change while idle must NOT fire -------------- */
+    var ev2 = new KeyboardEvent('keydown', { key: ' ', code: 'Space', keyCode: 32, bubbles: true, cancelable: true });
+    document.body.dispatchEvent(ev2);
+    await cooldown();
+    scr.textContent = "U R2 F' L D B2";
+    await sleep(500);
+    ok(!visible(), 'changing the scramble while idle does not fire a prompt');
+
+    /* -- 10. difflabel does not corrupt the reading ------------------------ */
+    await cooldown();
+    diff.textContent = '(-7.24)';                  // csTimer's +/- vs previous
+    await fakeSolve('18.02');
+    await sleep(600);
+    ok(visible(), 'a solve is still detected while .difflabel is populated');
+    diff.textContent = '';
+
+    /* -- 11. trailing repaints after the stop must not kill the prompt ------ */
+    /* Regression guard: csTimer redraws the display a few more times right
+       after recording (penalty/diff redraws). Those must not be mistaken for a
+       new solve starting, because hiding the prompt here would then collide
+       with the duplicate guard and the user would see nothing at all. */
+    await cooldown();
+    await fakeSolve('23.55');
+    await sleep(600);
+    ok(visible(), 'prompt is up before the trailing-repaint test');
+    for (var r = 0; r < 6; r++) { paint('23.5' + r); await sleep(15); }
+    await sleep(60);
+    ok(visible(), 'a burst of trailing repaints does not dismiss the prompt');
+
+    /* -- 12. the _status heartbeat must not dismiss the prompt -------------- */
+    /* The content script writes _status to storage on every fire so the popup
+       can report "N solves detected". That write echoes back through
+       storage.onChanged; if the listener treated it as a settings change it
+       would hide the prompt roughly one tick after showing it. */
+    await sleep(250);
+    ok(visible(), 'prompt survives its own _status write to storage');
+    ok(window.__store._status && window.__store._status.solvesSeen >= 1,
+       'status heartbeat records the solve count for the popup',
+       window.__store._status ? ('solvesSeen=' + window.__store._status.solvesSeen +
+                                 ' el=' + window.__store._status.el) : 'missing');
+
+    /* -- 13. a real settings change DOES clear a stale prompt --------------- */
+    chrome.storage.local.set({ position: 'bottom' });
+    await sleep(200);
+    ok(!visible(), 'changing a real setting clears the on-screen prompt');
+
+    /* -- 14. the popup Test button path ------------------------------------ */
+    chrome.storage.local.set({ demoAt: Date.now() });
+    await sleep(250);
+    ok(visible(), 'the popup Test button (demoAt) fires a prompt on demand');
+    var beforeCount = window.__store._status.solvesSeen;
+    chrome.storage.local.set({ demoAt: Date.now() + 1 });
+    await sleep(250);
+    ok(window.__store._status.solvesSeen === beforeCount,
+       'a test prompt is not counted as a detected solve',
+       'solvesSeen=' + window.__store._status.solvesSeen);
+
+    /* -- 15. paused means paused ------------------------------------------- */
+    key(); // dismiss
+    chrome.storage.local.set({ enabled: false });
+    await sleep(200);
+    await cooldown();
+    await fakeSolve('17.11');
+    await sleep(600);
+    ok(!visible(), 'no prompt while paused');
+    ok(window.__store._status.solvesSeen > beforeCount,
+       'but the solve is still counted, so the popup can say "detected but paused"',
+       'solvesSeen=' + window.__store._status.solvesSeen);
+    chrome.storage.local.set({ enabled: true });
+    await sleep(200);
+
+    /* -- 16. every prompt is a legal orientation --------------------------- */
+    var seen = {}, bad = 0;
+    for (var k = 0; k < 40; k++) {
+      var o = CROP.pick({ mode: 'full' });
+      if (!CROP.isValidPair(o.top, o.front)) bad++;
+      seen[o.top + '/' + o.front] = 1;
+    }
+    ok(bad === 0, '40 consecutive picks are all legal orientations');
+    note(Object.keys(seen).length + ' distinct orientations seen in 40 picks');
+
+    /* -- summary ----------------------------------------------------------- */
+    var fails = results.filter(function (r) { return !r.pass; });
+    var s = document.getElementById('summary');
+    s.className = fails.length ? 'fail' : 'pass';
+    s.textContent = fails.length
+      ? fails.length + ' of ' + results.length + ' checks FAILED'
+      : 'all ' + results.length + ' checks passed';
+    window.__RESULTS = { total: results.length, failed: fails.length,
+                         fails: fails.map(function (r) { return r.msg + ' ' + r.detail; }) };
+  }
+
+  run().catch(function (e) {
+    ok(false, 'harness threw: ' + (e && e.message));
+    window.__RESULTS = { total: results.length, failed: 999, fails: [String(e && e.stack || e)] };
+  });
+})();
+</script>
+</body>
+</html>
