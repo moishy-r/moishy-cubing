@@ -196,7 +196,15 @@ export interface SolveOptions {
   timeBudgetMs?: number;
 }
 
-/** Thrown when settings are structurally invalid (e.g. conflicting force regions). */
+/**
+ * Thrown when settings are structurally invalid (e.g. conflicting force regions),
+ * or when a `force`-mode unit cannot solve the state it was forced onto.
+ *
+ * The second case is a solve-time error rather than a silent fallback on purpose:
+ * a forced unit replaces its region outright, so solving that region with the
+ * core Steps the caller excluded would report a success they cannot use. See
+ * `walkOne`.
+ */
 export class SettingsError extends Error {
   constructor(message: string) {
     super(message);
@@ -894,8 +902,9 @@ interface WalkStep {
  */
 function walkOne(i: number, state: CubeState, prevMove: Move | null, ctx: RunCtx): WalkStep | null {
   // 1. Force blocks starting at i (replacements always; boundary extras if their
-  //    trigger passes). The cheapest that actually produces a result wins — a
-  //    force block whose case-table can't match simply drops out (see DESIGN).
+  //    trigger passes). The cheapest that actually produces a result wins. If a
+  //    force block is active here and NONE produce a result, that is an error, not
+  //    a fallback — see the throw below.
   const forceHere = ctx.regionAlts.filter((a) =>
     a.mode === "force" && a.fromIdx === i &&
     (a.boundary ? a.boundary.test(state, { prevMove }) : true)
@@ -922,7 +931,24 @@ function walkOne(i: number, state: CubeState, prevMove: Move | null, ctx: RunCtx
         nextIdx: best.alt.toIdx + 1,
       };
     }
-    // No force block produced a result — fall through to normal solving.
+    // Every active force block failed to produce a candidate. Falling through to
+    // the region's normal solving would defeat the entire point of `force`: the
+    // mode exists for the curriculum case (see /DESIGN.md "Replacements" — `ZBLL`
+    // -> `OCLL+PLL` for someone who does not know full ZBLL), so quietly solving
+    // the region with the very Step the caller excluded hands them a solution they
+    // cannot execute, and reports success.
+    //
+    // It also hides data defects. Two shipped this way: `ocllPll` could not solve
+    // one OCLL class and `collEpll` could not solve a Z-perm last layer, and
+    // because both fell through to the core `zbll` step every solve still verified
+    // — nothing surfaced until the case tables were audited directly.
+    throw new SettingsError(
+      `force-mode ${forceHere.length > 1 ? "units" : forceHere[0].kind} ` +
+        `${forceHere.map((a) => JSON.stringify(a.id)).join(", ")} ` +
+        `produced no solution for the state at step ${JSON.stringify(ctx.def.steps[i].id)}. ` +
+        `A forced unit replaces its region outright, so there is no fallback: either its case ` +
+        `table does not cover this state (a data gap), or it should be enabled in "compete" mode.`,
+    );
   }
 
   // 2. Connected span of enabled compete region alternatives overlapping i.

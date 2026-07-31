@@ -21,7 +21,7 @@
   },
   "license": "MIT",
   "imports": {
-    "@moishy/cubing-core": "jsr:@moishy/cubing-core@^0.2.0"
+    "@moishy/cubing-core": "jsr:@moishy/cubing-core@^0.3.0"
   },
   "publish": {
     "exclude": [

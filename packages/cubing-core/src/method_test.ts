@@ -525,3 +525,56 @@ Deno.test("recommendedSettings apply by default and are overridable by the calle
   const overridden = await method.solve(SEXY, { stepOptions: { ll: { forceStrategy: "search" } } });
   assertEquals(overridden.segments[0].strategyId, "search");
 });
+
+// A force-mode unit whose case table cannot match must fail loudly. The runner
+// used to fall through to the region's normal solving, which defeats the point of
+// `force`: the mode exists for the curriculum case (ZBLL -> OCLL+PLL for someone
+// who does not know full ZBLL), so quietly solving the region with the very Step
+// the caller excluded hands back a solution they cannot execute and reports
+// success. It also hid three real data gaps in @moishy/algsets — every solve
+// still verified, so nothing surfaced until the case tables were audited.
+Deno.test("a force replacement that cannot solve its region throws, never falls back", async () => {
+  const steps: Step[] = [{
+    id: "s",
+    strategies: [{
+      id: "core",
+      phases: [algPhase("p", isSolved, [{
+        state: scrambledLL,
+        case: { id: "core", algs: [{ moves: parseAlg("U R U' R'") }] },
+      }])],
+    }],
+  }];
+  // The replacement's lookup only knows a state this solve never reaches.
+  const blind: Replacement = {
+    id: "blind",
+    region: ["s", "s"],
+    mode: "force",
+    strategies: [{
+      id: "blindS",
+      phases: [algPhase("p", isSolved, [{
+        state: st("F"),
+        case: { id: "nope", algs: [{ moves: parseAlg("F'") }] },
+      }])],
+    }],
+  };
+  const method = new Method({ id: "demo", steps, replacements: [blind] });
+
+  // Sanity: the core step alone solves this scramble, so a fallback would look
+  // like success — which is exactly the failure mode being guarded.
+  const baseline = await method.solve(SEXY);
+  assert(baseline.solved, "core step should solve the scramble on its own");
+
+  await assertRejects(
+    () => method.solve(SEXY, { replacements: { blind: { enabled: true, mode: "force" } } }),
+    SettingsError,
+    "produced no solution",
+  );
+
+  // In `compete` mode the same replacement is a no-op, not an error: it simply
+  // loses the race and the core steps solve the region.
+  const competed = await method.solve(SEXY, {
+    replacements: { blind: { enabled: true, mode: "compete" } },
+  });
+  assert(competed.solved, "compete mode must fall back to the core steps, not throw");
+  assertEquals(competed.segments.map((s) => s.unitId), ["s"]);
+});

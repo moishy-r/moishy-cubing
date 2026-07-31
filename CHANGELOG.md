@@ -6,7 +6,18 @@ is one file. Each entry lists the versions it shipped as.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are
 [semver](https://semver.org/) — on a `0.x` line, a **minor** bump is the breaking one.
 
-## Unreleased — `algsets@0.3.1` · `apb@0.2.3`
+## Unreleased — `cubing-core@0.3.0` · `algsets@0.3.1` · `apb@0.2.3`
+
+### Changed
+
+- **`@moishy/cubing-core`: a `force`-mode unit that cannot solve its region now throws
+  `SettingsError` instead of silently falling back to the core Steps.** The fallback defeated the
+  point of `force` — the mode exists for the curriculum case (`ZBLL` -> `OCLL+PLL` for someone who
+  does not know full ZBLL), so quietly solving the region with the very Step the caller excluded
+  handed them a solution they cannot execute and reported success. It also hid all three data gaps
+  below: every solve still verified, so nothing surfaced until the case tables were audited
+  directly. Enabling the unit in `compete` mode is the way to say "use it only if it helps"; that
+  path is unchanged and still falls back to the core Steps.
 
 ### Fixed
 
