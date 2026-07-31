@@ -1,5 +1,6 @@
 import { brPair as brPairSet } from "@moishy/algsets/br-pair";
 import { collEpll as collSet } from "@moishy/algsets/coll-epll";
+import { dfdb as dfdbSet } from "@moishy/algsets/dfdb";
 import { eodr as eodrSet } from "@moishy/algsets/eodr";
 import { frPair as frPairSet } from "@moishy/algsets/fr-pair";
 import { eoPair as eoPairSet } from "@moishy/algsets/eo-pair";
@@ -1164,4 +1165,312 @@ Deno.test("every algset resolves and solves through its production lookup", () =
   }
   assertEquals(broken, [], `algset/lookup mismatches (checked ${checked} cases)`);
   assert(checked > 1400, `expected the whole corpus to be audited, only saw ${checked}`);
+});
+
+// --- Last-layer orientation COVERAGE (regression) -----------------------------
+//
+// The audit above walks every *stored case* and checks it is recognized. That
+// cannot find a coverage hole: if no case owns an orientation class, no iteration
+// over cases visits it. So walk the last-layer orientation STATE SPACE instead and
+// require the lookups APB actually uses to recognize and solve every state.
+//
+// This is the regression guard for the OLL primary defect: 50 of the 57 primaries
+// solved a different orientation class than their own variants, so the primaries
+// covered only 39 of the 57 classes. 66 of the 215 non-solved orientation states
+// (~31%) were unrecognizable by the `oll` extra, and the 7-case OCLL filter behind
+// `ocllPll` was missing a whole class — which `ocllPll` in *force* mode then hid by
+// silently falling through to the core `zbll` step. See packages/algsets/src/oll.
+Deno.test("OCLL + OLL lookups recognize and solve every last-layer orientation state", () => {
+  const llState = (co: number[], eo: number[]): CubeState => ({
+    ...solvedCube(),
+    co: [...co, 0, 0, 0, 0],
+    eo: [...eo, 0, 0, 0, 0, 0, 0, 0, 0],
+  });
+  const cornersOri = (s: CubeState) => normalizeOrientation(s).co.every((o) => o === 0);
+  const edgesOri = (s: CubeState) => normalizeOrientation(s).eo.every((o) => o === 0);
+
+  const OCLL_IDS = ["oll-21", "oll-22", "oll-23", "oll-24", "oll-25", "oll-26", "oll-27"];
+  const targets = [
+    {
+      name: "OCLL (ocllPll)",
+      lookup: aufInvariantLookup(ollSet, orientationSignature(), (c) => OCLL_IDS.includes(c.id)),
+      goal: cornersOri,
+      // OCLL runs after EO, so only the all-edges-oriented states reach it.
+      edgesOrientedOnly: true,
+      expected: 26,
+    },
+    {
+      name: "OLL (oll extra)",
+      lookup: aufInvariantLookup(ollSet, orientationSignature()),
+      goal: (s: CubeState) => cornersOri(s) && edgesOri(s),
+      edgesOrientedOnly: false,
+      expected: 215,
+    },
+  ];
+
+  for (const t of targets) {
+    const phase: AlgorithmicPhase = {
+      kind: "algorithmic",
+      id: t.name,
+      goal: t.goal,
+      cases: t.lookup,
+      auf: ["U"],
+    };
+    const unrecognized: string[] = [];
+    const unsolved: string[] = [];
+    let seen = 0;
+    for (let a = 0; a < 3; a++) {
+      for (let b = 0; b < 3; b++) {
+        for (let c = 0; c < 3; c++) {
+          for (let d = 0; d < 3; d++) {
+            if ((a + b + c + d) % 3 !== 0) continue; // corner twist sums to 0 mod 3
+            for (let mask = 0; mask < 16; mask++) {
+              const eo = [mask & 1, (mask >> 1) & 1, (mask >> 2) & 1, (mask >> 3) & 1];
+              if (eo.reduce((x, y) => x + y, 0) % 2 !== 0) continue; // edge-flip parity
+              if (t.edgesOrientedOnly && eo.some((x) => x !== 0)) continue;
+              const co = [a, b, c, d];
+              if (co.every((x) => x === 0) && eo.every((x) => x === 0)) continue; // skip case
+              seen++;
+              const label = `co=${co.join("")} eo=${eo.join("")}`;
+              const state = llState(co, eo);
+              if (!t.lookup.find(state)) {
+                unrecognized.push(label);
+                continue;
+              }
+              const seg = runPhase(phase, state);
+              if (!seg || !t.goal(seg.endState)) unsolved.push(label);
+            }
+          }
+        }
+      }
+    }
+    assertEquals(seen, t.expected, `${t.name}: unexpected state count`);
+    assertEquals(unrecognized, [], `${t.name}: orientation states no case recognizes`);
+    assertEquals(unsolved, [], `${t.name}: states recognized but not solved by the matched alg`);
+  }
+});
+
+// --- EPLL must include the Z perm (regression) --------------------------------
+//
+// EPLL is the `pll` cases whose corners are already solved, filtered from the set.
+// Every one of the Z perm's five algs is M-slice-based and its U turns leave the
+// last-layer corners rotated by U2, so the recognition state derived from `algs[0]`
+// has `cp = [2,3,0,1,...]` — corners solved only *up to AUF*. A strict
+// corners-solved filter therefore dropped `z`, leaving EPLL with 3 of its 4 cases
+// and making a Z-perm last layer unsolvable by `collEpll` (which, in force mode,
+// silently fell through to the core `zbll` step). Recognition is a two-sided U
+// coset, so folding AUF into the filter is the correct test.
+Deno.test("EPLL is the four corners-solved-up-to-AUF PLL cases, including z", () => {
+  const cornersSolved = (s: CubeState) => {
+    const n = normalizeOrientation(s);
+    return n.cp.every((c, i) => c === i && n.co[i] === 0);
+  };
+  const upToAuf = (s: CubeState) => [0, 1, 2, 3].some((k) => cornersSolved(applyMoves(s, U(k))));
+
+  const strict = pllSet.cases.filter((c) => cornersSolved(pllSet.recognitionState(c.id)));
+  const folded = pllSet.cases.filter((c) => upToAuf(pllSet.recognitionState(c.id)));
+
+  assertEquals(
+    folded.map((c) => c.id).sort(),
+    ["h", "ua", "ub", "z"],
+    "EPLL must be exactly Ua, Ub, Z and H",
+  );
+  // Documents *why* the fold is needed: the strict test loses z.
+  assert(
+    !strict.some((c) => c.id === "z"),
+    "z's recognition state is corners-solved only up to AUF — if this ever becomes " +
+      "strictly corners-solved the fold is no longer load-bearing, but it stays correct",
+  );
+});
+
+// Both force-mode last-layer replacements must actually fire on every solve: their
+// region is the whole `zbll` step, so nothing else is meant to cover it. These are
+// the exact scrambles on which each previously fell through to the core `zbll`
+// step because of the two recognition gaps fixed above.
+Deno.test("force-mode ocllPll and collEpll always fire and verify", async () => {
+  const cases: [string, string[]][] = [
+    ["ocllPll", [
+      "B' D' U B2 U' F U2 F B L2 U B2 F' L2 U' L2 F2 L2 F' B",
+      "B2 R' L2 D2 R2 L F2 D F' B' U D' B U B' F2 L' R' D R",
+      "L' B F2 R F2 L D' R2 U2 R2 L' U F' D2 U2 R' F' U R2 U'",
+    ]],
+    ["collEpll", [
+      "L' F2 R' B2 R U2 B' R' L' D' L U' R2 F' R F' B' R2 L2 R2",
+      "B F B U2 R B2 L' U' D' B' D2 F' L F L' D' U B D' U",
+      "R B' L2 R D R' F2 B2 F2 D L R' L' U2 R2 B' D2 U F2 R2",
+    ]],
+  ];
+  for (const [id, scrambles] of cases) {
+    for (const scramble of scrambles) {
+      const r = await apb.solve(scramble, {
+        replacements: { [id]: { enabled: true, mode: "force" } },
+      }, {});
+      const framed = applyMoves(solvedCube(), [
+        ...invert(r.orientation),
+        ...parseAlg(scramble),
+        ...r.orientation,
+      ]);
+      assert(
+        r.solved && isSolved(applyMoves(framed, r.solution)),
+        `${id} (${scramble}): must solve`,
+      );
+      assert(
+        r.segments.some((s) => s.unitId === id),
+        `${id} (${scramble}): force mode must use the replacement, not fall through to zbll`,
+      );
+    }
+  }
+});
+
+// --- Every variant must solve its own case (regression + ratchet) -------------
+//
+// The cross-set audit above asks whether *some* alg of a case solves it, which is
+// true by construction for the primary — so it cannot see a case whose stored
+// alternatives belong to a different case. That is exactly the defect that hid the
+// broken `oll` primaries, and an audit of all 14 sets found the same shape in two
+// more: the transform paired alg lists with the wrong case.
+//
+//   - `oll` had it in algs[0] (fixed — recognition derives from the primary, so it
+//     silently moved 50 cases and orphaned 18 orientation classes).
+//   - `zbll` and `pll` have it in algs[1..n]. Their primaries are correct and
+//     coverage is proven complete (see the 7775-state ZBLL test above), so this
+//     costs no correctness — `runPhase` just skips a variant that misses the goal.
+//     What it costs is the cost race: ~90% of ZBLL's and ~53% of PLL's alternative
+//     algs are dead weight, so those steps have far fewer real options than the
+//     data suggests. The mis-pairing is systematic and repairable (t-1's four
+//     variants all solve l-26; t-2's all solve l-28; pll aa's solve ab) — tracked
+//     as data debt, not fixed here.
+//
+// This test pins the twelve clean sets at zero and ratchets the two known ones:
+// they may only improve. A new set, or a newly broken variant, fails immediately.
+Deno.test("every algset variant solves its own case", () => {
+  const AUF = ["", "U", "U2", "U'"].map((a) => (a ? parseAlg(a) : []));
+  const norm = (s: CubeState) => normalizeOrientation(s);
+  const cornersOriented = (s: CubeState) => norm(s).co.every((o) => o === 0);
+  const allCornersSolved = (s: CubeState) => {
+    const n = norm(s);
+    return n.cp.every((c, i) => c === i && n.co[i] === 0);
+  };
+  const drSolved = (s: CubeState) => s.ep[4] === 4 && s.eo[4] === 0;
+  const AFTER_FRONT = { corners: [4, 5, 6], edges: [5, 6, 7, 8, 9, 10] };
+  const BLOCK223_ONLY = { corners: [5, 6], edges: [5, 6, 7, 9, 10] };
+
+  // `budget` is the number of known-dead variants: 0 for a clean set, and the
+  // current count for the two with known debt. The assertion is `<=`, so the
+  // number can only fall.
+  const targets: {
+    name: string;
+    set: { cases: readonly { id: string; algs: readonly { moves: Move[] }[] }[] };
+    goal: (s: CubeState) => boolean;
+    budget: number;
+  }[] = [
+    { name: "br-pair", set: brPairSet, goal: regionSolved(AFTER_BR), budget: 0 },
+    { name: "fr-pair", set: frPairSet, goal: regionSolved(AFTER_FRONT), budget: 0 },
+    { name: "dfdb", set: dfdbSet, goal: regionSolved(BLOCK223_ONLY), budget: 0 },
+    { name: "eo-pair", set: eoPairSet, goal: regionSolvedAndEO(AFTER_BR), budget: 0 },
+    { name: "lxs", set: lxsSet, goal: regionSolvedAndEO(F2L), budget: 0 },
+    { name: "lxs-back-slot", set: lxsBackSlotSet, goal: regionSolvedAndEO(F2L), budget: 0 },
+    {
+      name: "oll",
+      set: ollSet,
+      goal: (s) => cornersOriented(s) && norm(s).eo.every((o) => o === 0),
+      budget: 0,
+    },
+    { name: "coll-epll", set: collSet, goal: allCornersSolved, budget: 0 },
+    {
+      name: "eodr",
+      set: eodrSet,
+      goal: (s) => norm(s).eo.every((o) => o === 0) && drSolved(norm(s)),
+      budget: 0,
+    },
+    { name: "zbls", set: zblsSet, goal: regionSolvedAndEO(F2L), budget: 0 },
+    { name: "wv", set: wvSet, goal: cornersOriented, budget: 0 },
+    { name: "sv", set: svSet, goal: cornersOriented, budget: 0 },
+    // Known data debt — see the comment above.
+    { name: "pll", set: pllSet, goal: isSolved, budget: 47 },
+    { name: "zbll", set: zbllSet, goal: isSolved, budget: 1572 },
+  ];
+
+  const regressions: string[] = [];
+  for (const t of targets) {
+    let dead = 0;
+    const first: string[] = [];
+    for (const c of t.set.cases) {
+      const state = applyMoves(solvedCube(), invert(c.algs[0].moves));
+      for (let v = 1; v < c.algs.length; v++) {
+        const ok = AUF.some((pre) =>
+          AUF.some((post) => t.goal(applyMoves(state, [...pre, ...c.algs[v].moves, ...post])))
+        );
+        if (!ok) {
+          dead++;
+          if (first.length < 3) first.push(`${c.id} alg #${v + 1}`);
+        }
+      }
+    }
+    if (dead > t.budget) {
+      regressions.push(
+        `${t.name}: ${dead} variants do not solve their own case (budget ${t.budget})` +
+          `${first.length ? ` — e.g. ${first.join(", ")}` : ""}`,
+      );
+    }
+  }
+  assertEquals(regressions, [], "algsets gained variants that do not solve their own case");
+});
+
+// --- Last-layer CORNER coverage for COLL (regression) -------------------------
+//
+// Same shape as the orientation-coverage test above, for the other axis. APB's
+// `coll` phase goal is `cornersSolved`, so it must handle every last-layer corner
+// state — but the `coll-epll` set is faithful to its source (SpeedCubeDB's COLL),
+// whose 40 cases are grouped by the seven OCLL *orientation* shapes. It therefore
+// has no case for corners that are already oriented but permuted: those are corner
+// PLLs. All 23 such classes were unsolvable, plus the 4-state "corners solved up to
+// AUF" skip. `collLookup` now falls through to the corner-permuting PLLs and then
+// to an empty-alg skip, so the phase covers the space. This walks the corner state
+// space rather than the stored cases, which is the only way to see such a hole.
+Deno.test("the COLL lookup recognizes and solves every last-layer corner state", () => {
+  const collPhase = apbDefinition.replacements!
+    .find((r) => r.id === "collEpll")!.strategies[0].phases[0] as AlgorithmicPhase;
+  const cornersSolvedNow = (s: CubeState) => {
+    const n = normalizeOrientation(s);
+    return n.cp.every((c, i) => c === i && n.co[i] === 0);
+  };
+
+  const permutations = (xs: number[]): number[][] => {
+    if (xs.length <= 1) return [xs];
+    const out: number[][] = [];
+    for (let i = 0; i < xs.length; i++) {
+      for (const rest of permutations([...xs.slice(0, i), ...xs.slice(i + 1)])) {
+        out.push([xs[i], ...rest]);
+      }
+    }
+    return out;
+  };
+
+  const unrecognized: string[] = [];
+  const unsolved: string[] = [];
+  let seen = 0;
+  for (const cp of permutations([0, 1, 2, 3])) {
+    for (let m = 0; m < 81; m++) {
+      const co = [m % 3, Math.floor(m / 3) % 3, Math.floor(m / 9) % 3, Math.floor(m / 27) % 3];
+      if ((co[0] + co[1] + co[2] + co[3]) % 3 !== 0) continue; // twist sums to 0 mod 3
+      const state: CubeState = {
+        ...solvedCube(),
+        cp: [...cp, 4, 5, 6, 7],
+        co: [...co, 0, 0, 0, 0],
+      };
+      if (cornersSolvedNow(state)) continue; // nothing for COLL to do
+      seen++;
+      const label = `cp=${cp.join("")} co=${co.join("")}`;
+      if (!collPhase.cases.find(state)) {
+        unrecognized.push(label);
+        continue;
+      }
+      const seg = runPhase(collPhase, state);
+      if (!seg || !cornersSolvedNow(seg.endState)) unsolved.push(label);
+    }
+  }
+  assertEquals(seen, 647, "unexpected last-layer corner state count");
+  assertEquals(unrecognized, [], "corner states no COLL case recognizes");
+  assertEquals(unsolved, [], "corner states recognized but not solved by the matched alg");
 });

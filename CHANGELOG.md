@@ -6,9 +6,59 @@ is one file. Each entry lists the versions it shipped as.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are
 [semver](https://semver.org/) — on a `0.x` line, a **minor** bump is the breaking one.
 
-## Unreleased
+## Unreleased — `algsets@0.3.1` · `apb@0.2.3`
 
-Nothing yet.
+### Fixed
+
+- **`@moishy/algsets`: 50 of the 57 `oll` cases had the wrong primary alg.** Recognition is derived
+  from `algs[0]`, and in 50 cases that alg solved a _different_ orientation class than the case's
+  own (unanimous) variants — so the 57 primaries covered only **39 of the 57** last-layer
+  orientation classes. 66 of the 215 non-solved orientation states (~31%) matched no case at all.
+  The variants were correct throughout (checked against published algs for OLL 21-27, 33, 45, 51 and
+  57), so the fix is to drop the 50 bogus primaries; the correct alg was already present in every
+  case. Coverage is now the full 57, one case per class.
+
+  `assertValidAlgSet` could not catch this: each case still solved _its own_ derived state, and the
+  set's default full-facelet signature separates cases that collide under the coarser
+  orientation-only key APB recognizes OLL with. The same failure mode as the 27 `zbls` cases. Two
+  tests now guard it — the primaries must be a bijection onto the 57 classes, and every variant must
+  be on its case's class.
+
+- **`@moishy/apb`: `ocllPll` could not solve one OCLL class, and `collEpll` could not solve a Z-perm
+  last layer.** The first was the `oll` defect above (the 7-case OCLL filter inherited the missing
+  class). The second is separate: every one of the Z perm's five algs is M-slice-based and its `U`
+  turns leave the last-layer corners rotated by `U2`, so `z`'s derived recognition state is corners
+  solved only _up to AUF_ — and the strict corners-solved filter dropped it, leaving EPLL with 3 of
+  its 4 cases. Recognition is a two-sided U coset, so the filter now folds AUF.
+
+- **`@moishy/apb`: `collEpll` could not solve a last layer whose corners were already oriented.**
+  `coll-epll` is faithful to its source (SpeedCubeDB's COLL): its 40 cases are grouped by the seven
+  OCLL _orientation_ shapes, so it has no case for corners that are oriented but permuted — those
+  are corner PLLs. APB's `coll` phase goal is `cornersSolved`, so it has to handle them: 23 of the
+  647 non-solved corner classes had no case, plus the 4-state "corners solved up to AUF" skip.
+  `collLookup` now falls through to the corner-permuting PLLs and then to an empty-alg skip — the
+  same "derive the half we don't author" move as `epll`, with no new algorithm data. All five
+  replacements now fire on every solve of a 60-scramble sweep in both modes.
+
+- **`@moishy/apb`: the `eoPair` replacement is labelled "EOPair"**, not "BR Pair + EO". The demo
+  builds its options form from `apbDefinition`, so this is what the site shows.
+
+### Added
+
+- Three **coverage** tests in `@moishy/apb`, walking the state space rather than the stored cases,
+  since iterating cases cannot find a class that no case owns — which is why these survived: every
+  last-layer orientation state (OLL/OCLL), every last-layer corner state (COLL), and a ratchet
+  asserting every algset variant solves its own case.
+
+### Known
+
+- **`zbll` and `pll` carry the `oll` defect in their _variants_** — 1572 of 1745 ZBLL and 47 of 89
+  PLL alternative algs solve a different case than the one they are filed under, so `runPhase`
+  silently skips them. Primaries are correct and ZBLL coverage is proven complete (7775/7775), so
+  this costs no correctness — only the cost race, which has far fewer real options than the data
+  suggests. The mis-pairing is systematic and repairable (`t-1`'s four variants all solve `l-26`;
+  `t-2`'s all solve `l-28`; `pll` `aa`'s solve `ab`). The ratchet test pins the counts so they can
+  only fall. The other twelve sets are clean.
 
 ---
 
