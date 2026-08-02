@@ -6,7 +6,7 @@ is one file. Each entry lists the versions it shipped as.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are
 [semver](https://semver.org/) — on a `0.x` line, a **minor** bump is the breaking one.
 
-## Unreleased — `cubing-core@0.3.0` · `algsets@0.3.1` · `apb@0.2.3`
+## Unreleased — `cubing-core@0.3.0` · `algsets@0.3.1` · `steps@0.1.0` · `apb@0.2.3`
 
 ### Changed
 
@@ -80,6 +80,37 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
   builds its options form from `apbDefinition`, so this is what the site shows.
 
 ### Added
+
+- **`@moishy/steps@0.1.0` — reusable solver steps.** `@moishy/algsets` is the data side of "don't
+  write this twice"; this is the search side. A Roux first block, a 2x2x2, a 2x2x3, a cross — the
+  same search each time, only the cubies in the goal change — so the machinery and the standard
+  targets now live in one package and a method composes them. Ships `blockSearch` (goal + move set
+  - pruning table + A\* + axis canonicalization + region keying + the optional whole-block guard and
+    pool key), the named targets, the move-count-primary block cost model, and the six 2x2x3
+    strategies both individually and as a ready-made `block223Step()`.
+
+  It depends on `@moishy/algsets` for one reason: `rouxFbDfdb`'s second phase places DF/DB by
+  algorithm. Shipping that strategy whole is the point — it is the reference phase-chaining case and
+  the cheapest of the six, and splitting it would leave every method re-deriving the same pool key,
+  frame-relative flag and shared cost model. Dependency order stays linear:
+  `cubing-core -> algsets -> steps -> methods`.
+
+- **`@moishy/cubing-core` now exports the generic geometry and pruning machinery** it always owned
+  in spirit: `PieceRegion`, the goal predicates (`regionSolved`, `regionSolvedStrict`,
+  `regionSolvedAndEO`, `regionSolvedLRHome`, `centersSolved`), the signature primitives
+  (`pieceSignature`, `orientationSignature`, `cornerSignature`, `eoSignature`), the search keys
+  (`regionCoordinate`, `axisCanonical`), the pattern databases (`regionHeuristic`,
+  `regionHeuristicMulti`), plus `stripRotations` and `fallThrough`. `eoSignature` now takes the slot
+  list, since which edges a method orients is the method's business.
+
+- **`@moishy/algsets` now exports the `AlgSet` -> `CaseLookup` adapters**: `regionLookup`,
+  `regionLookupRaw`, `aufInvariantLookup`. They take an `AlgSet`, so this is the only home that does
+  not cycle — cubing-core cannot depend on the type.
+
+  None of the above is new code; all of it was internal to `@moishy/apb`, where it was unusable by
+  any other method. `apb/src/geometry.ts` drops from 604 lines to 95 and `apb.ts` from 969 to 642,
+  leaving the part that is genuinely APB's: its piece groups, and the compositions its own Steps
+  recognize on. APB's public surface is unchanged.
 
 - Three **coverage** tests in `@moishy/apb`, walking the state space rather than the stored cases,
   since iterating cases cannot find a class that no case owns — which is why these survived: every

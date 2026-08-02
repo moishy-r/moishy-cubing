@@ -23,8 +23,9 @@ import { type CubeState, orientationSignature, pieceSignature } from "@moishy/cu
 
 // --- Piece groups (Kociemba indices) ----------------------------------------
 
-/** 2x2x3 block at bottom-left: corners DLF, DBL; edges DF, DL, DB, FL, BL. */
-export const BLOCK223 = { corners: [5, 6], edges: [5, 6, 7, 9, 10] } as const;
+// BLOCK223 is `@moishy/steps`' — the block searches are defined against it, so it
+// belongs with them rather than duplicated here. Re-exported for APB's consumers.
+export { BLOCK223 } from "@moishy/steps";
 /** BR pair: DRB corner + BR edge. */
 export const BR_PAIR = { corners: [7], edges: [11] } as const;
 /** Last slot (LXS): DFR corner + FR edge + DR edge. */

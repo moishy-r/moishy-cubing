@@ -42,6 +42,7 @@ for (const seg of res.segments) {
 | ----------------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------ |
 | [`@moishy/cubing-core`](./packages/cubing-core) | `deno add jsr:@moishy/cubing-core` | Cube engine, search, MCC cost models, the Step→Strategy→Phase model, solver pipeline |
 | [`@moishy/algsets`](./packages/algsets)         | `deno add jsr:@moishy/algsets`     | Algorithm case data (ZBLL, PLL, OLL, COLL, …) with recognition derived from the algs |
+| [`@moishy/steps`](./packages/steps)             | `deno add jsr:@moishy/steps`       | Reusable solver steps — block-building searches (Roux FB, 2x2x2, 2x2x3, cross)       |
 | [`@moishy/apb`](./packages/apb)                 | `deno add jsr:@moishy/apb`         | The APB method — and the reference implementation for adding your own                |
 
 On Node, use `npx jsr add @moishy/apb` (see [Getting Started](./guides/getting-started.md)).

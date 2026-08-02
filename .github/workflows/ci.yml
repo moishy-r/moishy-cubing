@@ -41,7 +41,7 @@ jobs:
       # rather than at release time.
       - name: deno publish --dry-run
         run: |
-          for pkg in cubing-core algsets apb; do
+          for pkg in cubing-core algsets steps apb; do
             echo "::group::$pkg"
             (cd "packages/$pkg" && deno publish --dry-run)
             echo "::endgroup::"
@@ -70,7 +70,7 @@ jobs:
       - name: Build npm packages
         run: |
           set -euo pipefail
-          for pkg in cubing-core algsets apb; do
+          for pkg in cubing-core algsets steps apb; do
             VERSION=$(deno eval "console.log(JSON.parse(Deno.readTextFileSync('packages/$pkg/deno.json')).version)")
             echo "::group::$pkg@$VERSION"
             (cd "packages/$pkg" && deno run -A ../../scripts/build_npm.ts "$VERSION")
@@ -81,7 +81,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p /tmp/npm-smoke/tar && cd /tmp/npm-smoke
-          for pkg in cubing-core algsets apb; do
+          for pkg in cubing-core algsets steps apb; do
             (cd "$GITHUB_WORKSPACE/packages/$pkg/npm" && npm pack --pack-destination /tmp/npm-smoke/tar >/dev/null)
           done
           npm init -y >/dev/null

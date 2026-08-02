@@ -83,7 +83,6 @@ import {
   axisCanonical,
   type CaseLookup,
   cornerSignature,
-  createDefaultMoveCostModel,
   type CubeState,
   eoSignature,
   fallThrough,
@@ -95,15 +94,11 @@ import {
   normalizeOrientation,
   orientationSignature,
   parseAlg,
-  type PieceRegion,
   pieceSignature,
   regionCoordinate,
   regionHeuristic,
-  regionHeuristicMulti,
   regionSolved,
   regionSolvedAndEO,
-  regionSolvedLRHome,
-  regionSolvedStrict,
   type Replacement,
   type SearchPhase,
 } from "@moishy/cubing-core";
@@ -121,7 +116,8 @@ import { zbls as zblsSet } from "@moishy/algsets/zbls";
 import { wv as wvSet } from "@moishy/algsets/wv";
 import { sv as svSet } from "@moishy/algsets/sv";
 import { lxsBackSlot as lxsBackSlotSet } from "@moishy/algsets/lxs-back-slot";
-import { aufInvariantLookup, regionLookup, regionLookupRaw } from "@moishy/algsets";
+import { aufInvariantLookup, regionLookup } from "@moishy/algsets";
+import { block223Step, BLOCK_MOVES } from "@moishy/steps";
 import {
   AFTER_BR,
   BLOCK223,
@@ -131,58 +127,6 @@ import {
   wvSvSignature,
   zblsSignature,
 } from "./geometry.ts";
-
-// Block-building move set: outer faces + slices + wides (no rotations — those
-// require a re-grip, and are handled once, upstream, by color-neutral orientation
-// selection). Slice/wide moves permute the centers; the strict block goals
-// (`regionSolvedStrict`) require `cn` identity, so those searches only accept
-// blocks that net-preserve the fixed frame. The Roux FB is the exception: its
-// `regionSolvedLRHome` goal lets the U/F/D/B centers drift about the L–R axis
-// (DFDB restores that), so the FB search net-preserves only the L/R centers.
-// Three things keep this fast despite the larger generator: the center-aware cost
-// pruning table (pruning.ts) guides the search to restore centers (folded to the
-// four L–R states for the FB), `axisCanonical` (geometry.ts) collapses redundant
-// same-axis orderings, and the region-coordinate A* key merges off-region-only
-// differences. See SPEC "block223" and DESIGN "Color neutrality".
-const BLOCK_MOVES: MoveFamily[] = [
-  "U",
-  "D",
-  "L",
-  "R",
-  "F",
-  "B",
-  "M",
-  "E",
-  "S",
-  "r",
-  "l",
-  "u",
-  "d",
-  "f",
-  "b",
-];
-// Roux FB move set — OnionHoney's `htm_rwm`: outer U/D/F/B/R + wide r + slice M.
-// (No L/l, no E/S, no u/d/f/b.) Every family here fixes the L and R centers, so
-// any center drift is confined to the L–R axis — exactly what the FB goal
-// (`regionSolvedLRHome`) allows and DFDB restores. Matching OnionHoney's set makes
-// our first-block search a faithful analogue of its FB analyzer.
-const FB_MOVES: MoveFamily[] = ["U", "D", "F", "B", "R", "r", "M"];
-
-// Move-count-primary cost model for the *whole* block223 (both the FB search and
-// the DFDB alg, and the other block strategies), mirroring OnionHoney's block
-// analyzer evaluator (`moves.length * 100 + Σ ergonomic cost`): every move costs 1
-// plus a tiny ergonomic term, so block-building is ranked by *fewest moves first*,
-// with MCC only breaking ties among equal-length options. The ergonomic term is
-// kept small enough (max ~0.015/move over the block's move count ⇒ < 1 total) that
-// a shorter block always wins. The rest of the solve (brPair/eo/lxs/zbll) keeps the
-// full ergonomic MCC model — block-building optimizes move count (what blockbuilders
-// care about), the last layer optimizes ergonomics. The search stays A* (which finds
-// the same optimum IDA* would, without thrashing on the fractional term).
-const BLOCK_ERGO_TIEBREAK = 0.01;
-const blockBaseModel = createDefaultMoveCostModel();
-const BLOCK_COST_MODEL: MoveCostModel = {
-  cost: (move, ctx) => 1 + BLOCK_ERGO_TIEBREAK * blockBaseModel.cost(move, ctx),
-};
 
 // Last-layer / U-relative alg phases align by U pre/post-AUF (the default).
 const LL_AUF: MoveFamily[] = ["U"];
@@ -223,327 +167,6 @@ const searchPhase = (
   goal: (s: CubeState) => boolean,
   extra: Partial<SearchPhase> = {},
 ): SearchPhase => ({ kind: "search", id, goal, moves: BLOCK_MOVES, ...extra });
-
-// --- Step: block223 (2x2x3) --------------------------------------------------
-// Roux first block = corners DLF,DBL + edges DF,DL,FL. The sub-blocks each
-// strategy's search phases target (each also becomes that phase's pruning-table
-// region, so the search is heuristically guided rather than blind):
-const FRONT_222 = { corners: [5], edges: [5, 6, 9] }; // DFL, DF/DL/FL
-const BACK_222 = { corners: [6], edges: [6, 7, 10] }; // DBL, DL/DB/BL
-const ROUX_FB = { corners: [5, 6], edges: [6, 9, 10] }; // the 1x2x3 (no DF/DB)
-const CROSS = { corners: [], edges: [5, 6, 7] }; // DF, DL, DB
-// cross1 inserts its two F2L pairs one at a time, and races both orders (the best
-// order is scramble-dependent — ~0.5 moves/scramble on average). These are the
-// cross + the first pair for each order: front pair (DLF+FL) or back pair (DBL+BL).
-const CROSS_PAIR_FRONT = { corners: [5], edges: [5, 6, 7, 9] }; // cross + DLF + FL
-const CROSS_PAIR_BACK = { corners: [6], edges: [5, 6, 7, 10] }; // cross + DBL + BL
-
-// `direct`'s pruning tables: overlapping sub-regions of the 2x2x3, maxed
-// (`regionHeuristicMulti`). The whole 7-piece block cannot be one combined table
-// (8²·3²·12⁵·2⁵ ≈ 4.6e9 entries), and the corners-vs-edges split `regionHeuristic`
-// falls back to never sees a corner↔edge interaction — which is why a single-phase
-// whole-block search used to run for tens of seconds. These six *do*: both block
-// corners appear in every group, paired with each of two 3-edge sets that together
-// cover all five block edges, plus the four 2-edge sets neither triple contains.
-// (The six pairs a triple already contains are dominated by it — a table tracking
-// more pieces of the same goal is a pointwise-larger bound — so including them
-// would cost lookups and build time for nothing.) Measured on 24 scrambles: ~9x
-// fewer nodes than the split fallback and no timeouts, at identical block cost.
-// Two groups have 3 edges (8²·3²·12³·2³ = 7,962,624 entries, just under
-// MAX_COMBINED_SIZE, ~3.5s to build) and four have 2 (331,776 each, ~0.1s).
-const DIRECT_GROUPS: PieceRegion[] = [
-  { corners: [5, 6], edges: [5, 6, 7] }, // + the D-layer cross edges DF/DL/DB
-  { corners: [5, 6], edges: [5, 9, 10] }, // + DF and both side edges FL/BL
-  { corners: [5, 6], edges: [6, 9] },
-  { corners: [5, 6], edges: [6, 10] },
-  { corners: [5, 6], edges: [7, 9] },
-  { corners: [5, 6], edges: [7, 10] },
-];
-
-/**
- * A block-building search phase. The `goal` is always the full sub-block the
- * phase must reach; `heuristicRegion` (defaulting to `goal`) is what the pruning
- * table tracks. For a *second* phase (completing the block from a partial one
- * an earlier phase built), pass just the pieces this phase adds: that keeps the
- * heuristic small enough to build a *combined* corner+edge table (tight and fast),
- * whereas tracking the whole 5-edge block would force the loose, slow-to-build
- * full-block table. It stays admissible — tracking a subset of the goal's pieces
- * is always a valid lower bound.
- */
-const blockSearch = (
-  id: string,
-  goal: PieceRegion,
-  opts: {
-    // Pieces the pruning table tracks (defaults to `goal`). A second phase should
-    // pass just the pieces it *adds* — a tight, combinable table (see doc above).
-    heuristicRegion?: PieceRegion;
-    // Instead of one table over `heuristicRegion`, max a *set* of overlapping
-    // sub-region tables (`regionHeuristicMulti`). This is what a single-phase
-    // whole-block search needs: no single combined table fits the full 7-piece
-    // 2x2x3, but several overlapping smaller ones do, and their max sees the
-    // corner<->edge interaction the corners-vs-edges split cannot. Strict goals
-    // only (there is no L-R fold for the multi-table form).
-    heuristicGroups?: readonly PieceRegion[];
-    moves?: MoveFamily[];
-    // `lrHome`: use the drift-allowing Roux FB goal (`regionSolvedLRHome`) — block
-    // pieces home + L/R centers home, U/F/D/B free — with the matching L–R-folded
-    // heuristic. Only `fbDfdb`'s `rouxFB` sets it; every other block search must
-    // end fully centers-home (there is no later step to fix drift), so it stays
-    // strict.
-    lrHome?: boolean;
-    // Search-depth cap (STM); `undefined` inherits the engine default.
-    maxDepth?: number;
-    // Per-phase cost model; the heuristic is built for the same model so it stays
-    // admissible. Defaults to the move-count-primary `BLOCK_COST_MODEL` (matching
-    // OnionHoney) for *all* block223 strategies, so they optimize the same objective
-    // — fewest moves — and can be raced against each other coherently. (Its small
-    // ergonomic tiebreak keeps A*'s ordering meaningful despite integer move costs.)
-    costModel?: MoveCostModel;
-    // For a *second* phase: also max in a heuristic over the whole `goal` block, so
-    // the search is guided to *keep* the block an earlier phase built, not just to
-    // add the new pieces. The tight added-pieces table alone under-guides and the
-    // search wanders (breaking/rebuilding the first block) — measured ~22× more
-    // nodes. Maxing two admissible tables stays admissible (same optimal block), so
-    // this is a large speedup at no cost to quality.
-    guardGoal?: boolean;
-    // Soft per-invocation wall-clock budget; on expiry the phase (and so its
-    // strategy) drops out of the step's race instead of failing the solve. Only
-    // `direct` sets it — see SearchPhase.timeBudgetMs.
-    timeBudgetMs?: number;
-    // Ceiling on states retained, overriding the engine default. Only `direct`
-    // raises it — see SearchPhase.maxNodes.
-    maxNodes?: number;
-    // Phase-chaining pool key (only used when this phase feeds a downstream one).
-    // Must distinguish candidates by what the *next* phase reads — for a first
-    // block, the whole goal block, so the pool offers genuinely different
-    // completions rather than near-duplicate first blocks. See SearchPhase.poolStateKey.
-    poolStateKey?: (s: CubeState, last: Move | null) => string | number;
-  } = {},
-): SearchPhase => {
-  const heuristicRegion = opts.heuristicRegion ?? goal;
-  const moves = opts.moves ?? BLOCK_MOVES;
-  // block223 is optimized by move count across all strategies (see `costModel` doc).
-  const costModel = opts.costModel ?? BLOCK_COST_MODEL;
-  const tight = opts.heuristicGroups
-    ? regionHeuristicMulti(opts.heuristicGroups, moves, costModel)
-    : regionHeuristic(
-      [...heuristicRegion.corners],
-      [...heuristicRegion.edges],
-      moves,
-      costModel,
-      { foldLR: opts.lrHome },
-    );
-  // The guard tracks the whole goal block (only meaningful when the tight table
-  // tracks a strict subset — i.e. a second phase with an explicit heuristicRegion).
-  const guard = opts.guardGoal && opts.heuristicRegion !== undefined
-    ? regionHeuristic([...goal.corners], [...goal.edges], moves, costModel)
-    : null;
-  const heuristic = guard ? (s: CubeState) => Math.max(tight(s), guard(s)) : tight;
-  return {
-    kind: "search",
-    // Fixed-frame goal: the block search uses slice/wide moves under a home-frame
-    // heuristic, so its goal must pin the frame (see geometry.ts). Strict pins all
-    // centers home; `lrHome` allows the L–R-axis drift the FB leaves for DFDB.
-    // Algorithmic phases use the rotation-invariant `regionSolved`.
-    goal: opts.lrHome ? regionSolvedLRHome(goal) : regionSolvedStrict(goal),
-    moves,
-    id,
-    heuristic,
-    costModel,
-    // A* + the pruning table: cost-optimal without IDA*'s real-cost thrashing.
-    useAStar: true,
-    // Axis canonicalization collapses the redundant orderings the slice/wide
-    // generator would otherwise explore; the region coordinate keys the A* visited
-    // map by just the goal's tracked pieces + centers, merging off-region-only
-    // differences (a sufficient statistic for reaching the goal).
-    canFollow: axisCanonical,
-    stateKey: regionCoordinate(goal),
-    poolStateKey: opts.poolStateKey,
-    maxDepth: opts.maxDepth,
-    maxNodes: opts.maxNodes,
-    timeBudgetMs: opts.timeBudgetMs,
-  };
-};
-
-// dfdb places DF (edge 5) + DB (edge 7) onto a solved Roux FB.
-//
-// The FB (`regionSolvedLRHome`) leaves the U/F/D/B centers drifted about the L–R
-// axis; the DFDB alg both places DF/DB *and* restores that drift. Which case
-// applies therefore depends on the drift, not only on where DF/DB sit — so
-// recognition must read the raw centers (`regionLookupRaw`, no orientation
-// normalization) and the signature must include the center permutation `s.cn`.
-// (A plain `regionLookup` would `normalizeOrientation` the drift away, collapsing
-// distinct center-correction cases onto one key.) The 527-case set already
-// encodes every drift; only the recognition wiring changed.
-const dfdbSignature = (s: CubeState): string => pieceSignature([], [5, 7])(s) + "/" + s.cn.join("");
-const dfdbLookup = regionLookupRaw(dfdbSet, dfdbSignature);
-
-const block223: MethodDefinition["steps"][number] = {
-  id: "block223",
-  label: "2x2x3",
-  strategies: [
-    // fbDfdb: Roux FB by search, then DF/DB by alg (phase-chaining feeds the FB
-    // candidate pool into the DFDB scorer — the reference case for chaining).
-    {
-      id: "fbDfdb",
-      label: "RouxFB + DFDB",
-      phases: [
-        {
-          // rouxFB uses the full slice/wide move set and the drift-allowing goal
-          // (`lrHome`): it solves the 6 FB pieces incl. the L center, leaving only
-          // the U/F/D/B centers drifted about the L–R axis. This is the natural,
-          // cheap Roux FB — no moves spent restoring those centers, which the
-          // `dfdb` alg below restores while placing DF/DB. `poolStateKey` (which
-          // includes `cn`) keeps FB candidates that differ in the DF/DB pair or
-          // the drift distinct, so phase-chaining races them and keeps the
-          // cheapest combined FB+DFDB.
-          ...blockSearch("rouxFB", ROUX_FB, {
-            lrHome: true,
-            maxDepth: 9,
-            moves: FB_MOVES,
-            costModel: BLOCK_COST_MODEL,
-          }),
-          poolStateKey: regionCoordinate({ corners: [5, 6], edges: [6, 9, 10, 5, 7] }),
-        },
-        // frameRelative: the FB leaves the U/F/D/B centers drifted and DFDB
-        // restores them in place — homing would relocate the block off BL. Uses the
-        // same move-count `BLOCK_COST_MODEL` as the FB so block223 is ranked as a
-        // coherent unit (fewest total moves), not FB-moves + DFDB-ergonomics.
-        alg("dfdb", regionSolved(BLOCK223), dfdbLookup, undefined, {
-          frameRelative: true,
-          costModel: BLOCK_COST_MODEL,
-        }),
-      ],
-    },
-    // Pure-search strategies (no algs). `direct` searches the whole 2x2x3 at
-    // once; the corner-first/cross strategies solve smaller sub-blocks first.
-    // `direct` stays disabled by default, but is no longer pathological: guided by
-    // the maxed multi-table bound (`DIRECT_GROUPS`) it finds the block in ~0.1–1.4s
-    // per orientation (mean ~0.35s) where the old split heuristic routinely ran past
-    // 15s or exhausted the heap. It is still the most expensive block223 strategy —
-    // one deep 7-piece search against three or four tiny guarded ones — and it wins
-    // only on the scrambles whose shortest 2x2x3 does not factor as "2x2x2 first" or
-    // "cross first", so it is opt-in via `enabledStrategies`/`forceStrategy`.
-    {
-      id: "direct",
-      label: "Direct blockbuilding",
-      enabledByDefault: false,
-      // Single deep search for the whole 7-piece block; capped at 14 STM (a
-      // direct block is ~7–13 STM in practice, so this admits it with headroom
-      // while still bounding a runaway search).
-      phases: [blockSearch("full", BLOCK223, {
-        maxDepth: 14,
-        heuristicGroups: DIRECT_GROUPS,
-        // Firm per-orientation budget. Worst case measured ~1.4s over 24 scrambles on
-        // a fast laptop; a shared CI runner is several times slower, and an initial
-        // 3s cap duly dropped `direct` mid-release on one. 15s keeps the runaway
-        // protection (a pathological scramble costs `direct` its slot in the race
-        // rather than the solve's whole budget) with enough headroom that a merely
-        // slow machine does not change which strategies answer. Raise or lower per
-        // solve with `stepOptions.block223.searchTimeBudgetMs.full`.
-        timeBudgetMs: 15_000,
-        // One search for the whole 7-piece block legitimately retains ~910k states
-        // — measured over 8 scrambles — which is past the engine's safe default
-        // (DEFAULT_MAX_NODES, sized so a runaway search cannot exhaust the heap).
-        // Raise it here rather than lower the bar for every other search; the 15s
-        // budget above is still this phase's primary guard.
-        maxNodes: 2_000_000,
-      })],
-    },
-    // Corner-first and cross strategies are registered but disabled by default.
-    // Their second phase completes the block with another *search* (not a fast alg
-    // lookup like fbDfdb's dfdb), so with phase-chaining on they re-run that search
-    // for every pooled first-phase candidate — much slower to race than fbDfdb,
-    // for a block that is rarely cheaper. Opt in via `enabledStrategies`. Each first
-    // phase is capped; each second phase maxes a tight added-pieces table with a
-    // whole-block guard (`guardGoal`) so it keeps the first block intact rather than
-    // wandering — measured ~22× fewer nodes at identical block quality.
-    {
-      id: "cornerFirstFront",
-      label: "Corner-first (front)",
-      enabledByDefault: false,
-      // chaining off by default (fast, 0.5s dual-CN). Its phase-1 pool is wired
-      // (poolStateKey below) and effective, but earns its keep only at low slack;
-      // slack is step-level (fbDfdb needs 2), so we keep this fast and leave the
-      // pool as an opt-in quality mode. See DESIGN / the cornerFirst experiments.
-      phaseChaining: false,
-      phases: [
-        // The first-block pool is keyed on the *whole* block, so its candidates
-        // leave the completion pieces in genuinely different places (not near-
-        // duplicate 2x2x2s) — that is what makes phase-chaining pick a shorter
-        // combined block (~1 move, measured) at negligible cost.
-        blockSearch("front222", FRONT_222, {
-          maxDepth: 8,
-          poolStateKey: regionCoordinate(BLOCK223),
-        }),
-        blockSearch("rest", BLOCK223, {
-          heuristicRegion: { corners: [6], edges: [7, 10] },
-          guardGoal: true,
-        }),
-      ],
-    },
-    {
-      id: "cornerFirstBack",
-      label: "Corner-first (back)",
-      enabledByDefault: false,
-      phaseChaining: false,
-      phases: [
-        blockSearch("back222", BACK_222, { maxDepth: 8, poolStateKey: regionCoordinate(BLOCK223) }),
-        blockSearch("rest", BLOCK223, {
-          heuristicRegion: { corners: [5], edges: [5, 9] },
-          guardGoal: true,
-        }),
-      ],
-    },
-    // `cross1` ("cross + two F2L pairs", opt-in, rarely the winner per SPEC). The
-    // full 2-pair completion from a *bare* 3-edge cross has no corner anchor, so a
-    // single search for it is huge (6–30s even when the block is short). Instead we
-    // insert the two pairs one at a time, each adding one corner+edge under a
-    // whole-block guard (`guardGoal`), so every phase is a tiny, well-guided search
-    // that never hangs. The best *pair order* is scramble-dependent (front-first
-    // wins ~half the time, ~0.5 moves/scramble at stake), so both orders are
-    // registered as separate strategies and raced — exactly like cornerFirst's
-    // Front/Back. Greedy per-pair loses a little cancellation vs solving both at
-    // once, but this is the only shape that keeps cross1 fast and reliable, and it
-    // stays short on cross1's niche (near-free cross + easy pairs).
-    {
-      id: "cross1Front", // front pair (DLF+FL) first, then back pair (DBL+BL)
-      label: "Cross-first (front pair first)",
-      enabledByDefault: false,
-      phaseChaining: false,
-      phases: [
-        blockSearch("cross", CROSS, { maxDepth: 8 }),
-        blockSearch("crossPairFront", CROSS_PAIR_FRONT, {
-          heuristicRegion: { corners: [5], edges: [9] },
-          guardGoal: true,
-          maxDepth: 11,
-        }),
-        blockSearch("crossPairBack", BLOCK223, {
-          heuristicRegion: { corners: [6], edges: [10] },
-          guardGoal: true,
-        }),
-      ],
-    },
-    {
-      id: "cross1Back", // back pair (DBL+BL) first, then front pair (DLF+FL)
-      label: "Cross-first (back pair first)",
-      enabledByDefault: false,
-      phaseChaining: false,
-      phases: [
-        blockSearch("cross", CROSS, { maxDepth: 8 }),
-        blockSearch("crossPairBack", CROSS_PAIR_BACK, {
-          heuristicRegion: { corners: [6], edges: [10] },
-          guardGoal: true,
-          maxDepth: 11,
-        }),
-        blockSearch("crossPairFront", BLOCK223, {
-          heuristicRegion: { corners: [5], edges: [9] },
-          guardGoal: true,
-        }),
-      ],
-    },
-  ],
-};
 
 // --- Step: brPair (BR Pair) --------------------------------------------------
 // Recognized on the location+orientation of the DRB corner (7) and BR edge (11):
@@ -992,7 +615,7 @@ const backSlotEoLxs: Replacement = {
 export const apbDefinition: MethodDefinition = {
   id: "apb",
   label: "APB",
-  steps: [block223, brPair, eo, lxs, zbll],
+  steps: [block223Step(dfdbSet), brPair, eo, lxs, zbll],
   replacements: [ocllPll, collEpll, eoPair, eodrLs, backSlotEoLxs],
   extras: [ollExtra, zblsExtra, winterSummerVariation],
   recommendedSettings: {

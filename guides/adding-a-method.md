@@ -6,6 +6,11 @@ for you.
 
 `@moishy/apb` is the worked example — copying its shape is the recipe. This guide is the map.
 
+Before writing a search, check whether [`@moishy/steps`](../packages/steps) already has it. A Roux
+first block, a 2x2x2, a 2x2x3, a cross — those are the same searches whatever method calls them, and
+they ship ready to compose. A method package is then mostly _wiring_: which algset backs each step,
+what its recognition keys on, how the steps sequence.
+
 ## The Composition Model
 
 Three nested concepts:
@@ -63,8 +68,11 @@ that can't beat what it already has.
 
 The rule that keeps results correct: a heuristic must **never overestimate**. Undershoot and you
 just search more; overshoot and the engine will confidently return something that isn't optimal.
-APB's `pruning.ts` builds these tables automatically for a set of tracked pieces — read it before
-writing your own.
+`@moishy/cubing-core`'s `regionHeuristic` builds these tables automatically for a set of tracked
+pieces, and `regionHeuristicMulti` maxes several overlapping ones when a region is too big to
+tabulate whole. Use them before writing your own — and if you are building a block at all, reach for
+`@moishy/steps`' `blockSearch`, which already wires the table to the goal, the move set, A\*, axis
+canonicalization and the region key.
 
 Three further knobs matter for speed, all optional and all in `SearchPhase`: `canFollow` (prune
 redundant move orderings), `stateKey` (merge search states that differ only in pieces you don't
@@ -95,7 +103,7 @@ hand-stored. See [AUTHORING.md](../packages/algsets/AUTHORING.md).
 ## Recognition and Goals
 
 The fiddly part of a new method is not the pipeline — it's saying precisely which pieces a step
-cares about. APB does this in `geometry.ts`, and the patterns transfer:
+cares about. The vocabulary is `@moishy/cubing-core`'s, and APB's `geometry.ts` shows it applied:
 
 - **Region** — the corner and edge slots a step must fill.
   `{ corners: [5, 6], edges: [5, 6, 7, 9, 10] }` is APB's 2x2x3.
@@ -132,11 +140,15 @@ Winter Variation fires part-way through the last slot only when the case allows.
 
 ## Where to Look in the Code
 
-| For                            | Read                                                                          |
-| ------------------------------ | ----------------------------------------------------------------------------- |
-| A full method definition       | [`packages/apb/src/apb.ts`](../packages/apb/src/apb.ts)                       |
-| Regions, goals, recognition    | [`packages/apb/src/geometry.ts`](../packages/apb/src/geometry.ts)             |
-| Pruning tables                 | [`packages/apb/src/pruning.ts`](../packages/apb/src/pruning.ts)               |
-| Phase types and the runner     | [`packages/cubing-core/src/step.ts`](../packages/cubing-core/src/step.ts)     |
-| Racing, lookahead, CN          | [`packages/cubing-core/src/method.ts`](../packages/cubing-core/src/method.ts) |
-| The reasoning behind all of it | [DESIGN.md](../DESIGN.md)                                                     |
+| For                            | Read                                                                            |
+| ------------------------------ | ------------------------------------------------------------------------------- |
+| A full method definition       | [`packages/apb/src/apb.ts`](../packages/apb/src/apb.ts)                         |
+| Ready-made block searches      | [`packages/steps/src/blocks.ts`](../packages/steps/src/blocks.ts)               |
+| Block strategies to compose    | [`packages/steps/src/block223.ts`](../packages/steps/src/block223.ts)           |
+| Regions, goals, signatures     | [`packages/cubing-core/src/regions.ts`](../packages/cubing-core/src/regions.ts) |
+| Pruning tables                 | [`packages/cubing-core/src/pruning.ts`](../packages/cubing-core/src/pruning.ts) |
+| AlgSet -> CaseLookup adapters  | [`packages/algsets/src/lookup.ts`](../packages/algsets/src/lookup.ts)           |
+| Method wiring for one method   | [`packages/apb/src/geometry.ts`](../packages/apb/src/geometry.ts)               |
+| Phase types and the runner     | [`packages/cubing-core/src/step.ts`](../packages/cubing-core/src/step.ts)       |
+| Racing, lookahead, CN          | [`packages/cubing-core/src/method.ts`](../packages/cubing-core/src/method.ts)   |
+| The reasoning behind all of it | [DESIGN.md](../DESIGN.md)                                                       |
