@@ -36,6 +36,8 @@ export {
   type StateSignature,
 } from "./src/define.ts";
 
+export { aufInvariantLookup, regionLookup, regionLookupRaw } from "./src/lookup.ts";
+
 export {
   assertValidAlgSet,
   type IssueKind,

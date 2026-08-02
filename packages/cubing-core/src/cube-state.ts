@@ -397,3 +397,88 @@ export function toFacelets(s: CubeState): string {
   }
   return f.join("");
 }
+
+// --- De-rotation (fixed-frame normalization of algs) -------------------------
+
+const ROTATIONS = new Set<MoveFamily>(["x", "y", "z"]);
+const NON_ROTATIONS: MoveFamily[] = [
+  "R",
+  "L",
+  "U",
+  "D",
+  "F",
+  "B",
+  "M",
+  "E",
+  "S",
+  "r",
+  "l",
+  "u",
+  "d",
+  "f",
+  "b",
+];
+// Quarter-turn states (both directions) for every non-rotation family, for
+// identifying what a quarter turn becomes once conjugated by a rotation.
+const QUARTER_TURN_STATES = NON_ROTATIONS.flatMap((family) =>
+  ([1, 3] as const).map((amount) => ({
+    family,
+    amount,
+    state: applyMoves(solvedCube(), [{ family, amount }]),
+  }))
+);
+
+/**
+ * The single quarter turn equal to `rot · {family}(quarter) · rot⁻¹` — i.e. what
+ * a quarter turn of `family` becomes once the cube has been rotated by `rot`.
+ * A rotation conjugates a quarter turn to a quarter turn, but possibly of the
+ * *opposite* direction (e.g. `M` under `y` is `S'`), so the resulting `amount`
+ * (1 or 3) is returned alongside the family and must not be assumed to be 1.
+ * Computed against the engine (not a hand table) so it is correct for every
+ * family, including slices and wides. `rot` is the accumulated rotation so far.
+ */
+function conjugateQuarter(
+  family: MoveFamily,
+  rot: Move[],
+): { family: MoveFamily; amount: 1 | 3 } {
+  const target = applyMoves(solvedCube(), [...rot, { family, amount: 1 }, ...invert(rot)]);
+  for (const q of QUARTER_TURN_STATES) {
+    if (statesEqual(target, q.state)) return { family: q.family, amount: q.amount };
+  }
+  // A rotation conjugates a quarter-turn to a quarter-turn, so this is unreachable.
+  throw new Error(`conjugate of ${family} under rotation is not a single quarter turn`);
+}
+
+/**
+ * Rewrites an alg into an equivalent that ends in the *fixed frame* — same effect
+ * on the pieces, but no net whole-cube rotation. It pushes each `x`/`y`/`z` to
+ * the end (relabeling every following move through the accumulated rotation) and
+ * drops it.
+ *
+ * Standalone utility: the solve no longer de-rotates algs (recognition and goals
+ * are rotation-invariant, so tilted algs are used verbatim and simply leave the
+ * cube solved-up-to-rotation). Kept for callers that want a fixed-frame rewrite.
+ *
+ * Conjugation is a homomorphism, so `X^n` under `rot` becomes `(conj X)^n`: the
+ * relabeled move's amount is the conjugate quarter turn's direction times the
+ * original amount (mod 4). This matters for slices/wides, whose conjugate can be
+ * a prime — a double stays a double, but `M2`→`S2`, `M`→`S'`, `M'`→`S`, etc.
+ */
+export function stripRotations(moves: Move[]): Move[] {
+  const rot: Move[] = [];
+  const out: Move[] = [];
+  for (const m of moves) {
+    if (ROTATIONS.has(m.family)) {
+      rot.push(m);
+      continue;
+    }
+    if (rot.length === 0) {
+      out.push(m);
+      continue;
+    }
+    const q = conjugateQuarter(m.family, rot);
+    const amount = ((q.amount * m.amount) % 4) as 1 | 2 | 3;
+    out.push({ family: q.family, amount });
+  }
+  return out;
+}

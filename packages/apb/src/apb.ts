@@ -80,16 +80,30 @@
 import {
   type AlgorithmicPhase,
   applyMoves,
+  axisCanonical,
   type CaseLookup,
+  cornerSignature,
   createDefaultMoveCostModel,
   type CubeState,
+  eoSignature,
+  fallThrough,
   isSolved,
   type MethodDefinition,
   type Move,
   type MoveCostModel,
   type MoveFamily,
   normalizeOrientation,
+  orientationSignature,
   parseAlg,
+  type PieceRegion,
+  pieceSignature,
+  regionCoordinate,
+  regionHeuristic,
+  regionHeuristicMulti,
+  regionSolved,
+  regionSolvedAndEO,
+  regionSolvedLRHome,
+  regionSolvedStrict,
   type Replacement,
   type SearchPhase,
 } from "@moishy/cubing-core";
@@ -107,30 +121,16 @@ import { zbls as zblsSet } from "@moishy/algsets/zbls";
 import { wv as wvSet } from "@moishy/algsets/wv";
 import { sv as svSet } from "@moishy/algsets/sv";
 import { lxsBackSlot as lxsBackSlotSet } from "@moishy/algsets/lxs-back-slot";
+import { aufInvariantLookup, regionLookup, regionLookupRaw } from "@moishy/algsets";
 import {
   AFTER_BR,
-  aufInvariantLookup,
-  axisCanonical,
   BLOCK223,
-  cornerSignature,
+  EO_EDGE_SLOTS,
   eodrSignature,
-  eoSignature,
   F2L,
-  fallThrough,
-  orientationSignature,
-  type PieceRegion,
-  pieceSignature,
-  regionCoordinate,
-  regionLookup,
-  regionLookupRaw,
-  regionSolved,
-  regionSolvedAndEO,
-  regionSolvedLRHome,
-  regionSolvedStrict,
   wvSvSignature,
   zblsSignature,
 } from "./geometry.ts";
-import { regionHeuristic, regionHeuristicMulti } from "./pruning.ts";
 
 // Block-building move set: outer faces + slices + wides (no rotations — those
 // require a re-grip, and are handled once, upstream, by color-neutral orientation
@@ -565,7 +565,7 @@ const brPair: MethodDefinition["steps"][number] = {
 // 11 cases where the BR pair is already solved-in-place, so eoPair degenerates
 // to plain EO). Recognized on the EO-edge slot pattern (up to AUF).
 const DBR_EO = "dbr-solved-eo-(1)";
-const eoLookup = regionLookup(eoPairSet, eoSignature(), (c) => c.subset === DBR_EO);
+const eoLookup = regionLookup(eoPairSet, eoSignature(EO_EDGE_SLOTS), (c) => c.subset === DBR_EO);
 const eo: MethodDefinition["steps"][number] = {
   id: "eo",
   label: "EO",
@@ -736,7 +736,7 @@ const collEpll: Replacement = {
 // collision-free.
 const INSERT_SUBSETS = new Set(["mr", "mu", "or", "ou"]);
 const eoPairInsertSignature = (s: CubeState) =>
-  `${pieceSignature([7], [11])(s)}/${eoSignature()(s)}`;
+  `${pieceSignature([7], [11])(s)}/${eoSignature(EO_EDGE_SLOTS)(s)}`;
 const eoPairInsertLookup = regionLookup(
   eoPairSet,
   eoPairInsertSignature,
@@ -771,7 +771,8 @@ const eoPair: Replacement = {
         // A* merges a goal state with an EO-differing non-goal state under one key
         // and can return the non-goal one (the pair left one U short). The block +
         // pair coordinate alone was not enough.
-        stateKey: (s, last) => `${regionCoordinate(AFTER_BR)(s, last)}/${eoSignature()(s)}`,
+        stateKey: (s, last) =>
+          `${regionCoordinate(AFTER_BR)(s, last)}/${eoSignature(EO_EDGE_SLOTS)(s)}`,
         maxDepth: 9,
       }),
       alg("eoPairInsert", regionSolvedAndEO(AFTER_BR), eoPairInsertLookup),
@@ -941,7 +942,11 @@ const winterSummerVariation = {
 // pre-formed; `compete` is exactly the "use it when it's cheaper" knob.) frPair is
 // the mirror of the brPair set; backSlotEo is the `dfr` subset of eo-pair;
 // backSlotLxs solves the back-right slot. Opt-in like the rest.
-const eoBackSlotLookup = regionLookup(eoPairSet, eoSignature(), (c) => c.subset === "dfr");
+const eoBackSlotLookup = regionLookup(
+  eoPairSet,
+  eoSignature(EO_EDGE_SLOTS),
+  (c) => c.subset === "dfr",
+);
 // What backSlotEo lands on: block223 + the front-right pair (DFR corner 4, FR edge
 // 8), all edges oriented. The BACK slot (DBR 7 + BR 11) and DR (edge 4) are still
 // open — backSlotLxs fills them. (`dfr` is the front-pair-solved EO subset, exactly
