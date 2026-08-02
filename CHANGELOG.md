@@ -6,7 +6,7 @@ is one file. Each entry lists the versions it shipped as.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are
 [semver](https://semver.org/) — on a `0.x` line, a **minor** bump is the breaking one.
 
-## Unreleased — `cubing-core@0.3.0` · `algsets@0.3.1` · `steps@0.1.0` · `apb@0.2.3`
+## Unreleased — `cubing-core@0.3.0` · `algsets@0.3.1` · `steps@0.1.1` · `apb@0.2.3`
 
 ### Changed
 
@@ -81,7 +81,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ### Added
 
-- **`@moishy/steps@0.1.0` — reusable solver steps.** `@moishy/algsets` is the data side of "don't
+- **`@moishy/steps@0.1.1` — reusable solver steps.** `@moishy/algsets` is the data side of "don't
   write this twice"; this is the search side. A Roux first block, a 2x2x2, a 2x2x3, a cross — the
   same search each time, only the cubies in the goal change — so the machinery and the standard
   targets now live in one package and a method composes them. Ships `blockSearch` (goal + move set
@@ -94,6 +94,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
   the cheapest of the six, and splitting it would leave every method re-deriving the same pool key,
   frame-relative flag and shared cost model. Dependency order stays linear:
   `cubing-core -> algsets -> steps -> methods`.
+
+  First release is `0.1.1`, not `0.1.0`: npm requires a package to exist before a trusted publisher
+  can be attached to it, so `0.1.0` was published by hand to bootstrap that (see the note in
+  `release.yml`). A manual publish burns the version for the automated path — neither registry
+  allows republishing — so the release workflow ships `0.1.1`, identical in content and carrying the
+  provenance attestation the hand-published one lacks.
 
 - **`@moishy/cubing-core` now exports the generic geometry and pruning machinery** it always owned
   in spirit: `PieceRegion`, the goal predicates (`regionSolved`, `regionSolvedStrict`,
