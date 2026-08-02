@@ -2,6 +2,7 @@
   "workspace": [
     "./packages/cubing-core",
     "./packages/algsets",
+    "./packages/steps",
     "./packages/apb"
   ],
   "tasks": {

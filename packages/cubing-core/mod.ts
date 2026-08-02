@@ -55,8 +55,30 @@ export {
   SOLVED,
   solvedCube,
   statesEqual,
+  stripRotations,
   toFacelets,
 } from "./src/cube-state.ts";
+
+// Piece regions: goals, recognition signatures and search keys over a set of
+// tracked cubies. Method-agnostic — a method names its own regions over these.
+export {
+  axisCanonical,
+  centersSolved,
+  cornerSignature,
+  eoSignature,
+  orientationSignature,
+  type PieceRegion,
+  pieceSignature,
+  regionCoordinate,
+  regionSolved,
+  regionSolvedAndEO,
+  regionSolvedLRHome,
+  regionSolvedStrict,
+} from "./src/regions.ts";
+
+// Pattern databases: admissible, cost-based, centre-aware heuristics over a
+// region. What makes a slice/wide-inclusive block search affordable.
+export { regionHeuristic, regionHeuristicMulti } from "./src/pruning.ts";
 
 export {
   createBlockCostModel,
@@ -86,6 +108,7 @@ export {
   type AlgVariant,
   type CaseLookup,
   type Checkpoint,
+  fallThrough,
   type Phase,
   type PhaseKind,
   type PhaseSegment,

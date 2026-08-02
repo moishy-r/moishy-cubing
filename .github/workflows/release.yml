@@ -31,7 +31,7 @@ on:
         required: true
         type: choice
         default: all
-        options: [all, cubing-core, algsets, apb]
+        options: [all, cubing-core, algsets, steps, apb]
 
 permissions:
   contents: read
@@ -41,9 +41,9 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  # Dependency order matters in both registries: algsets and apb declare
-  # `@moishy/cubing-core@^x.y.z`, and a registry will reject a package whose
-  # dependencies do not resolve.
+  # Dependency order matters in both registries: each package declares the ones
+  # below it (cubing-core <- algsets <- steps <- apb), and a registry will reject a
+  # package whose dependencies do not resolve. Keep `all` in that order.
   targets:
     runs-on: ubuntu-latest
     outputs:
@@ -60,7 +60,7 @@ jobs:
           set -euo pipefail
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             case "${{ inputs.package }}" in
-              all) PACKAGES="cubing-core algsets apb" ;;
+              all) PACKAGES="cubing-core algsets steps apb" ;;
               *)   PACKAGES="${{ inputs.package }}" ;;
             esac
           else

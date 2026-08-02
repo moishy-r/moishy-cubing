@@ -1,4 +1,4 @@
-// Pruning tables (pattern databases) for the block-building search phases.
+// Pruning tables (pattern databases) for guided search.
 //
 // A `SearchPhase` with no heuristic explores blindly — an unpruned search over
 // the 15 block-building move families visits millions of nodes for a ~9-move
@@ -43,15 +43,9 @@
 // the process (keyed by region(s) + move set + cost model), so a solve — including
 // one racing many orientations — builds each table at most once.
 
-import {
-  applyMove,
-  createDefaultMoveCostModel,
-  type CubeState,
-  type Move,
-  type MoveCostModel,
-  type MoveFamily,
-  solvedCube,
-} from "@moishy/cubing-core";
+import { applyMove, type CubeState, solvedCube } from "./cube-state.ts";
+import type { Move, MoveFamily } from "./notation.ts";
+import { createDefaultMoveCostModel, type MoveCostModel } from "./move-cost.ts";
 
 // Costs are non-integer (e.g. 0.8, 1.32); ×1000 makes them exact integers so
 // Dial's can bucket by distance and the table can be a Uint16Array.

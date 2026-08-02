@@ -1,17 +1,25 @@
 // Tests for the slice/wide-inclusive block-building search: the axis
-// canonicalization and region-coordinate keying (geometry.ts), the cost-based
-// center-aware pruning heuristic (pruning.ts), and the phase-chaining pool
+// canonicalization and region-coordinate keying, the cost-based center-aware
+// pruning heuristic (both now cubing-core), and the phase-chaining pool
 // (searchAStarMany). See SPEC "block223" / "Center frame" and DESIGN.
 
 import { assert, assertAlmostEquals, assertEquals } from "@std/assert";
 import {
   applyMoves,
+  axisCanonical,
+  centersSolved,
   createDefaultMoveCostModel,
   type CubeState,
   isSolved,
   type Move,
   type MoveFamily,
   parseAlg,
+  pieceSignature,
+  regionCoordinate,
+  regionHeuristic,
+  regionHeuristicMulti,
+  regionSolvedLRHome,
+  regionSolvedStrict,
   scoreAlg,
   search,
   searchAStar,
@@ -21,16 +29,7 @@ import {
 } from "@moishy/cubing-core";
 import { apb } from "../mod.ts";
 import { dfdb as dfdbSet } from "@moishy/algsets/dfdb";
-import {
-  axisCanonical,
-  BLOCK223,
-  centersSolved,
-  pieceSignature,
-  regionCoordinate,
-  regionSolvedLRHome,
-  regionSolvedStrict,
-} from "./geometry.ts";
-import { regionHeuristic, regionHeuristicMulti } from "./pruning.ts";
+import { BLOCK223 } from "./geometry.ts";
 
 const ROUX_FB = { corners: [5, 6], edges: [6, 9, 10] };
 // Build a synthetic state with solved pieces but a given center permutation, to

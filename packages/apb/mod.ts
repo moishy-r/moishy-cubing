@@ -37,22 +37,18 @@ export { apbDefinition } from "./src/apb.ts";
 // piece groups its steps target (useful for reading a SolveResult — highlighting
 // the block in a UI, checking what a segment finished).
 //
-// `src/geometry.ts` holds the rest of the method wiring — goal predicates,
-// recognition signatures, CaseLookup builders — and is intentionally NOT
-// re-exported. Those are APB's internals: several are meaningless outside its
-// algsets (`zblsSignature`, `eodrSignature`), and re-exporting the generic ones
-// from the *method* package would freeze them into this contract while their
-// proper home is arguably cubing-core or algsets. Building your own method means
-// reading geometry.ts as a template, which is what guides/adding-a-method.md says.
-export {
-  AFTER_BR,
-  BLOCK223,
-  BR_PAIR,
-  EO_EDGE_SLOTS,
-  F2L,
-  LAST_SLOT,
-  type PieceRegion,
-} from "./src/geometry.ts";
+// What used to sit behind this line — goal predicates, signature primitives,
+// pruning tables, the AlgSet -> CaseLookup adapters — has moved to where it is
+// reusable: `@moishy/cubing-core` for the geometry and pattern databases,
+// `@moishy/algsets` for the adapters, `@moishy/steps` for the block searches.
+// `src/geometry.ts` keeps only what is genuinely APB's — its piece groups and the
+// signatures its own Steps recognize on (`zblsSignature`, `eodrSignature`,
+// `wvSvSignature` are meaningless outside its algsets) — and stays internal.
+export { AFTER_BR, BLOCK223, BR_PAIR, EO_EDGE_SLOTS, F2L, LAST_SLOT } from "./src/geometry.ts";
+
+// `PieceRegion` is cubing-core's type now — re-exported so a consumer reading a
+// SolveResult against the groups above does not have to import both packages.
+export type { PieceRegion } from "@moishy/cubing-core";
 
 /** The APB method, ready to `.solve(scramble, settings?)`. See ./src/apb.ts. */
 export const apb: Method = new Method(apbDefinition);

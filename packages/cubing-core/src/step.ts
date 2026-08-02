@@ -646,3 +646,20 @@ export function runPhaseCandidates(
   out.sort((a, b) => a.cost - b.cost);
   return opts.max === undefined ? out : out.slice(0, opts.max);
 }
+
+/**
+ * Chains lookups: returns the first that recognizes the state. Used by ZBLL to
+ * fall through to PLL for the corners-already-solved case, which the 472-case
+ * ZBLL set deliberately does not duplicate (see /DESIGN.md, SPEC ZBLL).
+ */
+export function fallThrough(...lookups: CaseLookup[]): CaseLookup {
+  return {
+    find(s) {
+      for (const l of lookups) {
+        const hit = l.find(s);
+        if (hit) return hit;
+      }
+      return null;
+    },
+  };
+}

@@ -15,34 +15,34 @@ import { wv as wvSet } from "@moishy/algsets/wv";
 import {
   type AlgorithmicPhase,
   applyMoves,
+  centersSolved,
+  cornerSignature,
   type CubeState,
+  eoSignature,
+  fallThrough,
   invert,
   isSolved,
   type Move,
   normalizeOrientation,
+  orientationSignature,
   parseAlg,
+  pieceSignature,
+  regionSolved,
+  regionSolvedAndEO,
   runPhase,
   solvedCube,
   statesEqual,
+  stripRotations,
 } from "@moishy/cubing-core";
 import { assert, assertEquals } from "@std/assert";
 import { apb, apbDefinition } from "../mod.ts";
+import { aufInvariantLookup, regionLookup } from "@moishy/algsets";
 import {
   AFTER_BR,
-  aufInvariantLookup,
   BLOCK223,
-  centersSolved,
-  cornerSignature,
+  EO_EDGE_SLOTS,
   eodrSignature,
-  eoSignature,
   F2L,
-  fallThrough,
-  orientationSignature,
-  pieceSignature,
-  regionLookup,
-  regionSolved,
-  regionSolvedAndEO,
-  stripRotations,
   wvSvSignature,
   zblsSignature,
 } from "./geometry.ts";
@@ -152,7 +152,7 @@ Deno.test(
       kind: "algorithmic",
       id: "eo",
       goal: regionSolvedAndEO(AFTER_BR),
-      cases: regionLookup(eoPairSet, eoSignature(), dbr),
+      cases: regionLookup(eoPairSet, eoSignature(EO_EDGE_SLOTS), dbr),
       auf: ["U"],
     };
     const set = {
@@ -525,7 +525,7 @@ Deno.test(
       goal: regionSolvedAndEO(AFTER_BR),
       cases: regionLookup(
         eoPairSet,
-        eoSignature(),
+        eoSignature(EO_EDGE_SLOTS),
         (c) => c.subset === "dbr-solved-eo-(1)",
       ),
       auf: ["U"],
@@ -1047,14 +1047,18 @@ Deno.test("every algset resolves and solves through its production lookup", () =
       name: "eo",
       set: eoPairSet,
       goal: regionSolvedAndEO(AFTER_BR),
-      lookup: regionLookup(eoPairSet, eoSignature(), (c) => c.subset === "dbr-solved-eo-(1)"),
+      lookup: regionLookup(
+        eoPairSet,
+        eoSignature(EO_EDGE_SLOTS),
+        (c) => c.subset === "dbr-solved-eo-(1)",
+      ),
       only: (id) => eoPairSet.get(id)?.subset === "dbr-solved-eo-(1)",
     },
     {
       name: "eoBackSlot",
       set: eoPairSet,
       goal: regionSolvedAndEO(AFTER_FRONT),
-      lookup: regionLookup(eoPairSet, eoSignature(), (c) => c.subset === "dfr"),
+      lookup: regionLookup(eoPairSet, eoSignature(EO_EDGE_SLOTS), (c) => c.subset === "dfr"),
       only: (id) => eoPairSet.get(id)?.subset === "dfr",
     },
     {

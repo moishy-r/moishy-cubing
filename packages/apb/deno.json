@@ -6,7 +6,8 @@
   "license": "MIT",
   "imports": {
     "@moishy/cubing-core": "jsr:@moishy/cubing-core@^0.3.0",
-    "@moishy/algsets": "jsr:@moishy/algsets@^0.3.0"
+    "@moishy/algsets": "jsr:@moishy/algsets@^0.3.0",
+    "@moishy/steps": "jsr:@moishy/steps@^0.1.0"
   },
   "publish": {
     "exclude": [

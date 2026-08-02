@@ -10,6 +10,7 @@
 import { assertEquals } from "@std/assert";
 import { VERSION as CORE } from "../mod.ts";
 import { VERSION as ALGSETS } from "../../algsets/mod.ts";
+import { VERSION as STEPS } from "../../steps/mod.ts";
 import { VERSION as APB } from "../../apb/mod.ts";
 
 const read = async (pkg: string) =>
@@ -18,6 +19,7 @@ const read = async (pkg: string) =>
 const PACKAGES: [name: string, exported: string][] = [
   ["cubing-core", CORE],
   ["algsets", ALGSETS],
+  ["steps", STEPS],
   ["apb", APB],
 ];
 
