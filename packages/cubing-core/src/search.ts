@@ -71,6 +71,31 @@ export interface SearchParams {
   stateKey?: (state: CubeState, lastMove: Move | null) => string | number;
   /** Maximum solution length in moves. Bounds the search; defaults to 20. */
   maxDepth?: number;
+  /**
+   * Safety net on how much the search may retain, defaulting to
+   * {@link DEFAULT_MAX_NODES}. On exhaustion the search gives up and reports
+   * `found: false`, exactly as if no solution existed within `maxDepth`.
+   *
+   * `maxDepth` bounds solution *length*, not work: when no solution exists within
+   * it, A* has to exhaust every state reachable in that many moves, and nothing
+   * else bounds the visited map or the frontier. A modest depth over a
+   * slice/wide-inclusive generator is enough to exhaust the heap — lowering APB's
+   * `rouxFB` cap from 9 to 7 grew the heap at ~200 MB/s to a fatal, uncatchable
+   * V8 out-of-memory in under a minute. Lowering a cap is a documented use
+   * (`StepOptions.searchMaxDepth` — "lower one to bound an experiment"), so it
+   * must not be able to kill the process.
+   *
+   * The A* engines bound the visited map, which is the structure that actually
+   * grows — bounding *expansions* instead is the wrong lever, since one expansion
+   * admits up to 45 children. The iterative-deepening engines keep no map, so
+   * there this bounds nodes expanded.
+   *
+   * Unlike {@link SearchParams.deadline} the bound is deterministic: the same
+   * search retains the same states on every machine, so which strategies answer
+   * does not become load- or hardware-dependent (the tradeoff called out for
+   * `SearchPhase.timeBudgetMs`).
+   */
+  maxNodes?: number;
   /** Cost ceiling: stop once no solution exists at or below this cost. Defaults to Infinity. */
   maxCost?: number;
   /** Cooperative cancellation; checked at each node and throws if aborted. */
@@ -96,6 +121,18 @@ export interface SearchResult {
 }
 
 const DEFAULT_MAX_DEPTH = 20;
+
+/**
+ * Default ceiling on retained states (see {@link SearchParams.maxNodes}).
+ *
+ * Costed from measurement, not guessed: a retained state runs ~1 KB (the frontier
+ * node holds a whole `CubeState` plus its path), so 500k bounds a runaway search
+ * at roughly half a gigabyte. That clears every block search measured here except
+ * APB's opt-in `direct`, whose single 7-piece search legitimately retains ~910k —
+ * a phase that big is expected to raise its own {@link SearchPhase.maxNodes}
+ * rather than have every other search pay for its ceiling.
+ */
+export const DEFAULT_MAX_NODES = 500_000;
 // Tolerance for float threshold comparisons (MCC costs are non-integer).
 const EPS = 1e-9;
 
@@ -124,6 +161,7 @@ export function search(params: SearchParams): SearchResult {
     canFollow = sameFamily,
     prevMove = null,
     maxDepth = DEFAULT_MAX_DEPTH,
+    maxNodes = DEFAULT_MAX_NODES,
     maxCost = Infinity,
     signal,
     deadline,
@@ -145,6 +183,9 @@ export function search(params: SearchParams): SearchResult {
       throw new DOMException("search time budget exceeded", "TimeoutError");
     }
     nodesVisited++;
+    // Node ceiling reached: prune. Infinity propagates to the driver loop's
+    // `next === Infinity` check, ending the search as "no solution found".
+    if (nodesVisited > maxNodes) return Infinity;
 
     const f = g + heuristic(state);
     if (f > threshold + EPS) return f;
@@ -211,6 +252,7 @@ export function searchAStar(params: SearchParams): SearchResult {
     prevMove = null,
     stateKey = toFacelets,
     maxDepth = DEFAULT_MAX_DEPTH,
+    maxNodes = DEFAULT_MAX_NODES,
     maxCost = Infinity,
     signal,
     deadline,
@@ -272,6 +314,9 @@ export function searchAStar(params: SearchParams): SearchResult {
     }
     const node = pop();
     nodesVisited++;
+    // Ceiling on retained states — see SearchParams.maxNodes. Bounding the map
+    // (not expansions) is what bounds memory: one expansion admits up to 45 children.
+    if (bestG.size > maxNodes) break;
     if (node.f > maxCost + EPS) break; // cheapest frontier f exceeds the ceiling
     if (goal(node.state)) {
       return { found: true, moves: node.moves, cost: node.g, nodesVisited };
@@ -333,6 +378,7 @@ export function searchAStarMany(params: SearchAStarManyParams): SearchResult[] {
     costSlack,
     maxSolutions = DEFAULT_MAX_SOLUTIONS,
     maxDepth = DEFAULT_MAX_DEPTH,
+    maxNodes = DEFAULT_MAX_NODES,
     signal,
     deadline,
   } = params;
@@ -394,6 +440,7 @@ export function searchAStarMany(params: SearchAStarManyParams): SearchResult[] {
     }
     const node = pop();
     nodesVisited++;
+    if (bestG.size > maxNodes) break; // ceiling reached — keep what was found
     // A* pops in f order and a goal has h = 0 (f = g), so once the frontier's
     // cheapest f exceeds the slack window, no further goal can qualify.
     if (node.f > cheapest + costSlack + EPS) break;
@@ -452,6 +499,7 @@ export function searchMany(params: SearchManyParams): SearchResult[] {
     canFollow = sameFamily,
     prevMove = null,
     maxDepth = DEFAULT_MAX_DEPTH,
+    maxNodes = DEFAULT_MAX_NODES,
     slack,
     maxSolutions = DEFAULT_MAX_SOLUTIONS,
     signal,
@@ -472,6 +520,7 @@ export function searchMany(params: SearchManyParams): SearchResult[] {
         throw new DOMException("search time budget exceeded", "TimeoutError");
       }
       nodesVisited++;
+      if (nodesVisited > maxNodes) return; // node ceiling — stop growing the pool
       if (goal(state)) {
         out.push({ moves: path.slice(), cost: g });
         return; // don't extend past the goal

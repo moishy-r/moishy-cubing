@@ -1,7 +1,7 @@
 import { assert, assertEquals } from "@std/assert";
 import { applyAlg, type CubeState, isSolved, solvedCube } from "./cube-state.ts";
-import { formatAlg } from "./notation.ts";
-import { search } from "./search.ts";
+import { formatAlg, type MoveFamily } from "./notation.ts";
+import { search, searchAStar, searchAStarMany } from "./search.ts";
 
 const FACES = ["U", "D", "L", "R", "F", "B"] as const;
 
@@ -75,4 +75,46 @@ Deno.test("a too-shallow depth bound reports no solution", () => {
   const r = search({ start, goal: isSolved, moves: [...FACES], maxDepth: 2 });
   assertEquals(r.found, false);
   assertEquals(r.cost, Infinity);
+});
+
+// A depth bound with no solution under it must not be able to kill the process.
+// `maxDepth` bounds solution *length*, not work: A* then has to exhaust every
+// state reachable within it, and nothing else bounded the visited map or the
+// frontier. Lowering APB's rouxFB cap from 9 to 7 grew the heap at ~200 MB/s to a
+// fatal, uncatchable V8 out-of-memory — from a documented use of
+// `StepOptions.searchMaxDepth` ("lower one to bound an experiment").
+Deno.test("an unsatisfiable depth bound gives up at maxNodes instead of exhausting memory", () => {
+  // Unreachable goal over a slice/wide generator: the search can only exhaust.
+  const params = {
+    start: solvedCube(),
+    goal: () => false,
+    moves: ["U", "D", "F", "B", "R", "r", "M"] as MoveFamily[],
+    maxDepth: 8,
+    maxNodes: 20_000,
+  };
+  for (const engine of [searchAStar, search]) {
+    const res = engine(params);
+    assertEquals(res.found, false, `${engine.name}: unreachable goal must report not-found`);
+    // The ceiling has to actually bind — otherwise this test proves nothing.
+    assert(
+      res.nodesVisited > 1_000,
+      `${engine.name}: expected a real search, saw ${res.nodesVisited} nodes`,
+    );
+  }
+  // The pool engine is the one APB's rouxFB actually uses (phase-chaining), and
+  // was where the OOM lived.
+  const pool = searchAStarMany({ ...params, costSlack: 2, maxSolutions: 8 });
+  assertEquals(pool.length, 0, "unreachable goal must yield an empty pool");
+});
+
+Deno.test("maxNodes defaults are generous enough for a solvable search", () => {
+  // A real, solvable search must never be cut short by the default ceiling.
+  const res = searchAStar({
+    start: applyAlg(solvedCube(), "R U R' U'"),
+    goal: isSolved,
+    moves: ["R", "U"] as MoveFamily[],
+    maxDepth: 6,
+  });
+  assertEquals(res.found, true);
+  assertEquals(res.cost > 0, true);
 });

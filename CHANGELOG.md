@@ -10,6 +10,19 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ### Changed
 
+- **`@moishy/cubing-core`: a search whose depth bound admits no solution no longer exhausts the
+  heap.** `maxDepth` bounds solution _length_, not work — with no solution under it, A\* has to
+  exhaust every state reachable in that many moves, and nothing bounded the visited map or the
+  frontier. Lowering APB's `rouxFB` cap from 9 to 7 grew the heap at ~200 MB/s to a fatal,
+  uncatchable V8 out-of-memory in under a minute; that is a documented use of
+  `StepOptions.searchMaxDepth` ("lower one to bound an experiment"), so it must not be able to kill
+  the process. Searches now stop at `SearchParams.maxNodes` (default `DEFAULT_MAX_NODES`, 500k
+  retained states ≈ half a gigabyte, costed from measurement) and report `found: false`. The same
+  repro now returns in ~2s at a bounded 563 MB. Unlike a wall-clock budget the bound is
+  deterministic, so which strategies answer stays machine-independent. A phase whose search is
+  legitimately huge raises its own `SearchPhase.maxNodes` — APB's opt-in `direct` retains ~910k
+  solving the whole 2x2x3 in one go, and does so.
+
 - **`@moishy/cubing-core`: a `force`-mode unit that cannot solve its region now throws
   `SettingsError` instead of silently falling back to the core Steps.** The fallback defeated the
   point of `force` — the mode exists for the curriculum case (`ZBLL` -> `OCLL+PLL` for someone who

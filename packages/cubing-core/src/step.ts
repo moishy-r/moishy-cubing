@@ -53,6 +53,15 @@ export interface SearchPhase {
   /** Maximum length of this phase's sub-solution, in moves. */
   maxDepth?: number;
   /**
+   * Ceiling on how much this phase's search may retain, overriding
+   * {@link import("./search.ts").DEFAULT_MAX_NODES}. Raise it for a phase whose
+   * search is legitimately huge — APB's `direct` retains ~910k states solving the
+   * whole 2x2x3 in one go — so the safe default can stay low for everything else.
+   * Exceeding it yields no segment, so the strategy drops out of the step's race;
+   * unlike {@link SearchPhase.timeBudgetMs} that outcome is deterministic.
+   */
+  maxNodes?: number;
+  /**
    * Use the best-first A* engine instead of IDA*. Preferred when the phase has a
    * strong `heuristic` (e.g. a pruning table): A* visits each state once and
    * avoids IDA*'s re-exploration on every cost-threshold bump, which thrashes
@@ -370,6 +379,7 @@ export function runPhase(
         prevMove: innerPrev,
         stateKey: phase.stateKey,
         maxDepth: phase.maxDepth ?? context.maxDepth,
+        maxNodes: phase.maxNodes,
         signal: context.signal,
         deadline: budget.deadline,
       });
@@ -531,6 +541,7 @@ export function runPhaseCandidates(
           prevMove: innerPrev,
           stateKey: phase.poolStateKey ?? phase.stateKey,
           maxDepth: phase.maxDepth ?? context.maxDepth,
+          maxNodes: phase.maxNodes,
           costSlack: opts.searchSlack,
           maxSolutions: opts.max,
           signal: context.signal,
@@ -545,6 +556,7 @@ export function runPhaseCandidates(
           costModel,
           prevMove: innerPrev,
           maxDepth: phase.maxDepth ?? context.maxDepth,
+          maxNodes: phase.maxNodes,
           slack: opts.searchSlack,
           maxSolutions: opts.max,
           signal: context.signal,

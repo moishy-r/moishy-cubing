@@ -310,6 +310,9 @@ const blockSearch = (
     // strategy) drops out of the step's race instead of failing the solve. Only
     // `direct` sets it — see SearchPhase.timeBudgetMs.
     timeBudgetMs?: number;
+    // Ceiling on states retained, overriding the engine default. Only `direct`
+    // raises it — see SearchPhase.maxNodes.
+    maxNodes?: number;
     // Phase-chaining pool key (only used when this phase feeds a downstream one).
     // Must distinguish candidates by what the *next* phase reads — for a first
     // block, the whole goal block, so the pool offers genuinely different
@@ -357,6 +360,7 @@ const blockSearch = (
     stateKey: regionCoordinate(goal),
     poolStateKey: opts.poolStateKey,
     maxDepth: opts.maxDepth,
+    maxNodes: opts.maxNodes,
     timeBudgetMs: opts.timeBudgetMs,
   };
 };
@@ -438,6 +442,12 @@ const block223: MethodDefinition["steps"][number] = {
         // slow machine does not change which strategies answer. Raise or lower per
         // solve with `stepOptions.block223.searchTimeBudgetMs.full`.
         timeBudgetMs: 15_000,
+        // One search for the whole 7-piece block legitimately retains ~910k states
+        // — measured over 8 scrambles — which is past the engine's safe default
+        // (DEFAULT_MAX_NODES, sized so a runaway search cannot exhaust the heap).
+        // Raise it here rather than lower the bar for every other search; the 15s
+        // budget above is still this phase's primary guard.
+        maxNodes: 2_000_000,
       })],
     },
     // Corner-first and cross strategies are registered but disabled by default.
