@@ -60,6 +60,23 @@ jobs:
             exit 1
           fi
 
+      - name: Fail if the CROP assets were not copied
+        run: |
+          set -euo pipefail
+          # Same failure mode the apb guard above exists to prevent. crop/core/
+          # is the single source of truth and every copy is gitignored, so if
+          # `bundle:crop` silently no-ops the page deploys with a 404 for its
+          # core and a dead timer — with nothing else failing.
+          for f in docs/crop/crop-core.js docs/crop/crop-overlay.css docs/crop/icons/icon48.png; do
+            test -s "$f" || { echo "::error::$f is missing or empty — refusing to deploy"; exit 1; }
+          done
+          # Byte-identical to the source, or the copy step is not doing its job.
+          for pair in "crop/core/crop-core.js docs/crop/crop-core.js" \
+                      "crop/core/crop-overlay.css docs/crop/crop-overlay.css"; do
+            cmp -s $pair || { echo "::error::$pair differ — bundle:crop did not run"; exit 1; }
+          done
+          echo "crop assets: $(wc -c < docs/crop/crop-core.js) bytes of core, icons present"
+
       - uses: actions/configure-pages@v5
 
       - uses: actions/upload-pages-artifact@v3
