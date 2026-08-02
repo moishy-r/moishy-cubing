@@ -578,3 +578,127 @@ Deno.test("a force replacement that cannot solve its region throws, never falls 
   assert(competed.solved, "compete mode must fall back to the core steps, not throw");
   assertEquals(competed.segments.map((s) => s.unitId), ["s"]);
 });
+
+// `compete` means "use this only if it helps", so it must be judged on the whole
+// solve, not just its own region. The span DP picks the cheapest cover of the
+// region and the runner then continues greedily, so a cheaper region can leave a
+// dearer remainder — measured on APB before this was fixed: enabling `eoPair`
+// alone made the total worse on 14 of 60 scrambles (worst +7.9).
+//
+// Setup: the replacement covers step "a" in 1 move where the core step needs 4,
+// but it lands in a state that costs step "b" 6 moves instead of 1. Region cover
+// 1 < 4, whole solve 7 > 5.
+Deno.test("a compete unit that wins its region but loses the solve is not used", async () => {
+  const SCRAMBLE = "U R F R' F'";
+  const viaCore = st("U"); // core "a" lands here; "b" finishes in one move
+  const viaRepl = st("U R F R' F' R"); // replacement lands here; "b" needs six
+
+  const method = new Method({
+    id: "demo",
+    steps: [
+      {
+        id: "a",
+        strategies: [{
+          id: "aCore",
+          phases: [algPhase("p", eq(viaCore), [{
+            state: st(SCRAMBLE),
+            case: { id: "aCore", algs: [{ moves: parseAlg("F R F' R'") }] },
+          }])],
+        }],
+      },
+      {
+        id: "b",
+        strategies: [{
+          id: "bStep",
+          phases: [algPhase("p", isSolved, [
+            { state: viaCore, case: { id: "cheap", algs: [{ moves: parseAlg("U'") }] } },
+            {
+              state: viaRepl,
+              case: { id: "dear", algs: [{ moves: parseAlg("R' F R F' R' U'") }] },
+            },
+          ])],
+        }],
+      },
+    ],
+    replacements: [{
+      id: "shortcut",
+      region: ["a", "a"],
+      mode: "compete",
+      strategies: [{
+        id: "shortcutS",
+        phases: [algPhase("p", eq(viaRepl), [{
+          state: st(SCRAMBLE),
+          case: { id: "shortcut", algs: [{ moves: parseAlg("R") }] },
+        }])],
+      }],
+    }],
+  });
+
+  const off = await method.solve(SCRAMBLE);
+  const forced = await method.solve(SCRAMBLE, {
+    replacements: { shortcut: { enabled: true, mode: "force" } },
+  });
+  const competed = await method.solve(SCRAMBLE, {
+    replacements: { shortcut: { enabled: true, mode: "compete" } },
+  });
+  assert(off.solved && forced.solved && competed.solved);
+
+  // The premise: the replacement really is cheaper over its own region ...
+  const regionCost = (r: typeof off) =>
+    r.segments.filter((s) => s.unitId === "a" || s.unitId === "shortcut")
+      .reduce((a, s) => a + s.cost, 0);
+  assert(
+    regionCost(forced) < regionCost(off) - 1e-9,
+    `premise: replacement should win its region (${regionCost(forced)} vs ${regionCost(off)})`,
+  );
+  // ... and really does make the whole solve dearer.
+  assert(
+    forced.cost > off.cost + 1e-9,
+    `premise: replacement should lose the solve (${forced.cost} vs ${off.cost})`,
+  );
+
+  // So compete must decline it, and match the leave-it-off solve exactly.
+  assertEquals(competed.cost, off.cost);
+  assert(
+    !competed.segments.some((s) => s.unitId === "shortcut"),
+    "compete used a unit that made the whole solve dearer",
+  );
+});
+
+Deno.test("a compete unit that improves the solve is still used", async () => {
+  // The mirror of the above: when the shortcut genuinely wins, compete takes it.
+  const SCRAMBLE = "R U R' U'";
+  const method = new Method({
+    id: "demo",
+    steps: [{
+      id: "s",
+      strategies: [{
+        id: "padded",
+        phases: [algPhase("p", isSolved, [{
+          state: st(SCRAMBLE),
+          case: { id: "padded", algs: [{ moves: parseAlg("U R U' R' U U'") }] },
+        }])],
+      }],
+    }],
+    replacements: [{
+      id: "short",
+      region: ["s", "s"],
+      mode: "compete",
+      strategies: [{
+        id: "shortS",
+        phases: [algPhase("p", isSolved, [{
+          state: st(SCRAMBLE),
+          case: { id: "short", algs: [{ moves: parseAlg("U R U' R'") }] },
+        }])],
+      }],
+    }],
+  });
+  const competed = await method.solve(SCRAMBLE, {
+    replacements: { short: { enabled: true, mode: "compete" } },
+  });
+  assert(competed.solved);
+  assert(
+    competed.segments.some((s) => s.unitId === "short"),
+    "compete declined a unit that improves the solve",
+  );
+});

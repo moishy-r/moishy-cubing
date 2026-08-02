@@ -47,7 +47,9 @@ export interface Replacement {
   strategies: Strategy[];
   /**
    * Author default: `"compete"` races against the region's normal per-step
-   * solving; `"force"` uses only this. Always caller-overridable via settings.
+   * solving and is kept only if the *whole solve* comes out cheaper (see
+   * {@link Method.solveRaced}); `"force"` uses only this, and errors rather than
+   * falling back if it cannot. Always caller-overridable via settings.
    */
   mode: "compete" | "force";
 }
@@ -700,7 +702,84 @@ export class Method {
     settings: SolverSettings = {},
     opts: SolveOptions = {},
   ): Promise<SolveResult> {
-    return Promise.resolve().then(() => this.solveSync(scramble, settings, opts));
+    return Promise.resolve().then(() => this.solveRaced(scramble, settings, opts));
+  }
+
+  /**
+   * `compete` means "use this only if it helps", so enabling a compete unit must
+   * never make the *whole solve* dearer than leaving it off. The span DP alone
+   * cannot promise that: it picks the cheapest cover of the unit's region, and the
+   * runner then continues greedily, so a cheaper region can leave a dearer
+   * remainder. Measured before this existed: enabling `eoPair` alone regressed the
+   * total on 14 of 60 scrambles (worst +7.9), and all five APB replacements
+   * together on 29 of 60 (worst +11.4) — while the region cover itself was never
+   * dearer on any of them, exactly as the DP guarantees.
+   *
+   * So the promise is kept where it is actually made: solve once with the compete
+   * units off and once with them on, and keep the cheaper. Costs a second solve,
+   * but only when a compete unit is enabled — they are opt-in and off by default,
+   * so the default path is untouched. `force` units are not raced: forcing a unit
+   * is a statement that it must be used, not an offer.
+   *
+   * The baseline runs first so the guarantee survives a time budget: if the second
+   * solve is cut short, the baseline is still there to return.
+   */
+  private solveRaced(
+    scramble: string,
+    settings: SolverSettings,
+    opts: SolveOptions,
+  ): SolveResult {
+    const competing = this.enabledCompeteIds(settings);
+    if (competing === null) return this.solveSync(scramble, settings, opts);
+
+    const started = performance.now();
+    const baseline = this.solveSync(scramble, competing, opts);
+
+    // Charge the first solve against a shared budget rather than giving each run a
+    // fresh one, or `timeBudgetMs` would silently mean twice what it says.
+    let rest = opts;
+    if (opts.timeBudgetMs !== undefined) {
+      const left = opts.timeBudgetMs - (performance.now() - started);
+      if (left <= 0) return baseline;
+      rest = { ...opts, timeBudgetMs: left };
+    }
+    const withUnits = this.solveSync(scramble, settings, rest);
+
+    if (!withUnits.solved) return baseline;
+    if (!baseline.solved) return withUnits;
+    return withUnits.cost < baseline.cost - 1e-9 ? withUnits : baseline;
+  }
+
+  /**
+   * Settings with every enabled `compete`-mode replacement/extra turned off, or
+   * `null` when there are none (the default, and the signal to skip the race).
+   */
+  private enabledCompeteIds(settings: SolverSettings): SolverSettings | null {
+    const rec = this.definition.recommendedSettings ?? {};
+    const off: {
+      replacements: Record<string, ReplacementOptions>;
+      extras: Record<string, ReplacementOptions>;
+    } = { replacements: {}, extras: {} };
+    let any = false;
+
+    for (const kind of ["replacements", "extras"] as const) {
+      const units: { id: string; mode: "compete" | "force" }[] = kind === "replacements"
+        ? (this.definition.replacements ?? [])
+        : (this.definition.extras ?? []);
+      for (const u of units) {
+        const o: ReplacementOptions = { ...rec[kind]?.[u.id], ...settings[kind]?.[u.id] };
+        if (!o.enabled) continue;
+        if ((o.mode ?? u.mode) !== "compete") continue;
+        off[kind][u.id] = { ...o, enabled: false };
+        any = true;
+      }
+    }
+    if (!any) return null;
+    return {
+      ...settings,
+      replacements: { ...settings.replacements, ...off.replacements },
+      extras: { ...settings.extras, ...off.extras },
+    };
   }
 
   private buildCtx(settings: SolverSettings, opts: SolveOptions): RunCtx {

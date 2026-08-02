@@ -226,12 +226,19 @@ method's core steps (its `region`), not a distinct kind of Step. Two selection m
 method author but overridable per-solve in settings:
 
 - `"compete"` - the Replacement's Strategies are merged into the same candidate pool as the region's
-  original Strategies and raced by MCC; the cheaper one wins. Use this when the alternative is a
-  genuine performance question (e.g. `BR Pair+EO` vs `EOPair`).
+  original Strategies and raced by MCC; the cheaper one wins. The race is judged on the **whole
+  solve**, not just the region: the span DP picks the cheapest cover of the region, but the runner
+  continues greedily afterwards, so a cheaper region can leave a dearer remainder. Enabling a
+  compete unit therefore solves twice — once with it off, once on — and keeps the cheaper, which is
+  what makes "use it only if it helps" true rather than approximately true. Only paid when such a
+  unit is enabled, and they are opt-in. Use this when the alternative is a genuine performance
+  question (e.g. `BR Pair+EO` vs `EOPair`).
 - `"force"` - the Replacement's Strategies entirely replace the region's pool when enabled, no
-  comparison. Use this when the alternative exists for a knowledge/curriculum reason, not a speed
-  one (e.g. `ZBLL` -> `OCLL+PLL` for someone who doesn't know full ZBLL - ZBLL will ~always look
-  cheaper by MCC, so racing it would defeat the point).
+  comparison. If none of them can solve the region the solve _errors_: falling back to the very
+  Steps the caller excluded would hand back a solution they cannot use. Use this when the
+  alternative exists for a knowledge/curriculum reason, not a speed one (e.g. `ZBLL` -> `OCLL+PLL`
+  for someone who doesn't know full ZBLL - ZBLL will ~always look cheaper by MCC, so racing it would
+  defeat the point).
 
 ```ts
 interface ReplacementOptions {

@@ -10,6 +10,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ### Changed
 
+- **`@moishy/cubing-core`: enabling a `compete` unit can no longer make the solve worse.** The mode
+  means "use this only if it helps", but it was judged on its own region: the span DP picks the
+  cheapest cover of the region and the runner then continues greedily, so a cheaper region could
+  leave a dearer remainder. Enabling APB's `eoPair` alone made the total worse on 14 of 60 scrambles
+  (worst +7.9) and all five replacements together on 29 of 60 (worst +11.4) — while the region cover
+  itself was never dearer on any of them, exactly as the DP guarantees. A compete unit is now judged
+  on the whole solve: the solver runs once with the compete units off and once with them on and
+  keeps the cheaper. Regressions are now 0 of 60 for every unit and for all eight at once, and each
+  unit fires on exactly the scrambles where it helps. Costs a second solve, but only when a compete
+  unit is enabled — they are opt-in and off by default, so the default path is untouched. `force`
+  units are not raced: forcing a unit says it must be used, not that it is on offer.
+
 - **`@moishy/cubing-core`: a search whose depth bound admits no solution no longer exhausts the
   heap.** `maxDepth` bounds solution _length_, not work — with no solution under it, A\* has to
   exhaust every state reachable in that many moves, and nothing bounded the visited map or the
