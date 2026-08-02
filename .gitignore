@@ -20,3 +20,6 @@ crop/extension/icons/
 docs/crop/crop-core.js
 docs/crop/crop-overlay.css
 docs/crop/icons/
+
+# CROP store upload artifact, built by zipping crop/extension/
+crop-extension-*.zip
