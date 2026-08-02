@@ -2,6 +2,14 @@
 
 Reusable solver steps for speedsolving methods — the search side of "don't write this twice".
 
+```sh
+deno add jsr:@moishy/steps    # Deno — https://jsr.io/@moishy/steps
+npm  install @moishy/steps    # Node — https://www.npmjs.com/package/@moishy/steps
+```
+
+Building a method rather than a step? Start from [`@moishy/apb`](https://jsr.io/@moishy/apb) and
+[the guide](../../guides/adding-a-method.md); this package is what such a method composes.
+
 [`@moishy/algsets`](../algsets) already does this for algorithm data: a PLL case is a PLL case
 whoever is solving it, so the data lives in one package and every method imports it. Searches are
 the same. A Roux first block, a 2x2x2, a 2x2x3, a cross — these are the same search each time, and

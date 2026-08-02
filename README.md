@@ -38,14 +38,16 @@ for (const seg of res.segments) {
 
 ## Packages
 
-| Package                                         | Install                            | What it is                                                                           |
-| ----------------------------------------------- | ---------------------------------- | ------------------------------------------------------------------------------------ |
-| [`@moishy/cubing-core`](./packages/cubing-core) | `deno add jsr:@moishy/cubing-core` | Cube engine, search, MCC cost models, the Step→Strategy→Phase model, solver pipeline |
-| [`@moishy/algsets`](./packages/algsets)         | `deno add jsr:@moishy/algsets`     | Algorithm case data (ZBLL, PLL, OLL, COLL, …) with recognition derived from the algs |
-| [`@moishy/steps`](./packages/steps)             | `deno add jsr:@moishy/steps`       | Reusable solver steps — block-building searches (Roux FB, 2x2x2, 2x2x3, cross)       |
-| [`@moishy/apb`](./packages/apb)                 | `deno add jsr:@moishy/apb`         | The APB method — and the reference implementation for adding your own                |
+| Package                                                                                                                                                 | Install                                                                 | What it is                                                                                                                |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| [`@moishy/cubing-core`](./packages/cubing-core)<br>[jsr](https://jsr.io/@moishy/cubing-core) · [npm](https://www.npmjs.com/package/@moishy/cubing-core) | `deno add jsr:@moishy/cubing-core`<br>`npm install @moishy/cubing-core` | Cube engine, search, MCC cost models, regions and pruning tables, the Step→Strategy→Phase model, solver pipeline          |
+| [`@moishy/algsets`](./packages/algsets)<br>[jsr](https://jsr.io/@moishy/algsets) · [npm](https://www.npmjs.com/package/@moishy/algsets)                 | `deno add jsr:@moishy/algsets`<br>`npm install @moishy/algsets`         | Algorithm case data (ZBLL, PLL, OLL, COLL, …) with recognition derived from the algs, plus the AlgSet→CaseLookup adapters |
+| [`@moishy/steps`](./packages/steps)<br>[jsr](https://jsr.io/@moishy/steps) · [npm](https://www.npmjs.com/package/@moishy/steps)                         | `deno add jsr:@moishy/steps`<br>`npm install @moishy/steps`             | Reusable solver steps — block-building searches (Roux FB, 2x2x2, 2x2x3, cross) ready to compose                           |
+| [`@moishy/apb`](./packages/apb)<br>[jsr](https://jsr.io/@moishy/apb) · [npm](https://www.npmjs.com/package/@moishy/apb)                                 | `deno add jsr:@moishy/apb`<br>`npm install @moishy/apb`                 | The APB method — and the reference implementation for adding your own                                                     |
 
-On Node, use `npx jsr add @moishy/apb` (see [Getting Started](./guides/getting-started.md)).
+Every package ships to both registries; the npm build is dual ESM/CJS, so `import` and `require`
+both work. To pull the JSR build on Node instead, `npx jsr add @moishy/apb` (see
+[Getting Started](./guides/getting-started.md)).
 
 ## Documentation
 
@@ -86,7 +88,7 @@ deno task bundle
 Publishing is automated. Two GitHub Actions workflows:
 
 - **CI** (`.github/workflows/ci.yml`) — on every push and PR: `deno task ok`, a `deno publish` dry
-  run for all three packages, and an npm build that packs the tarballs, installs them into a clean
+  run for all four packages, and an npm build that packs the tarballs, installs them into a clean
   project and runs a real solve through both ESM and CJS.
 - **Release** (`.github/workflows/release.yml`) — publishes to JSR and npm.
 

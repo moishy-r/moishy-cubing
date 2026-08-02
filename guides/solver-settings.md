@@ -105,7 +105,15 @@ phase 1 and then solving phase 2, it keeps a pool of phase-1 candidates within `
 and picks the pair with the best _combined_ cost. `slack` defaults to 2.
 
 **`searchMaxDepth`** overrides a specific search phase's built-in depth cap, keyed by phase id.
-Raise it to let a hard scramble through; lower it to bound an experiment.
+Raise it to let a hard scramble through; lower it to bound an experiment. Note that a cap admitting
+no solution makes the search exhaust everything reachable within it before giving up — that is
+bounded by `maxNodes` (see below), not by the depth itself.
+
+**`maxNodes`** is a per-phase ceiling on retained search states, set on the phase rather than in
+`stepOptions`. It exists so an unsatisfiable depth cap cannot exhaust the heap: on exhaustion the
+search reports no solution, exactly as if none existed. It defaults high enough that only a runaway
+search meets it, and unlike a wall-clock budget it is deterministic, so which strategies answer does
+not depend on the machine.
 
 **`searchTimeBudgetMs`** overrides a search phase's wall-clock budget, same keying. A phase that
 runs out of budget drops out of its step's race rather than failing the solve — which means the
@@ -151,9 +159,16 @@ opt-in.
 await apb.solve(scramble, { replacements: { eoPair: { enabled: true, mode: "compete" } } });
 ```
 
-- **`compete`** (default): solve the region both ways and keep whichever is cheaper. Cannot make a
-  solve worse.
-- **`force`**: always take the replacement, even when it loses.
+- **`compete`** (default): solve **the whole scramble** both ways — once with the replacement off,
+  once on — and keep whichever total is cheaper. It genuinely cannot make a solve worse, which is
+  why it is judged on the total rather than on its own region: a replacement that wins its region
+  can still leave a dearer remainder, since the runner commits greedily afterwards. The cost is a
+  second solve, paid only when a compete unit is enabled.
+- **`force`**: always take the replacement, even when it loses. If it _cannot_ solve the region —
+  its case table does not cover the state — the solve throws `SettingsError` rather than quietly
+  falling back to the steps you excluded. Forcing a unit is a statement that it must be used, so a
+  silent fallback would hand you a solution you cannot execute; reach for `compete` if you meant
+  "use it only if it helps".
 
 APB registers `ocllPll`, `collEpll`, `eoPair`, `eodrLs`, and `backSlotEoLxs`.
 

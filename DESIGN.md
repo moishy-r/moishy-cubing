@@ -9,13 +9,21 @@ it's the source of truth for "why does it work this way," not the chat history t
 ## Packages
 
 - `@moishy/cubing-core` - cube engine, base classes, generic search, MCC scoring, solver pipeline
-  runner. No algorithm data, no method-specific logic.
-- `@moishy/algsets` - algorithm case data only, authored as typed TS modules. No solving logic.
+  runner, and the geometry every method is defined against: piece regions, goal predicates,
+  recognition-signature primitives, pruning tables. No algorithm data, no method-specific logic.
+- `@moishy/algsets` - algorithm case data, authored as typed TS modules, plus the `AlgSet` ->
+  `CaseLookup` adapters. It owns the `AlgSet` type, which is why those adapters cannot sit in
+  cubing-core without a cycle. No solving logic.
+- `@moishy/steps` - reusable _searches_: `blockSearch`, the standard block targets (Roux first
+  block, 2x2x2, 2x2x3, cross), the block cost model, and the six 2x2x3 strategies. What `algsets` is
+  for data, this is for search — a first block is the same search whoever calls it.
 - `@moishy/apb` - the APB method plugin. Reference implementation for "how to add a new method" -
-  copy this package's shape for `@moishy/cfop`, `@moishy/roux`, etc.
+  copy this package's shape for `@moishy/cfop`, `@moishy/roux`, etc. A method package should be
+  mostly wiring: which algset backs each step, what its recognition keys on, how steps sequence.
 
 Deno workspace, one repo. Each package publishes independently to JSR (native) and npm (via `dnt`,
-see `scripts/build_npm.ts`), triggered by pushing a tag `<package-dir>-v<version>` (see
+see `scripts/build_npm.ts`), triggered by pushing a tag `<package-dir>-v<version>`, or by running
+the Release workflow and choosing `all`, which publishes in dependency order (see
 `.github/workflows/release.yml`). Versions are NOT kept in lockstep across packages - `algsets` will
 move much faster than `cubing-core`.
 

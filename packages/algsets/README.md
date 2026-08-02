@@ -99,7 +99,7 @@ Full brief, including per-set conventions and sourcing notes:
 ## Changelog
 
 [CHANGELOG.md](https://github.com/moishy-r/moishy-cubing/blob/main/CHANGELOG.md) — release history
-for all three packages.
+for all four packages.
 
 ## License
 

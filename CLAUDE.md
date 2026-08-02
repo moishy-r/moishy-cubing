@@ -5,19 +5,29 @@ Conventions and traps that aren't obvious from the code. For what the project _i
 
 ## Packages and What Belongs Where
 
-Dependency order is **`cubing-core` → `algsets` → `apb`**; nothing may point back up.
+Dependency order is **`cubing-core` → `algsets` → `steps` → `apb`**; nothing may point back up.
 
-- **`@moishy/cubing-core`** — cube state, notation, MCC cost models, the search engines, and the
-  Step/Strategy/Phase runner. Knows nothing about any method.
-- **`@moishy/algsets`** — algorithm case data plus `defineAlgSet`/validation. Owns the `AlgSet`
-  type, which is why the `AlgSet` → `CaseLookup` adapters cannot live in cubing-core (that would
-  cycle).
-- **`@moishy/apb`** — the APB method. Pure configuration on top of the other two.
+- **`@moishy/cubing-core`** — cube state, notation, MCC cost models, the search engines, the
+  Step/Strategy/Phase runner, plus the generic geometry every method needs: piece regions, goal
+  predicates, recognition-signature primitives, and the pruning tables. Knows nothing about any
+  method.
+- **`@moishy/algsets`** — algorithm case data plus `defineAlgSet`/validation, and the `AlgSet` →
+  `CaseLookup` adapters. It owns the `AlgSet` type, which is why those adapters cannot live in
+  cubing-core (that would cycle).
+- **`@moishy/steps`** — reusable _searches_: `blockSearch`, the standard block targets (Roux FB,
+  2x2x2, 2x2x3, cross), the block cost model, and the six 2x2x3 strategies. What algsets is for
+  data, this is for search. Depends on algsets for exactly one thing: `rouxFbDfdb`'s second phase
+  places DF/DB by alg, so it takes an `AlgSet`.
+- **`@moishy/apb`** — the APB method. Pure configuration on top of the other three.
 
-`apb`'s public surface is deliberately 10 symbols. `src/geometry.ts` (goal predicates, recognition
-signatures, lookup builders) and `src/pruning.ts` (pattern databases) are internal — much of it is
-generic and would serve other methods, but it is not published from a _method_ package. See
-[the API-surface entry in CHANGELOG.md](./CHANGELOG.md).
+Before writing a search in a method package, check whether `steps` already has it — a first block, a
+2x2x2, a cross are the same search whoever is calling them. A method package should be _wiring_:
+which algset backs each step, what its recognition keys on, how the steps sequence.
+
+`apb`'s public surface is deliberately small. `src/geometry.ts` keeps only what is genuinely APB's —
+its piece groups, and the two-line compositions of the shared signature primitives that its own
+Steps recognize on (`zblsSignature`, `eodrSignature`, `wvSvSignature`). Everything generic that used
+to sit there moved out; see the CHANGELOG entry for the extraction.
 
 ## The Demo, and Testing Every Setting
 
@@ -66,8 +76,8 @@ Point 3 is the trap. On a `0.x` line, **`^0.1.0` means `>=0.1.0 <0.2.0`** — so
 fine and needs no dependent changes, but `0.1.x → 0.2.0` strands every dependent on a version that
 no longer exists. `^0.0.1` is narrower still: it admits only `0.0.1` exactly.
 
-Dependency order is `cubing-core → algsets → apb`; both registries reject a package whose
-dependencies don't resolve.
+Dependency order is `cubing-core → algsets → steps → apb`; both registries reject a package whose
+dependencies don't resolve. The Release workflow's `all` publishes in exactly that order.
 
 `deno task ok` fails if any of the three drift apart — see
 `packages/cubing-core/src/version_test.ts`. Trust that test over your memory.
@@ -101,7 +111,7 @@ no test failure unless you compare against a known optimum.
 
 Maxing several admissible bounds stays admissible. Summing them does **not**: it was measured here
 and is wrong for cube regions, because one slice/wide move can advance two disjoint piece groups at
-once (see `regionHeuristicMulti` in `packages/apb/src/pruning.ts`).
+once (see `regionHeuristicMulti` in `packages/cubing-core/src/pruning.ts`).
 
 A heuristic must be built for the same cost model as the phase that uses it, or admissibility is
 lost.

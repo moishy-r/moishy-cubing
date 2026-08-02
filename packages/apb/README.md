@@ -1,7 +1,9 @@
 # @moishy/apb
 
 A solver for the **APB** method (Athefre's Pair & Block), built on
-[`@moishy/cubing-core`](https://jsr.io/@moishy/cubing-core).
+[`@moishy/cubing-core`](https://jsr.io/@moishy/cubing-core),
+[`@moishy/algsets`](https://jsr.io/@moishy/algsets) and
+[`@moishy/steps`](https://jsr.io/@moishy/steps) — this package is the method wiring on top of them.
 
 It produces the solution a human following APB would execute — every step labeled, ranked by how
 ergonomic it is to turn, not by move count.
@@ -14,9 +16,10 @@ npm  install @moishy/apb    # Node — https://www.npmjs.com/package/@moishy/apb
 ```
 
 > **Pre-1.0.** The solver is verified end to end — every algset is audited against the lookup it is
-> used with, and 540 solves across every replacement and extra all completed. What is not frozen yet
-> is the public API; it settles at 1.0. See the
-> [changelog](https://github.com/moishy-r/moishy-cubing/blob/main/CHANGELOG.md).
+> used with, every last-layer orientation and corner state is covered by a test that walks the state
+> space rather than the stored cases, and solves across every replacement and extra all verify by
+> re-executing the solution on the scramble. What is not frozen yet is the public API; it settles at
+> 1.0. See the [changelog](https://github.com/moishy-r/moishy-cubing/blob/main/CHANGELOG.md).
 
 ## Use
 

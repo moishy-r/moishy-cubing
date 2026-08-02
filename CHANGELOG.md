@@ -1,12 +1,18 @@
 # Changelog
 
-All three packages version independently but are released together when a change spans them, so this
+All four packages version independently but are released together when a change spans them, so this
 is one file. Each entry lists the versions it shipped as.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are
 [semver](https://semver.org/) — on a `0.x` line, a **minor** bump is the breaking one.
 
-## Unreleased — `cubing-core@0.3.0` · `algsets@0.3.1` · `steps@0.1.1` · `apb@0.2.3`
+## Unreleased
+
+Nothing yet.
+
+---
+
+## 2026-08-02 — `cubing-core@0.3.0` · `algsets@0.3.1` · `steps@0.1.1` · `apb@0.2.3`
 
 ### Changed
 
@@ -84,10 +90,10 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 - **`@moishy/steps@0.1.1` — reusable solver steps.** `@moishy/algsets` is the data side of "don't
   write this twice"; this is the search side. A Roux first block, a 2x2x2, a 2x2x3, a cross — the
   same search each time, only the cubies in the goal change — so the machinery and the standard
-  targets now live in one package and a method composes them. Ships `blockSearch` (goal + move set
-  - pruning table + A\* + axis canonicalization + region keying + the optional whole-block guard and
-    pool key), the named targets, the move-count-primary block cost model, and the six 2x2x3
-    strategies both individually and as a ready-made `block223Step()`.
+  targets now live in one package and a method composes them. Ships `blockSearch` — which wires the
+  goal, move set, pruning table, A\*, axis canonicalization, region keying, the optional whole-block
+  guard and the phase-chaining pool key — the named targets, the move-count-primary block cost
+  model, and the six 2x2x3 strategies both individually and as a ready-made `block223Step()`.
 
   It depends on `@moishy/algsets` for one reason: `rouxFbDfdb`'s second phase places DF/DB by
   algorithm. Shipping that strategy whole is the point — it is the reference phase-chaining case and
