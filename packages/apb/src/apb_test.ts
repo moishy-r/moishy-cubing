@@ -797,12 +797,14 @@ Deno.test("compete replacement never worsens a solve; wins only when cheaper", a
 
   // (2) A scramble where backSlotEoLxs genuinely wins: it must be chosen, and the
   // total must strictly beat pure-core (front-pair-first leaves a much cheaper LL).
-  // NOTE: this fixture is coupled to what block223 produces — a change to the block
-  // strategies or their cost model shifts the state eo/lxs see, and the scramble may
-  // stop being a win. Re-pick by scanning seeded scrambles for one where enabling
-  // the replacement both fires it and lowers total cost; the invariant in (1) is the
-  // part that must hold universally.
-  const winScr = "L U2 F2 R B2 D' B2 R' U' F2 U2 R B2 R' D' R D2 F L' F2";
+  // NOTE: this fixture is coupled to what the rest of the solve produces — a change
+  // to the block strategies, their cost model, or the algs available to a later step
+  // shifts the comparison, and the scramble may stop being a win. Re-pick by scanning
+  // seeded scrambles for one where enabling the replacement both fires it and lowers
+  // total cost; the invariant in (1) is the part that must hold universally. Last
+  // re-picked when the zbll/pll variant migration gave ZBLL its real alternatives
+  // back, which lowered the pure-core finish on the previous fixture.
+  const winScr = "D2 R' U' B' F2 L' D' F' R U L' D' U L F2 D R' B' U2 B";
   const [c2, k2] = [await withBS(winScr), await pureCore(winScr)];
   assert(c2.solved && k2.solved);
   assert(picked(c2, "backSlotEoLxs"), "compete must pick backSlotEoLxs when it wins overall");
@@ -1332,17 +1334,21 @@ Deno.test("force-mode ocllPll and collEpll always fire and verify", async () => 
 //
 //   - `oll` had it in algs[0] (fixed — recognition derives from the primary, so it
 //     silently moved 50 cases and orphaned 18 orientation classes).
-//   - `zbll` and `pll` have it in algs[1..n]. Their primaries are correct and
-//     coverage is proven complete (see the 7775-state ZBLL test above), so this
-//     costs no correctness — `runPhase` just skips a variant that misses the goal.
-//     What it costs is the cost race: ~90% of ZBLL's and ~53% of PLL's alternative
-//     algs are dead weight, so those steps have far fewer real options than the
-//     data suggests. The mis-pairing is systematic and repairable (t-1's four
-//     variants all solve l-26; t-2's all solve l-28; pll aa's solve ab) — tracked
-//     as data debt, not fixed here.
+//   - `zbll` and `pll` had it in algs[1..n] — 1572 of 1745 ZBLL and 47 of 89 PLL
+//     variants were filed under the wrong case, so `runPhase` silently skipped
+//     them and those steps had far fewer real options than the data suggested.
+//     Primaries were correct throughout and coverage was already proven complete
+//     (the 7775-state ZBLL test above), so it cost no correctness — only the cost
+//     race. Now migrated: every variant sits under the case it actually solves.
+//     The misfiling was near-perfectly structured, which is what made the move
+//     safe — in `zbll`, all 428 affected cases formed 214 mutual swap-pairs
+//     (t-1 <-> l-26, t-2 <-> l-28, ...), every misfiled variant of a case going to
+//     the same target. 14 algs across the two sets were dropped rather than moved:
+//     they solve no case in their set because they disturb the F2L, i.e. they are
+//     corrupt, not merely misfiled.
 //
-// This test pins the twelve clean sets at zero and ratchets the two known ones:
-// they may only improve. A new set, or a newly broken variant, fails immediately.
+// Every set is now pinned at zero: a newly broken or misfiled variant fails
+// immediately.
 Deno.test("every algset variant solves its own case", () => {
   const AUF = ["", "U", "U2", "U'"].map((a) => (a ? parseAlg(a) : []));
   const norm = (s: CubeState) => normalizeOrientation(s);
@@ -1386,9 +1392,8 @@ Deno.test("every algset variant solves its own case", () => {
     { name: "zbls", set: zblsSet, goal: regionSolvedAndEO(F2L), budget: 0 },
     { name: "wv", set: wvSet, goal: cornersOriented, budget: 0 },
     { name: "sv", set: svSet, goal: cornersOriented, budget: 0 },
-    // Known data debt — see the comment above.
-    { name: "pll", set: pllSet, goal: isSolved, budget: 47 },
-    { name: "zbll", set: zbllSet, goal: isSolved, budget: 1572 },
+    { name: "pll", set: pllSet, goal: isSolved, budget: 0 },
+    { name: "zbll", set: zbllSet, goal: isSolved, budget: 0 },
   ];
 
   const regressions: string[] = [];

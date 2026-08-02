@@ -86,15 +86,24 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
   last-layer orientation state (OLL/OCLL), every last-layer corner state (COLL), and a ratchet
   asserting every algset variant solves its own case.
 
-### Known
+- **`@moishy/algsets`: `zbll` and `pll` carried the `oll` defect in their _variants_, now
+  migrated.** 1572 of 1745 ZBLL and 47 of 89 PLL alternative algs were filed under the wrong case,
+  so `runPhase` silently skipped them and those steps had far fewer real options than the data
+  suggested. Primaries were correct throughout and ZBLL coverage was already proven complete
+  (7775/7775), so this cost no correctness — only the cost race. Every variant now sits under the
+  case it actually solves.
 
-- **`zbll` and `pll` carry the `oll` defect in their _variants_** — 1572 of 1745 ZBLL and 47 of 89
-  PLL alternative algs solve a different case than the one they are filed under, so `runPhase`
-  silently skips them. Primaries are correct and ZBLL coverage is proven complete (7775/7775), so
-  this costs no correctness — only the cost race, which has far fewer real options than the data
-  suggests. The mis-pairing is systematic and repairable (`t-1`'s four variants all solve `l-26`;
-  `t-2`'s all solve `l-28`; `pll` `aa`'s solve `ab`). The ratchet test pins the counts so they can
-  only fall. The other twelve sets are clean.
+  What made the move safe is how structured the misfiling was: in `zbll` all 428 affected cases
+  formed **214 mutual swap-pairs** (`t-1` <-> `l-26`, `t-2` <-> `l-28`, ...), with every misfiled
+  variant of a case going to the same target; `pll` was messier (6 swaps, 3 chains, 1 split) and the
+  same "move each variant to the case it solves" rule handles all of it. Primaries were never
+  touched, so recognition and coverage are unchanged by construction. 14 algs were dropped rather
+  than moved — they solve no case in their set because they disturb the F2L, i.e. corrupt rather
+  than misfiled — and 11 duplicates collapsed after the move. Net effect on solutions: mean cost
+  44.12 -> 43.52 and mean length 41.08 -> 40.57 moves over 60 scrambles on shipped defaults.
+
+  All fourteen sets now hold zero misfiled variants, and the ratchet test pins every one of them at
+  zero rather than carrying a budget.
 
 ---
 
