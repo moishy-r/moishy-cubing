@@ -28,10 +28,9 @@ export const pll: AlgSet = defineAlgSet({
       subset: "edge-swap",
       algs: [
         { alg: "x R2' D2' R U R' D2' R U' R x'", source: "SpeedCubeDB" },
-        { alg: "x R' U R' D2 R U' R' D2 R2 x'", source: "SpeedCubeDB" },
-        { alg: "U' x L2 D2 L' U' L D2 L' U L'", source: "SpeedCubeDB" },
-        { alg: "U x' R2 D2 R' U' R D2 R' U R' x", source: "SpeedCubeDB" },
-        { alg: "l' U R' D2 R U' R' D2 R2 x'", source: "SpeedCubeDB" },
+        { alg: "x R2 D2 R U R' D2 R U' R x'", source: "SpeedCubeDB" },
+        { alg: "U x' R U' R D2 R' U R D2 R2 x", source: "SpeedCubeDB" },
+        { alg: "R' B' R U' R D R' U R D' R2 B R", source: "SpeedCubeDB" },
       ],
     },
     {
@@ -40,10 +39,9 @@ export const pll: AlgSet = defineAlgSet({
       subset: "edge-swap",
       algs: [
         { alg: "x R' U R' D2' R U' R' D2' R2' x'", source: "SpeedCubeDB" },
-        { alg: "x R2 D2 R U R' D2 R U' R x'", source: "SpeedCubeDB" },
-        { alg: "U' x L U' L D2 L' U L D2 L2", source: "SpeedCubeDB" },
-        { alg: "U x' R U' R D2 R' U R D2 R2 x", source: "SpeedCubeDB" },
-        { alg: "R' B' R U' R D R' U R D' R2 B R", source: "SpeedCubeDB" },
+        { alg: "x R' U R' D2 R U' R' D2 R2 x'", source: "SpeedCubeDB" },
+        { alg: "U x' R2 D2 R' U' R D2 R' U R' x", source: "SpeedCubeDB" },
+        { alg: "l' U R' D2 R U' R' D2 R2 x'", source: "SpeedCubeDB" },
       ],
     },
     {
@@ -56,11 +54,6 @@ export const pll: AlgSet = defineAlgSet({
         { alg: "U R' U' R' D' R U' R' D R U R' D' R U R' D R2", source: "SpeedCubeDB" },
         { alg: "R2 U F' R' U R U' R' U R U' R' U R U' F U' R2", source: "SpeedCubeDB" },
         { alg: "U x' L' U L D' L' U' L D L' U' L D' L' U L D", source: "SpeedCubeDB" },
-        { alg: "R' U' R U' R' U R U R2' F' R U R U' R' F U R", source: "SpeedCubeDB" },
-        { alg: "U R' U' F' R U R' U' R' F R2 U' R' U' R U R' U R", source: "SpeedCubeDB" },
-        { alg: "U R' F R f' R' F R2 U R' U' R' F' R2 U R' S", source: "SpeedCubeDB" },
-        { alg: "R' U R U' R2 F' U' F U R F R' F' R2", source: "SpeedCubeDB" },
-        { alg: "U R2 F R F' R' U' F' U F R2 U R' U' R", source: "SpeedCubeDB" },
       ],
     },
     {
@@ -73,10 +66,14 @@ export const pll: AlgSet = defineAlgSet({
       // derived from algs[0], that corrupt primary made the F-perm case
       // unrecognizable (its whole two-sided-AUF orbit went uncovered). Dropped;
       // the real F-perm below is now primary.
-      algs: [{
-        alg: "R' U' F' R U R' U' R' F R2 U' R' U' R U R' U R",
-        source: "SpeedCubeDB",
-      }, { alg: "R' U' F' R U R' U' R' F R2 U' R' U' R U R' F'", source: "SpeedCubeDB" }],
+      algs: [
+        { alg: "R' U' F' R U R' U' R' F R2 U' R' U' R U R' U R", source: "SpeedCubeDB" },
+        { alg: "R' U' R U' R' U R U R2' F' R U R U' R' F U R", source: "SpeedCubeDB" },
+        { alg: "U R' U' F' R U R' U' R' F R2 U' R' U' R U R' U R", source: "SpeedCubeDB" },
+        { alg: "U R' F R f' R' F R2 U R' U' R' F' R2 U R' S", source: "SpeedCubeDB" },
+        { alg: "R' U R U' R2 F' U' F U R F R' F' R2", source: "SpeedCubeDB" },
+        { alg: "U R2 F R F' R' U' F' U F R2 U R' U' R", source: "SpeedCubeDB" },
+      ],
     },
     {
       id: "ga",
@@ -84,6 +81,18 @@ export const pll: AlgSet = defineAlgSet({
       subset: "adjacent-swap",
       algs: [
         { alg: "R' U' R D' U R2' U R' U R U' R U' R2' D", source: "SpeedCubeDB" },
+        { alg: "R' U' R U D' R2 U R' U R U' R U' R2 D", source: "SpeedCubeDB" },
+        { alg: "D R' U' R U D' R2 U R' U R U' R U' R2", source: "SpeedCubeDB" },
+        { alg: "U F' U' F R2 u R' U R U' R u' R2", source: "SpeedCubeDB" },
+        { alg: "R' d' F R2 u R' U R U' R u' R2", source: "SpeedCubeDB" },
+      ],
+    },
+    {
+      id: "gb",
+      name: "Gb Permutation",
+      subset: "adjacent-swap",
+      algs: [
+        { alg: "R2' U R' U R' U' R U' R2' D U' R' U R D'", source: "SpeedCubeDB" },
         { alg: "R2 U R' U R' U' R U' R2 D U' R' U R D'", source: "SpeedCubeDB" },
         { alg: "R2 u R' U R' U' R u' R2 F' U F", source: "SpeedCubeDB" },
         {
@@ -94,27 +103,15 @@ export const pll: AlgSet = defineAlgSet({
       ],
     },
     {
-      id: "gb",
-      name: "Gb Permutation",
-      subset: "adjacent-swap",
-      algs: [
-        { alg: "R2' U R' U R' U' R U' R2' D U' R' U R D'", source: "SpeedCubeDB" },
-        { alg: "R' U' R U D' R2 U R' U R U' R U' R2 D", source: "SpeedCubeDB" },
-        { alg: "D R' U' R U D' R2 U R' U R U' R U' R2", source: "SpeedCubeDB" },
-        { alg: "U F' U' F R2 u R' U R U' R u' R2", source: "SpeedCubeDB" },
-        { alg: "R' d' F R2 u R' U R U' R u' R2", source: "SpeedCubeDB" },
-      ],
-    },
-    {
       id: "gc",
       name: "Gc Permutation",
       subset: "adjacent-swap",
       algs: [
         { alg: "D' R U R' U' D R2' U' R U' R' U R' U R2'", source: "SpeedCubeDB" },
-        { alg: "R2 U' R U' R U R' U R2 D' U R U' R' D", source: "SpeedCubeDB" },
-        { alg: "U2 R2 F2 R U2 R U2 R' F R U R' U' R' F R2", source: "SpeedCubeDB" },
-        { alg: "D R2 U' R U' R U R' U R2 D' U R U' R'", source: "SpeedCubeDB" },
-        { alg: "R2 u' R U' R U R' u R2 f R' f'", source: "SpeedCubeDB" },
+        { alg: "R U R' U' D R2 U' R U' R' U R' U R2 D'", source: "SpeedCubeDB" },
+        { alg: "D' R U R' U' D R2 U' R U' R' U R' U R2", source: "SpeedCubeDB" },
+        { alg: "R U R' y' R2 u' R U' R' U R' u R2", source: "SpeedCubeDB" },
+        { alg: "U R2 F' R U R U' R' F' R U2 R' U2 R' F2 R2", source: "SpeedCubeDB" },
       ],
     },
     {
@@ -123,25 +120,24 @@ export const pll: AlgSet = defineAlgSet({
       subset: "adjacent-swap",
       algs: [
         { alg: "R2' U' R U' R U R' U R2' D' U R U' R' D", source: "SpeedCubeDB" },
-        { alg: "R U R' U' D R2 U' R U' R' U R' U R2 D'", source: "SpeedCubeDB" },
-        { alg: "D' R U R' U' D R2 U' R U' R' U R' U R2", source: "SpeedCubeDB" },
-        { alg: "R U R' y' R2 u' R U' R' U R' u R2", source: "SpeedCubeDB" },
-        { alg: "U R2 F' R U R U' R' F' R U2 R' U2 R' F2 R2", source: "SpeedCubeDB" },
-        { alg: "M2' U' M2' U2' M2' U' M2'", source: "SpeedCubeDB" },
-        { alg: "M2 U' M2 U2 M2 U' M2", source: "SpeedCubeDB" },
-        { alg: "M2 U M2 U2 M2 U M2", source: "SpeedCubeDB" },
-        { alg: "R2 S2 R2 U' R2 S2 R2", source: "SpeedCubeDB" },
-        { alg: "M2 U2 M2 U M2 U2 M2", source: "SpeedCubeDB" },
+        { alg: "R2 U' R U' R U R' U R2 D' U R U' R' D", source: "SpeedCubeDB" },
+        { alg: "U2 R2 F2 R U2 R U2 R' F R U R' U' R' F R2", source: "SpeedCubeDB" },
+        { alg: "D R2 U' R U' R U R' U R2 D' U R U' R'", source: "SpeedCubeDB" },
+        { alg: "R2 u' R U' R U R' u R2 f R' f'", source: "SpeedCubeDB" },
       ],
     },
     {
       id: "h",
       name: "H Permutation",
       subset: "epll",
-      algs: [{ alg: "M2 U M2 U2 M2 U M2", source: "SpeedCubeDB" }, {
-        alg: "M2' U M2' U2 M2' U M2'",
-        source: "SpeedCubeDB",
-      }, { alg: "M2 U' M2 U2 M2 U' M2", source: "SpeedCubeDB" }],
+      algs: [
+        { alg: "M2 U M2 U2 M2 U M2", source: "SpeedCubeDB" },
+        { alg: "M2' U M2' U2 M2' U M2'", source: "SpeedCubeDB" },
+        { alg: "M2 U' M2 U2 M2 U' M2", source: "SpeedCubeDB" },
+        { alg: "M2' U' M2' U2' M2' U' M2'", source: "SpeedCubeDB" },
+        { alg: "R2 S2 R2 U' R2 S2 R2", source: "SpeedCubeDB" },
+        { alg: "M2 U2 M2 U M2 U2 M2", source: "SpeedCubeDB" },
+      ],
     },
     {
       id: "ja",
@@ -213,18 +209,19 @@ export const pll: AlgSet = defineAlgSet({
         { alg: "U R2 F R U R U' R' F' R U2 R' U2 R", source: "SpeedCubeDB" },
         { alg: "R' U2 R' D' R U' R' D R U R U' R' U' R", source: "SpeedCubeDB" },
         { alg: "U R' U R U R' U' R' D' R U R' D R U2 R", source: "SpeedCubeDB" },
-        { alg: "F R U' R' U R U R2' F' R U R U' R'", source: "SpeedCubeDB" },
-        { alg: "R U R' U' R' F R2 U' R' U' R U R' F'", source: "SpeedCubeDB" },
-        { alg: "l b d' L' U' F U2 L' U' L' U L U' f' S M r u E U' R'", source: "SpeedCubeDB" },
-        { alg: "R U R' U' R' F R2 U' R' U F' L' U L", source: "SpeedCubeDB" },
-        { alg: "R2 u R2 u' R2 F2 u' F2 u F2", source: "SpeedCubeDB" },
       ],
     },
     {
       id: "t",
       name: "T Permutation",
       subset: "adjacent-swap",
-      algs: [{ alg: "R U R' U' R' F R2 U' R' U' R U R' F'", source: "SpeedCubeDB" }],
+      algs: [
+        { alg: "R U R' U' R' F R2 U' R' U' R U R' F'", source: "SpeedCubeDB" },
+        { alg: "F R U' R' U R U R2' F' R U R U' R'", source: "SpeedCubeDB" },
+        { alg: "l b d' L' U' F U2 L' U' L' U L U' f' S M r u E U' R'", source: "SpeedCubeDB" },
+        { alg: "R U R' U' R' F R2 U' R' U F' L' U L", source: "SpeedCubeDB" },
+        { alg: "R2 u R2 u' R2 F2 u' F2 u F2", source: "SpeedCubeDB" },
+      ],
     },
     {
       id: "ua",
@@ -232,10 +229,9 @@ export const pll: AlgSet = defineAlgSet({
       subset: "epll",
       algs: [
         { alg: "M2' U' M' U2' M U' M2'", source: "SpeedCubeDB" },
-        { alg: "U2 M2 U M U2 M' U M2", source: "SpeedCubeDB" },
-        { alg: "R U R' U R' U' R2 U' R' U R' U R", source: "SpeedCubeDB" },
-        { alg: "U R2 U' S' U2 S U' R2", source: "SpeedCubeDB" },
-        { alg: "R2 U' R' U' R U R U R U' R", source: "SpeedCubeDB" },
+        { alg: "U2 M2 U' M U2 M' U' M2", source: "SpeedCubeDB" },
+        { alg: "R' U R' U' R' U' R' U R U R2", source: "SpeedCubeDB" },
+        { alg: "U2 R2 U R U R' U' R' U' R' U R'", source: "SpeedCubeDB" },
       ],
     },
     {
@@ -244,9 +240,10 @@ export const pll: AlgSet = defineAlgSet({
       subset: "epll",
       algs: [
         { alg: "M2' U M' U2' M U M2'", source: "SpeedCubeDB" },
-        { alg: "U2 M2 U' M U2 M' U' M2", source: "SpeedCubeDB" },
-        { alg: "R' U R' U' R' U' R' U R U R2", source: "SpeedCubeDB" },
-        { alg: "U2 R2 U R U R' U' R' U' R' U R'", source: "SpeedCubeDB" },
+        { alg: "U2 M2 U M U2 M' U M2", source: "SpeedCubeDB" },
+        { alg: "R U R' U R' U' R2 U' R' U R' U R", source: "SpeedCubeDB" },
+        { alg: "U R2 U' S' U2 S U' R2", source: "SpeedCubeDB" },
+        { alg: "R2 U' R' U' R U R U R U' R", source: "SpeedCubeDB" },
       ],
     },
     {

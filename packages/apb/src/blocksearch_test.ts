@@ -230,6 +230,13 @@ Deno.test("regionHeuristic (foldLR) is admissible for the drift-allowing FB goal
       moves: BLOCK_MOVES,
       heuristic: () => 0,
       canFollow: axisCanonical,
+      // Ground truth is deliberately *unguided*, so it expands far more nodes than
+      // any real phase — well past the engine's safety ceiling
+      // (`DEFAULT_MAX_NODES`, which exists to stop a runaway search exhausting the
+      // heap). Lift it here, exactly as a test lifts `searchTimeBudgetMs`, so a
+      // failure means "the heuristic overestimates", not "the ceiling cut the
+      // reference search short".
+      maxNodes: Infinity,
     });
     assert(opt.found);
     assert(hFold(s) <= opt.cost + 1e-9, `folded ${hFold(s)} overestimated true ${opt.cost}`);

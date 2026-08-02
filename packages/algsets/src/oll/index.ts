@@ -27,7 +27,6 @@ export const oll: AlgSet = defineAlgSet({
       name: "OLL 1",
       subset: "dot",
       algs: [
-        { alg: "F R' F' R U2' F R' F' R2' U2' R'", source: "SpeedCubeDB" },
         { alg: "R U2 R' R' F R F' U2 R' F R F'", source: "SpeedCubeDB" },
         { alg: "R U2 R2 F R F' U2 R' F R F'", source: "SpeedCubeDB" },
         { alg: "U R U' R2 D' r U' r' D R2 U R'", source: "SpeedCubeDB" },
@@ -52,7 +51,6 @@ export const oll: AlgSet = defineAlgSet({
       name: "OLL 3",
       subset: "dot",
       algs: [
-        { alg: "F U R U' R' F' U f U R U' R' f'", source: "SpeedCubeDB" },
         { alg: "U' f R U R' U' f' U' F R U R' U' F'", source: "SpeedCubeDB" },
         { alg: "U R' F2 R2 U2 R' F R U2 R2 F2 R", source: "SpeedCubeDB" },
         { alg: "r' R2 U R' U r U2 r' U M'", source: "SpeedCubeDB" },
@@ -64,7 +62,6 @@ export const oll: AlgSet = defineAlgSet({
       name: "OLL 4",
       subset: "dot",
       algs: [
-        { alg: "F U R U' R' F' U' f U R U' R' f'", source: "SpeedCubeDB" },
         { alg: "U' f R U R' U' f' U F R U R' U' F'", source: "SpeedCubeDB" },
         { alg: "U' R' F2 R2 U2 R' F' R U2 R2 F2 R", source: "SpeedCubeDB" },
         { alg: "R' F R F' U' S R' U' R U R S'", source: "SpeedCubeDB" },
@@ -76,7 +73,6 @@ export const oll: AlgSet = defineAlgSet({
       name: "OLL 5",
       subset: "square",
       algs: [
-        { alg: "r' U' R U' R' U2' r", source: "SpeedCubeDB" },
         { alg: "r' U2 R U R' U r", source: "SpeedCubeDB" },
         { alg: "U2 l' U2 L U L' U l", source: "SpeedCubeDB" },
         { alg: "U2 R' F2 r U r' F R", source: "SpeedCubeDB" },
@@ -88,7 +84,6 @@ export const oll: AlgSet = defineAlgSet({
       name: "OLL 6",
       subset: "square",
       algs: [
-        { alg: "r U R' U R U2' r'", source: "SpeedCubeDB" },
         { alg: "r U2 R' U' R U' r'", source: "SpeedCubeDB" },
         { alg: "F U' R2 D R' U' R D' R2 U F'", source: "SpeedCubeDB" },
         { alg: "U2 l U2 L' U' L U' l'", source: "SpeedCubeDB" },
@@ -100,7 +95,6 @@ export const oll: AlgSet = defineAlgSet({
       name: "OLL 7",
       subset: "lightning-bolt",
       algs: [
-        { alg: "r U2' R' U' R U' r'", source: "SpeedCubeDB" },
         { alg: "r U R' U R U2 r'", source: "SpeedCubeDB" },
         { alg: "S' R U R' U R U2 R' U S", source: "SpeedCubeDB" },
         { alg: "L' U2 L U2 L F' L' F", source: "SpeedCubeDB" },
@@ -112,7 +106,6 @@ export const oll: AlgSet = defineAlgSet({
       name: "OLL 8",
       subset: "lightning-bolt",
       algs: [
-        { alg: "r' U2' R U R' U r", source: "SpeedCubeDB" },
         { alg: "U2 r' U' R U' R' U2 r", source: "SpeedCubeDB" },
         { alg: "l' U' L U' L' U2 l", source: "SpeedCubeDB" },
         { alg: "R U2 R' U2 R' F R F'", source: "SpeedCubeDB" },
@@ -124,7 +117,6 @@ export const oll: AlgSet = defineAlgSet({
       name: "OLL 9",
       subset: "fish-shape",
       algs: [
-        { alg: "F U R U' R2' F' R U R U' R'", source: "SpeedCubeDB" },
         { alg: "U R U R' U' R' F R R U R' U' F'", source: "SpeedCubeDB" },
         { alg: "U R U R' U' R' F R2 U R' U' F'", source: "SpeedCubeDB" },
         { alg: "R U2 R' U' S' R U' R' S", source: "SpeedCubeDB" },
@@ -137,7 +129,6 @@ export const oll: AlgSet = defineAlgSet({
       name: "OLL 10",
       subset: "fish-shape",
       algs: [
-        { alg: "R U2' R' F R' F' R U' R U' R'", source: "SpeedCubeDB" },
         { alg: "R U R' U R' F R F' R U2 R'", source: "SpeedCubeDB" },
         { alg: "U F U F' R' F R U' R' F' R", source: "SpeedCubeDB" },
         { alg: "U M' R' U2 R U R' U R U M", source: "SpeedCubeDB" },
@@ -149,7 +140,6 @@ export const oll: AlgSet = defineAlgSet({
       name: "OLL 11",
       subset: "lightning-bolt",
       algs: [
-        { alg: "M U' R U2' R' U' R U' R2' r", source: "SpeedCubeDB" },
         { alg: "M R U R' U R U2 R' U M'", source: "SpeedCubeDB" },
         { alg: "r' R2 U R' U R U2 R' U M'", source: "SpeedCubeDB" },
         { alg: "U2 r U R' U R' F R F' R U2 r'", source: "SpeedCubeDB" },
@@ -161,7 +151,6 @@ export const oll: AlgSet = defineAlgSet({
       name: "OLL 12",
       subset: "lightning-bolt",
       algs: [
-        { alg: "F U R U' R' F' U' F U R U' R' F'", source: "SpeedCubeDB" },
         { alg: "U' M' R' U' R U' R' U2 R U' M", source: "SpeedCubeDB" },
         { alg: "F R U R' U' F' U F R U R' U' F'", source: "SpeedCubeDB" },
         { alg: "U' S R' U' R U' R' U2 R U2 S'", source: "SpeedCubeDB" },
@@ -173,7 +162,6 @@ export const oll: AlgSet = defineAlgSet({
       name: "OLL 13",
       subset: "knight-shape",
       algs: [
-        { alg: "F' U' F r U' r' U r U r'", source: "SpeedCubeDB" },
         { alg: "r U' r' U' r U r' F' U F", source: "SpeedCubeDB" },
         { alg: "F U R U2 R' U' R U R' F'", source: "SpeedCubeDB" },
         { alg: "F U R U' R2 F' R U R U' R'", source: "SpeedCubeDB" },
@@ -185,7 +173,6 @@ export const oll: AlgSet = defineAlgSet({
       name: "OLL 14",
       subset: "knight-shape",
       algs: [
-        { alg: "F U F' R' F R U' R' F' R", source: "SpeedCubeDB" },
         { alg: "R' F R U R' F' R F U' F'", source: "SpeedCubeDB" },
         { alg: "r U R' U' r' F R2 U R' U' F'", source: "SpeedCubeDB" },
         { alg: "l' U l U l' U' l F U' F'", source: "SpeedCubeDB" },
@@ -197,7 +184,6 @@ export const oll: AlgSet = defineAlgSet({
       name: "OLL 15",
       subset: "knight-shape",
       algs: [
-        { alg: "r' U' r U' R' U R r' U r", source: "SpeedCubeDB" },
         { alg: "r' U' r R' U' R U r' U r", source: "SpeedCubeDB" },
         { alg: "U2 l' U' l L' U' L U l' U l", source: "SpeedCubeDB" },
         { alg: "r' U' M' U' R U r' U r", source: "SpeedCubeDB" },
@@ -209,7 +195,6 @@ export const oll: AlgSet = defineAlgSet({
       name: "OLL 16",
       subset: "knight-shape",
       algs: [
-        { alg: "r U r' U R U' R' r U' r'", source: "SpeedCubeDB" },
         { alg: "r U r' R U R' U' r U' r'", source: "SpeedCubeDB" },
         { alg: "r U M U R' U' r U' r'", source: "SpeedCubeDB" },
         { alg: "U2 R' F R U R' U' F' R U' R' U2 R", source: "SpeedCubeDB" },
@@ -221,7 +206,6 @@ export const oll: AlgSet = defineAlgSet({
       name: "OLL 17",
       subset: "dot",
       algs: [
-        { alg: "F R' F' R U2' F R' F' R U' R U' R'", source: "SpeedCubeDB" },
         { alg: "R U R' U R' F R F' U2 R' F R F'", source: "SpeedCubeDB" },
         { alg: "U2 F R' F' R U S' R U' R' S", source: "SpeedCubeDB" },
         { alg: "U2 F R' F' R2 r' U R U' R' U' M'", source: "SpeedCubeDB" },
@@ -233,7 +217,6 @@ export const oll: AlgSet = defineAlgSet({
       name: "OLL 18",
       subset: "dot",
       algs: [
-        { alg: "r' U2' R U R' U r2' U2' R' U' R U' r'", source: "SpeedCubeDB" },
         { alg: "U R U2 R' R' F R F' U2 M' U R U' r'", source: "SpeedCubeDB" },
         { alg: "U R U2 R2 F R F' U2 M' U R U' r'", source: "SpeedCubeDB" },
         { alg: "r U R' U R U2 r2 U' R U' R' U2 r", source: "SpeedCubeDB" },
@@ -246,7 +229,6 @@ export const oll: AlgSet = defineAlgSet({
       name: "OLL 19",
       subset: "dot",
       algs: [
-        { alg: "F R' F' R M U R U' R' U' M'", source: "SpeedCubeDB" },
         { alg: "M U R U R' U' M' R' F R F'", source: "SpeedCubeDB" },
         { alg: "U S' R U R' S U' R' F R F'", source: "SpeedCubeDB" },
         { alg: "R' U2 F R U R' U' F2 U2 F R", source: "SpeedCubeDB" },
@@ -295,7 +277,6 @@ export const oll: AlgSet = defineAlgSet({
       name: "OLL 23",
       subset: "cross",
       algs: [
-        { alg: "R U2' R D R' U2' R D' R2'", source: "SpeedCubeDB" },
         { alg: "R2 D R' U2 R D' R' U2 R'", source: "SpeedCubeDB" },
         { alg: "U2 R2 D' R U2 R' D R U2 R", source: "SpeedCubeDB" },
         { alg: "R U R' U R U2 R2 U' R U' R' U2 R", source: "SpeedCubeDB" },
@@ -307,7 +288,6 @@ export const oll: AlgSet = defineAlgSet({
       name: "OLL 24",
       subset: "cross",
       algs: [
-        { alg: "F R' F' r U R U' r'", source: "SpeedCubeDB" },
         { alg: "r U R' U' r' F R F'", source: "SpeedCubeDB" },
         { alg: "U2 R' F' r U R U' r' F", source: "SpeedCubeDB" },
         { alg: "U' x' R U R' D R U' R' D' x", source: "SpeedCubeDB" },
@@ -319,7 +299,6 @@ export const oll: AlgSet = defineAlgSet({
       name: "OLL 25",
       subset: "cross",
       algs: [
-        { alg: "R' F' r U R U' r' F", source: "SpeedCubeDB" },
         { alg: "U F' r U R' U' r' F R", source: "SpeedCubeDB" },
         { alg: "R U2 R D R' U2 R D' R2", source: "SpeedCubeDB" },
         { alg: "F R' F' r U R U' r'", source: "SpeedCubeDB" },
@@ -331,7 +310,6 @@ export const oll: AlgSet = defineAlgSet({
       name: "OLL 26",
       subset: "cross",
       algs: [
-        { alg: "R U R' U R U2' R'", source: "SpeedCubeDB" },
         { alg: "U R U2 R' U' R U' R'", source: "SpeedCubeDB" },
         { alg: "R' U' R U' R' U2 R", source: "SpeedCubeDB" },
         { alg: "U2 L' U' L U' L' U2 L", source: "SpeedCubeDB" },
@@ -343,7 +321,6 @@ export const oll: AlgSet = defineAlgSet({
       name: "OLL 27",
       subset: "cross",
       algs: [
-        { alg: "R U2' R' U' R U' R'", source: "SpeedCubeDB" },
         { alg: "R U R' U R U2 R'", source: "SpeedCubeDB" },
         { alg: "U' R' U2 R U R' U R", source: "SpeedCubeDB" },
         { alg: "U L' U2 L U L' U L", source: "SpeedCubeDB" },
@@ -355,7 +332,6 @@ export const oll: AlgSet = defineAlgSet({
       name: "OLL 28",
       subset: "corners-oriented",
       algs: [
-        { alg: "R U R' U' M' U R U' r'", source: "SpeedCubeDB" },
         { alg: "r U R' U' M U R U' R'", source: "SpeedCubeDB" },
         { alg: "R' F R S R' F' R S'", source: "SpeedCubeDB" },
         { alg: "r U R' U' r' R U R U' R'", source: "SpeedCubeDB" },
@@ -367,7 +343,6 @@ export const oll: AlgSet = defineAlgSet({
       name: "OLL 29",
       subset: "awkward-shape",
       algs: [
-        { alg: "M F R' F' R U R U' R' U' M'", source: "SpeedCubeDB" },
         { alg: "U R U R' U' R U' R' F' U' F R U R'", source: "SpeedCubeDB" },
         { alg: "r2 D' r U r' D r2 U' r' U' r", source: "SpeedCubeDB" },
         { alg: "U S' R U R' U' R' F R F' U S", source: "SpeedCubeDB" },
@@ -379,7 +354,6 @@ export const oll: AlgSet = defineAlgSet({
       name: "OLL 30",
       subset: "awkward-shape",
       algs: [
-        { alg: "F U R U2' R' U R U2' R' U' F'", source: "SpeedCubeDB" },
         { alg: "U2 F U R U2 R' U' R U2 R' U' F'", source: "SpeedCubeDB" },
         { alg: "U' r' D' r U' r' D r2 U' r' U r U r'", source: "SpeedCubeDB" },
         { alg: "U2 F R' F R2 U' R' U' R U R' F2", source: "SpeedCubeDB" },
@@ -391,7 +365,6 @@ export const oll: AlgSet = defineAlgSet({
       name: "OLL 31",
       subset: "p-shape",
       algs: [
-        { alg: "R' F R U R' U' F' U R", source: "SpeedCubeDB" },
         { alg: "R' U' F U R U' R' F' R", source: "SpeedCubeDB" },
         { alg: "U2 S' L' U' L U L F' L' f", source: "SpeedCubeDB" },
         { alg: "U S R U R' U' f' U' F", source: "SpeedCubeDB" },
@@ -403,7 +376,6 @@ export const oll: AlgSet = defineAlgSet({
       name: "OLL 32",
       subset: "p-shape",
       algs: [
-        { alg: "f R' F' R U R U' R' S'", source: "SpeedCubeDB" },
         { alg: "S R U R' U' R' F R f'", source: "SpeedCubeDB" },
         { alg: "U2 L U F' U' L' U L F L'", source: "SpeedCubeDB" },
         { alg: "R U B' U' R' U R B R'", source: "SpeedCubeDB" },
@@ -415,7 +387,6 @@ export const oll: AlgSet = defineAlgSet({
       name: "OLL 33",
       subset: "t-shape",
       algs: [
-        { alg: "F R' F' R U R U' R'", source: "SpeedCubeDB" },
         { alg: "R U R' U' R' F R F'", source: "SpeedCubeDB" },
         { alg: "U2 L' U' L U L F' L' F", source: "SpeedCubeDB" },
         { alg: "U2 r' F' r U r U' r' F", source: "SpeedCubeDB" },
@@ -427,7 +398,6 @@ export const oll: AlgSet = defineAlgSet({
       name: "OLL 34",
       subset: "c-shape",
       algs: [
-        { alg: "F U R' U' R' F' R U R2' U' R'", source: "SpeedCubeDB" },
         { alg: "U2 R U R2 U' R' F R U R U' F'", source: "SpeedCubeDB" },
         { alg: "U f R f' U' r' U' R U M'", source: "SpeedCubeDB" },
         { alg: "F R U R' U' R' F' r U R U' r'", source: "SpeedCubeDB" },
@@ -439,7 +409,6 @@ export const oll: AlgSet = defineAlgSet({
       name: "OLL 35",
       subset: "fish-shape",
       algs: [
-        { alg: "R U2' R' F R' F' R2' U2' R'", source: "SpeedCubeDB" },
         { alg: "R U2 R' R' F R F' R U2 R'", source: "SpeedCubeDB" },
         { alg: "R U2 R2 F R F' R U2 R'", source: "SpeedCubeDB" },
         { alg: "f R U R' U' f' R U R' U R U2 R'", source: "SpeedCubeDB" },
@@ -452,7 +421,6 @@ export const oll: AlgSet = defineAlgSet({
       name: "OLL 36",
       subset: "w-shape",
       algs: [
-        { alg: "F' L F L' U' L' U' L U L' U L", source: "SpeedCubeDB" },
         { alg: "U2 L' U' L U' L' U L U L F' L' F", source: "SpeedCubeDB" },
         { alg: "U R U R2 F' U' F U R2 U2 R'", source: "SpeedCubeDB" },
         { alg: "U2 R U R' F' R U R' U' R' F R U' R' F R F'", source: "SpeedCubeDB" },
@@ -464,7 +432,6 @@ export const oll: AlgSet = defineAlgSet({
       name: "OLL 37",
       subset: "fish-shape",
       algs: [
-        { alg: "F R U' R' U R U R' F'", source: "SpeedCubeDB" },
         { alg: "F R U' R' U' R U R' F'", source: "SpeedCubeDB" },
         { alg: "F R' F' R U R U' R'", source: "SpeedCubeDB" },
         { alg: "U F' r U r' U' r' F r", source: "SpeedCubeDB" },
@@ -476,7 +443,6 @@ export const oll: AlgSet = defineAlgSet({
       name: "OLL 38",
       subset: "w-shape",
       algs: [
-        { alg: "F R' F' R U R U R' U' R U' R'", source: "SpeedCubeDB" },
         { alg: "R U R' U R U' R' U' R' F R F'", source: "SpeedCubeDB" },
         { alg: "U F R U' R' S U' R U R' f'", source: "SpeedCubeDB" },
         { alg: "r U R' U' r' F R U R U' R' F'", source: "SpeedCubeDB" },
@@ -488,7 +454,6 @@ export const oll: AlgSet = defineAlgSet({
       name: "OLL 39",
       subset: "lightning-bolt",
       algs: [
-        { alg: "L U F' U' L' U L F L'", source: "SpeedCubeDB" },
         { alg: "U L F' L' U' L U F U' L'", source: "SpeedCubeDB" },
         { alg: "U' f' r U r' U' r' F r S", source: "SpeedCubeDB" },
         { alg: "U' R U R' F' U' F U R U2 R'", source: "SpeedCubeDB" },
@@ -500,7 +465,6 @@ export const oll: AlgSet = defineAlgSet({
       name: "OLL 40",
       subset: "lightning-bolt",
       algs: [
-        { alg: "R' U' F U R U' R' F' R", source: "SpeedCubeDB" },
         { alg: "U R' F R U R' U' F' U R", source: "SpeedCubeDB" },
         { alg: "U' f R' F' R U R U' R' S'", source: "SpeedCubeDB" },
         { alg: "R r D r' U r D' r' U' R'", source: "SpeedCubeDB" },
@@ -512,7 +476,6 @@ export const oll: AlgSet = defineAlgSet({
       name: "OLL 41",
       subset: "awkward-shape",
       algs: [
-        { alg: "F U R U' R' F' R U2' R' U' R U' R'", source: "SpeedCubeDB" },
         { alg: "U2 R U R' U R U2 R' F R U R' U' F'", source: "SpeedCubeDB" },
         { alg: "U2 F U R2 D R' U' R D' R2 F'", source: "SpeedCubeDB" },
         { alg: "U' S U' R' F' U' F U R S'", source: "SpeedCubeDB" },
@@ -524,7 +487,6 @@ export const oll: AlgSet = defineAlgSet({
       name: "OLL 42",
       subset: "awkward-shape",
       algs: [
-        { alg: "F U R U' R' F' R' U2' R U R' U R", source: "SpeedCubeDB" },
         { alg: "R' U' R U' R' U2 R F R U R' U' F'", source: "SpeedCubeDB" },
         { alg: "U F S' R U R' U' F' U S", source: "SpeedCubeDB" },
         { alg: "U R' F R F' R' F R F' R U R' U' R U R'", source: "SpeedCubeDB" },
@@ -536,7 +498,6 @@ export const oll: AlgSet = defineAlgSet({
       name: "OLL 43",
       subset: "p-shape",
       algs: [
-        { alg: "f' U' L' U L f", source: "SpeedCubeDB" },
         { alg: "U R' U' F' U F R", source: "SpeedCubeDB" },
         { alg: "U2 F' U' L' U L F", source: "SpeedCubeDB" },
         { alg: "f' L' U' L U f", source: "SpeedCubeDB" },
@@ -548,7 +509,6 @@ export const oll: AlgSet = defineAlgSet({
       name: "OLL 44",
       subset: "p-shape",
       algs: [
-        { alg: "f U R U' R' f'", source: "SpeedCubeDB" },
         { alg: "f R U R' U' f'", source: "SpeedCubeDB" },
         { alg: "U2 F U R U' R' F'", source: "SpeedCubeDB" },
         { alg: "U R U B U' B' R'", source: "SpeedCubeDB" },
@@ -560,7 +520,6 @@ export const oll: AlgSet = defineAlgSet({
       name: "OLL 45",
       subset: "t-shape",
       algs: [
-        { alg: "F U R U' R' F'", source: "SpeedCubeDB" },
         { alg: "F R U R' U' F'", source: "SpeedCubeDB" },
         { alg: "U R' F' U' F U R", source: "SpeedCubeDB" },
         { alg: "U2 f U R U' R' f'", source: "SpeedCubeDB" },
@@ -572,7 +531,6 @@ export const oll: AlgSet = defineAlgSet({
       name: "OLL 46",
       subset: "c-shape",
       algs: [
-        { alg: "R' U' F R' F' R U R", source: "SpeedCubeDB" },
         { alg: "R' U' R' F R F' U R", source: "SpeedCubeDB" },
         { alg: "R' F' U' F R U' R' U2 R", source: "SpeedCubeDB" },
         { alg: "U F R U R' U' F' U' R U R' U R U2 R'", source: "SpeedCubeDB" },
@@ -584,7 +542,6 @@ export const oll: AlgSet = defineAlgSet({
       name: "OLL 47",
       subset: "l-shape",
       algs: [
-        { alg: "F' U' L' U L U' L' U L F", source: "SpeedCubeDB" },
         { alg: "F' L' U' L U L' U' L U F", source: "SpeedCubeDB" },
         { alg: "U' F R' F' R U2 R U' R' U R U2 R'", source: "SpeedCubeDB" },
         { alg: "R' U' R' F R F' R' F R F' U R", source: "SpeedCubeDB" },
@@ -596,7 +553,6 @@ export const oll: AlgSet = defineAlgSet({
       name: "OLL 48",
       subset: "l-shape",
       algs: [
-        { alg: "F U R U' R' U R U' R' F'", source: "SpeedCubeDB" },
         { alg: "F R U R' U' R U R' U' F'", source: "SpeedCubeDB" },
         { alg: "U2 f U R U' R' U R U' R' f'", source: "SpeedCubeDB" },
         { alg: "R U2 R' U' R U R' U2 R' F R F'", source: "SpeedCubeDB" },
@@ -608,7 +564,6 @@ export const oll: AlgSet = defineAlgSet({
       name: "OLL 49",
       subset: "l-shape",
       algs: [
-        { alg: "r' U r2' U' r2' U' r2' U r'", source: "SpeedCubeDB" },
         { alg: "U2 r U' r2 U r2 U r2 U' r", source: "SpeedCubeDB" },
         { alg: "l U' l2 U l2 U l2 U' l", source: "SpeedCubeDB" },
         { alg: "R B' R2 F R2 B R2 F' R", source: "SpeedCubeDB" },
@@ -620,7 +575,6 @@ export const oll: AlgSet = defineAlgSet({
       name: "OLL 50",
       subset: "l-shape",
       algs: [
-        { alg: "r U' r2' U r2' U r2' U' r", source: "SpeedCubeDB" },
         { alg: "r' U r2 U' r2 U' r2 U r'", source: "SpeedCubeDB" },
         { alg: "U2 R' F R2 B' R2 F' R2 B R'", source: "SpeedCubeDB" },
         { alg: "U' R U2 R' U' R U' R' F R U R' U' F'", source: "SpeedCubeDB" },
@@ -632,7 +586,6 @@ export const oll: AlgSet = defineAlgSet({
       name: "OLL 51",
       subset: "i-shape",
       algs: [
-        { alg: "f U R U' R' U R U' R' f'", source: "SpeedCubeDB" },
         { alg: "f R U R' U' R U R' U' f'", source: "SpeedCubeDB" },
         { alg: "U2 F U R U' R' U R U' R' F'", source: "SpeedCubeDB" },
         { alg: "U' R' U' R' F R F' R U' R' U2 R", source: "SpeedCubeDB" },
@@ -680,7 +633,6 @@ export const oll: AlgSet = defineAlgSet({
       name: "OLL 55",
       subset: "i-shape",
       algs: [
-        { alg: "F R' F' U2' R U R' U R2' U2' R'", source: "SpeedCubeDB" },
         { alg: "R U2 R2 U' R U' R' U2 F R F'", source: "SpeedCubeDB" },
         { alg: "U R' F U R U' R2 F' R2 U R' U' R", source: "SpeedCubeDB" },
         { alg: "U R' F R U R U' R2 F' R2 U' R' U R U R'", source: "SpeedCubeDB" },
@@ -692,7 +644,6 @@ export const oll: AlgSet = defineAlgSet({
       name: "OLL 56",
       subset: "i-shape",
       algs: [
-        { alg: "r U r' R U R' U' R U R' U' r U' r'", source: "SpeedCubeDB" },
         { alg: "r U r' U R U' R' U R U' R' r U' r'", source: "SpeedCubeDB" },
         { alg: "r U r' U R U' R' M' U R U2 r'", source: "SpeedCubeDB" },
         { alg: "F R U R' U' R F' r U R' U' r'", source: "SpeedCubeDB" },
@@ -704,7 +655,6 @@ export const oll: AlgSet = defineAlgSet({
       name: "OLL 57",
       subset: "corners-oriented",
       algs: [
-        { alg: "r U R' U' M U R U' R'", source: "SpeedCubeDB" },
         { alg: "R U R' U' M' U R U' r'", source: "SpeedCubeDB" },
         { alg: "U R U' R' S' R U R' S", source: "SpeedCubeDB" },
         { alg: "U R U R' S' R U' R' S", source: "SpeedCubeDB" },

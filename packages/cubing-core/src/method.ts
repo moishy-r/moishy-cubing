@@ -47,7 +47,9 @@ export interface Replacement {
   strategies: Strategy[];
   /**
    * Author default: `"compete"` races against the region's normal per-step
-   * solving; `"force"` uses only this. Always caller-overridable via settings.
+   * solving and is kept only if the *whole solve* comes out cheaper (see
+   * {@link Method.solveRaced}); `"force"` uses only this, and errors rather than
+   * falling back if it cannot. Always caller-overridable via settings.
    */
   mode: "compete" | "force";
 }
@@ -196,7 +198,15 @@ export interface SolveOptions {
   timeBudgetMs?: number;
 }
 
-/** Thrown when settings are structurally invalid (e.g. conflicting force regions). */
+/**
+ * Thrown when settings are structurally invalid (e.g. conflicting force regions),
+ * or when a `force`-mode unit cannot solve the state it was forced onto.
+ *
+ * The second case is a solve-time error rather than a silent fallback on purpose:
+ * a forced unit replaces its region outright, so solving that region with the
+ * core Steps the caller excluded would report a success they cannot use. See
+ * `walkOne`.
+ */
 export class SettingsError extends Error {
   constructor(message: string) {
     super(message);
@@ -692,7 +702,84 @@ export class Method {
     settings: SolverSettings = {},
     opts: SolveOptions = {},
   ): Promise<SolveResult> {
-    return Promise.resolve().then(() => this.solveSync(scramble, settings, opts));
+    return Promise.resolve().then(() => this.solveRaced(scramble, settings, opts));
+  }
+
+  /**
+   * `compete` means "use this only if it helps", so enabling a compete unit must
+   * never make the *whole solve* dearer than leaving it off. The span DP alone
+   * cannot promise that: it picks the cheapest cover of the unit's region, and the
+   * runner then continues greedily, so a cheaper region can leave a dearer
+   * remainder. Measured before this existed: enabling `eoPair` alone regressed the
+   * total on 14 of 60 scrambles (worst +7.9), and all five APB replacements
+   * together on 29 of 60 (worst +11.4) — while the region cover itself was never
+   * dearer on any of them, exactly as the DP guarantees.
+   *
+   * So the promise is kept where it is actually made: solve once with the compete
+   * units off and once with them on, and keep the cheaper. Costs a second solve,
+   * but only when a compete unit is enabled — they are opt-in and off by default,
+   * so the default path is untouched. `force` units are not raced: forcing a unit
+   * is a statement that it must be used, not an offer.
+   *
+   * The baseline runs first so the guarantee survives a time budget: if the second
+   * solve is cut short, the baseline is still there to return.
+   */
+  private solveRaced(
+    scramble: string,
+    settings: SolverSettings,
+    opts: SolveOptions,
+  ): SolveResult {
+    const competing = this.enabledCompeteIds(settings);
+    if (competing === null) return this.solveSync(scramble, settings, opts);
+
+    const started = performance.now();
+    const baseline = this.solveSync(scramble, competing, opts);
+
+    // Charge the first solve against a shared budget rather than giving each run a
+    // fresh one, or `timeBudgetMs` would silently mean twice what it says.
+    let rest = opts;
+    if (opts.timeBudgetMs !== undefined) {
+      const left = opts.timeBudgetMs - (performance.now() - started);
+      if (left <= 0) return baseline;
+      rest = { ...opts, timeBudgetMs: left };
+    }
+    const withUnits = this.solveSync(scramble, settings, rest);
+
+    if (!withUnits.solved) return baseline;
+    if (!baseline.solved) return withUnits;
+    return withUnits.cost < baseline.cost - 1e-9 ? withUnits : baseline;
+  }
+
+  /**
+   * Settings with every enabled `compete`-mode replacement/extra turned off, or
+   * `null` when there are none (the default, and the signal to skip the race).
+   */
+  private enabledCompeteIds(settings: SolverSettings): SolverSettings | null {
+    const rec = this.definition.recommendedSettings ?? {};
+    const off: {
+      replacements: Record<string, ReplacementOptions>;
+      extras: Record<string, ReplacementOptions>;
+    } = { replacements: {}, extras: {} };
+    let any = false;
+
+    for (const kind of ["replacements", "extras"] as const) {
+      const units: { id: string; mode: "compete" | "force" }[] = kind === "replacements"
+        ? (this.definition.replacements ?? [])
+        : (this.definition.extras ?? []);
+      for (const u of units) {
+        const o: ReplacementOptions = { ...rec[kind]?.[u.id], ...settings[kind]?.[u.id] };
+        if (!o.enabled) continue;
+        if ((o.mode ?? u.mode) !== "compete") continue;
+        off[kind][u.id] = { ...o, enabled: false };
+        any = true;
+      }
+    }
+    if (!any) return null;
+    return {
+      ...settings,
+      replacements: { ...settings.replacements, ...off.replacements },
+      extras: { ...settings.extras, ...off.extras },
+    };
   }
 
   private buildCtx(settings: SolverSettings, opts: SolveOptions): RunCtx {
@@ -894,8 +981,9 @@ interface WalkStep {
  */
 function walkOne(i: number, state: CubeState, prevMove: Move | null, ctx: RunCtx): WalkStep | null {
   // 1. Force blocks starting at i (replacements always; boundary extras if their
-  //    trigger passes). The cheapest that actually produces a result wins — a
-  //    force block whose case-table can't match simply drops out (see DESIGN).
+  //    trigger passes). The cheapest that actually produces a result wins. If a
+  //    force block is active here and NONE produce a result, that is an error, not
+  //    a fallback — see the throw below.
   const forceHere = ctx.regionAlts.filter((a) =>
     a.mode === "force" && a.fromIdx === i &&
     (a.boundary ? a.boundary.test(state, { prevMove }) : true)
@@ -922,7 +1010,24 @@ function walkOne(i: number, state: CubeState, prevMove: Move | null, ctx: RunCtx
         nextIdx: best.alt.toIdx + 1,
       };
     }
-    // No force block produced a result — fall through to normal solving.
+    // Every active force block failed to produce a candidate. Falling through to
+    // the region's normal solving would defeat the entire point of `force`: the
+    // mode exists for the curriculum case (see /DESIGN.md "Replacements" — `ZBLL`
+    // -> `OCLL+PLL` for someone who does not know full ZBLL), so quietly solving
+    // the region with the very Step the caller excluded hands them a solution they
+    // cannot execute, and reports success.
+    //
+    // It also hides data defects. Two shipped this way: `ocllPll` could not solve
+    // one OCLL class and `collEpll` could not solve a Z-perm last layer, and
+    // because both fell through to the core `zbll` step every solve still verified
+    // — nothing surfaced until the case tables were audited directly.
+    throw new SettingsError(
+      `force-mode ${forceHere.length > 1 ? "units" : forceHere[0].kind} ` +
+        `${forceHere.map((a) => JSON.stringify(a.id)).join(", ")} ` +
+        `produced no solution for the state at step ${JSON.stringify(ctx.def.steps[i].id)}. ` +
+        `A forced unit replaces its region outright, so there is no fallback: either its case ` +
+        `table does not cover this state (a data gap), or it should be enabled in "compete" mode.`,
+    );
   }
 
   // 2. Connected span of enabled compete region alternatives overlapping i.

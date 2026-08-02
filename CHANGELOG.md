@@ -6,9 +6,104 @@ is one file. Each entry lists the versions it shipped as.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Versions are
 [semver](https://semver.org/) — on a `0.x` line, a **minor** bump is the breaking one.
 
-## Unreleased
+## Unreleased — `cubing-core@0.3.0` · `algsets@0.3.1` · `apb@0.2.3`
 
-Nothing yet.
+### Changed
+
+- **`@moishy/cubing-core`: enabling a `compete` unit can no longer make the solve worse.** The mode
+  means "use this only if it helps", but it was judged on its own region: the span DP picks the
+  cheapest cover of the region and the runner then continues greedily, so a cheaper region could
+  leave a dearer remainder. Enabling APB's `eoPair` alone made the total worse on 14 of 60 scrambles
+  (worst +7.9) and all five replacements together on 29 of 60 (worst +11.4) — while the region cover
+  itself was never dearer on any of them, exactly as the DP guarantees. A compete unit is now judged
+  on the whole solve: the solver runs once with the compete units off and once with them on and
+  keeps the cheaper. Regressions are now 0 of 60 for every unit and for all eight at once, and each
+  unit fires on exactly the scrambles where it helps. Costs a second solve, but only when a compete
+  unit is enabled — they are opt-in and off by default, so the default path is untouched. `force`
+  units are not raced: forcing a unit says it must be used, not that it is on offer.
+
+- **`@moishy/cubing-core`: a search whose depth bound admits no solution no longer exhausts the
+  heap.** `maxDepth` bounds solution _length_, not work — with no solution under it, A\* has to
+  exhaust every state reachable in that many moves, and nothing bounded the visited map or the
+  frontier. Lowering APB's `rouxFB` cap from 9 to 7 grew the heap at ~200 MB/s to a fatal,
+  uncatchable V8 out-of-memory in under a minute; that is a documented use of
+  `StepOptions.searchMaxDepth` ("lower one to bound an experiment"), so it must not be able to kill
+  the process. Searches now stop at `SearchParams.maxNodes` (default `DEFAULT_MAX_NODES`, 500k
+  retained states ≈ half a gigabyte, costed from measurement) and report `found: false`. The same
+  repro now returns in ~2s at a bounded 563 MB. Unlike a wall-clock budget the bound is
+  deterministic, so which strategies answer stays machine-independent. A phase whose search is
+  legitimately huge raises its own `SearchPhase.maxNodes` — APB's opt-in `direct` retains ~910k
+  solving the whole 2x2x3 in one go, and does so.
+
+- **`@moishy/cubing-core`: a `force`-mode unit that cannot solve its region now throws
+  `SettingsError` instead of silently falling back to the core Steps.** The fallback defeated the
+  point of `force` — the mode exists for the curriculum case (`ZBLL` -> `OCLL+PLL` for someone who
+  does not know full ZBLL), so quietly solving the region with the very Step the caller excluded
+  handed them a solution they cannot execute and reported success. It also hid all three data gaps
+  below: every solve still verified, so nothing surfaced until the case tables were audited
+  directly. Enabling the unit in `compete` mode is the way to say "use it only if it helps"; that
+  path is unchanged and still falls back to the core Steps.
+
+### Fixed
+
+- **`@moishy/algsets`: 50 of the 57 `oll` cases had the wrong primary alg.** Recognition is derived
+  from `algs[0]`, and in 50 cases that alg solved a _different_ orientation class than the case's
+  own (unanimous) variants — so the 57 primaries covered only **39 of the 57** last-layer
+  orientation classes. 66 of the 215 non-solved orientation states (~31%) matched no case at all.
+  The variants were correct throughout (checked against published algs for OLL 21-27, 33, 45, 51 and
+  57), so the fix is to drop the 50 bogus primaries; the correct alg was already present in every
+  case. Coverage is now the full 57, one case per class.
+
+  `assertValidAlgSet` could not catch this: each case still solved _its own_ derived state, and the
+  set's default full-facelet signature separates cases that collide under the coarser
+  orientation-only key APB recognizes OLL with. The same failure mode as the 27 `zbls` cases. Two
+  tests now guard it — the primaries must be a bijection onto the 57 classes, and every variant must
+  be on its case's class.
+
+- **`@moishy/apb`: `ocllPll` could not solve one OCLL class, and `collEpll` could not solve a Z-perm
+  last layer.** The first was the `oll` defect above (the 7-case OCLL filter inherited the missing
+  class). The second is separate: every one of the Z perm's five algs is M-slice-based and its `U`
+  turns leave the last-layer corners rotated by `U2`, so `z`'s derived recognition state is corners
+  solved only _up to AUF_ — and the strict corners-solved filter dropped it, leaving EPLL with 3 of
+  its 4 cases. Recognition is a two-sided U coset, so the filter now folds AUF.
+
+- **`@moishy/apb`: `collEpll` could not solve a last layer whose corners were already oriented.**
+  `coll-epll` is faithful to its source (SpeedCubeDB's COLL): its 40 cases are grouped by the seven
+  OCLL _orientation_ shapes, so it has no case for corners that are oriented but permuted — those
+  are corner PLLs. APB's `coll` phase goal is `cornersSolved`, so it has to handle them: 23 of the
+  647 non-solved corner classes had no case, plus the 4-state "corners solved up to AUF" skip.
+  `collLookup` now falls through to the corner-permuting PLLs and then to an empty-alg skip — the
+  same "derive the half we don't author" move as `epll`, with no new algorithm data. All five
+  replacements now fire on every solve of a 60-scramble sweep in both modes.
+
+- **`@moishy/apb`: the `eoPair` replacement is labelled "EOPair"**, not "BR Pair + EO". The demo
+  builds its options form from `apbDefinition`, so this is what the site shows.
+
+### Added
+
+- Three **coverage** tests in `@moishy/apb`, walking the state space rather than the stored cases,
+  since iterating cases cannot find a class that no case owns — which is why these survived: every
+  last-layer orientation state (OLL/OCLL), every last-layer corner state (COLL), and a ratchet
+  asserting every algset variant solves its own case.
+
+- **`@moishy/algsets`: `zbll` and `pll` carried the `oll` defect in their _variants_, now
+  migrated.** 1572 of 1745 ZBLL and 47 of 89 PLL alternative algs were filed under the wrong case,
+  so `runPhase` silently skipped them and those steps had far fewer real options than the data
+  suggested. Primaries were correct throughout and ZBLL coverage was already proven complete
+  (7775/7775), so this cost no correctness — only the cost race. Every variant now sits under the
+  case it actually solves.
+
+  What made the move safe is how structured the misfiling was: in `zbll` all 428 affected cases
+  formed **214 mutual swap-pairs** (`t-1` <-> `l-26`, `t-2` <-> `l-28`, ...), with every misfiled
+  variant of a case going to the same target; `pll` was messier (6 swaps, 3 chains, 1 split) and the
+  same "move each variant to the case it solves" rule handles all of it. Primaries were never
+  touched, so recognition and coverage are unchanged by construction. 14 algs were dropped rather
+  than moved — they solve no case in their set because they disturb the F2L, i.e. corrupt rather
+  than misfiled — and 11 duplicates collapsed after the move. Net effect on solutions: mean cost
+  44.12 -> 43.52 and mean length 41.08 -> 40.57 moves over 60 scrambles on shipped defaults.
+
+  All fourteen sets now hold zero misfiled variants, and the ratchet test pins every one of them at
+  zero rather than carrying a budget.
 
 ---
 

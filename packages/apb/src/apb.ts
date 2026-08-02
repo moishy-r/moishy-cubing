@@ -80,6 +80,7 @@
 import {
   type AlgorithmicPhase,
   applyMoves,
+  type CaseLookup,
   createDefaultMoveCostModel,
   type CubeState,
   isSolved,
@@ -203,6 +204,10 @@ const DUAL_CN_BOTTOM: Move[][] = [
   parseAlg("z2 y'"),
 ];
 
+// The four AUF states. Used both by `pairJoined` (eoPair) and by the EPLL case
+// filter, which must be AUF-invariant — see `cornersSolvedUpToAUF`.
+const AUF4: Move[][] = [[], parseAlg("U"), parseAlg("U2"), parseAlg("U'")];
+
 const alg = (
   id: string,
   goal: (s: CubeState) => boolean,
@@ -305,6 +310,9 @@ const blockSearch = (
     // strategy) drops out of the step's race instead of failing the solve. Only
     // `direct` sets it — see SearchPhase.timeBudgetMs.
     timeBudgetMs?: number;
+    // Ceiling on states retained, overriding the engine default. Only `direct`
+    // raises it — see SearchPhase.maxNodes.
+    maxNodes?: number;
     // Phase-chaining pool key (only used when this phase feeds a downstream one).
     // Must distinguish candidates by what the *next* phase reads — for a first
     // block, the whole goal block, so the pool offers genuinely different
@@ -352,6 +360,7 @@ const blockSearch = (
     stateKey: regionCoordinate(goal),
     poolStateKey: opts.poolStateKey,
     maxDepth: opts.maxDepth,
+    maxNodes: opts.maxNodes,
     timeBudgetMs: opts.timeBudgetMs,
   };
 };
@@ -433,6 +442,12 @@ const block223: MethodDefinition["steps"][number] = {
         // slow machine does not change which strategies answer. Raise or lower per
         // solve with `stepOptions.block223.searchTimeBudgetMs.full`.
         timeBudgetMs: 15_000,
+        // One search for the whole 7-piece block legitimately retains ~910k states
+        // — measured over 8 scrambles — which is past the engine's safe default
+        // (DEFAULT_MAX_NODES, sized so a runaway search cannot exhaust the heap).
+        // Raise it here rather than lower the bar for every other search; the 15s
+        // budget above is still this phase's primary guard.
+        maxNodes: 2_000_000,
       })],
     },
     // Corner-first and cross strategies are registered but disabled by default.
@@ -627,11 +642,29 @@ const cornersSolved = (s: CubeState) => {
   const n = normalizeOrientation(s);
   return n.cp.every((c, i) => c === i && n.co[i] === 0);
 };
+/**
+ * Corners solved **up to AUF** — the correct test for "is this an EPLL case?".
+ *
+ * A case's recognition state is derived from `invert(algs[0])`, so it carries
+ * whatever net U-rotation the alg leaves on the corners. Every one of the `z`
+ * perm's five algs is M-slice-based, and their U turns permute the last-layer
+ * corners: each leaves `cp = [2,3,0,1,...]` — the corners solved *up to a U2*.
+ * The strict `cornersSolved` therefore rejected `z`, leaving the EPLL filter with
+ * only 3 of its 4 cases (`h`, `ua`, `ub`) and making a Z-perm last layer
+ * unsolvable by `collEpll`. This is not a data defect — all five variants agree,
+ * and it is inherent to writing a Z perm with M slices.
+ *
+ * Folding AUF here is exactly right: recognition is built with
+ * `aufInvariantLookup` (a two-sided U-coset), so a case whose corners are solved
+ * up to a U turn *is* an EPLL case. The predicate still rejects the genuine
+ * corner-permuting PLLs, whose corner permutation is not a U rotation.
+ */
+const cornersSolvedUpToAUF = (s: CubeState) => AUF4.some((u) => cornersSolved(applyMoves(s, u)));
 // EPLL is terminal (reaches solved) -> both-AUF lookup like PLL.
 const epllLookup = aufInvariantLookup(
   pllSet,
   pllSet.signature,
-  (c) => cornersSolved(pllSet.recognitionState(c.id)),
+  (c) => cornersSolvedUpToAUF(pllSet.recognitionState(c.id)),
 );
 // COLL keys on the *corners* only (`cornerSignature`) — the coll-epll set's
 // default full-facelet signature pins the edge permutation EPLL is meant to fix,
@@ -641,7 +674,43 @@ const epllLookup = aufInvariantLookup(
 // (`t-3`, `t-4`) now solve too — their tilted result satisfies the rotation-
 // invariant `cornersSolved` goal, and the following `epll` phase homes that
 // rotated input (see the "Rotation-GENERAL" note up top).
-const collLookup = aufInvariantLookup(collSet, cornerSignature());
+//
+// Falls through to the corner-permuting PLLs for the corner states the COLL set
+// deliberately omits. `coll-epll` is faithful to its source (SpeedCubeDB's COLL):
+// its 40 cases are grouped by the seven OCLL *orientation* shapes, so it has no
+// case for a last layer whose corners are already **oriented but permuted** —
+// those are corner PLLs (A/E and friends), not COLL. APB's `coll` phase goal is
+// `cornersSolved`, so it must handle them anyway: all 23 such corner classes had
+// no case, and `collEpll` simply could not solve that last layer (~3.6% of corner
+// states; it surfaced as a force-mode failure once force stopped falling through
+// to `zbll`).
+//
+// This is the same "derive the half we don't author" move as `epll` above — no
+// new algorithm data. The filter is the exact complement of the EPLL one: PLLs
+// whose corner permutation is *not* just an AUF are precisely the cases that
+// permute corners, and each solves its own corner class. Keying on
+// `cornerSignature` ignores the edges they also move; that is fine, because a
+// corner-solving alg necessarily leaves an even edge permutation, which is an
+// EPLL case (the following phase). Several PLLs share a corner class — harmless,
+// first-defined wins and all of them solve it.
+//
+// The last resort is the COLL *skip*: if the corners are already solved up to a U
+// turn, no alg is needed and the phase contributes only the AUF that aligns them
+// (`runPhase` supplies it around the empty alg). Rare — 4 of the 648 corner states
+// — but reachable, and without it a forced `collEpll` would now hard-error rather
+// than emit nothing. Directly analogous to an OLL/PLL skip.
+const cornersAlreadySolved: CaseLookup = {
+  find: (s) => cornersSolvedUpToAUF(s) ? { id: "coll-skip", algs: [{ moves: [] }] } : null,
+};
+const collLookup = fallThrough(
+  aufInvariantLookup(collSet, cornerSignature()),
+  aufInvariantLookup(
+    pllSet,
+    cornerSignature(),
+    (c) => !cornersSolvedUpToAUF(pllSet.recognitionState(c.id)),
+  ),
+  cornersAlreadySolved,
+);
 const collEpll: Replacement = {
   id: "collEpll",
   label: "COLL + EPLL",
@@ -675,7 +744,7 @@ const eoPairInsertLookup = regionLookup(
 );
 const eoPair: Replacement = {
   id: "eoPair",
-  label: "BR Pair + EO",
+  label: "EOPair",
   region: ["brPair", "eo"],
   mode: "compete",
   strategies: [{
@@ -730,7 +799,6 @@ const eoPair: Replacement = {
 //     formPair, where it belongs).
 // This keeps the common U-face case as fast as before and only tightens the goal
 // for the off-U-layer pairs, so the split lands on the real pair-forming move.
-const AUF4: Move[][] = [[], parseAlg("U"), parseAlg("U2"), parseAlg("U'")];
 function pairJoined(s: CubeState): boolean {
   if (eoPairInsertLookup.find(s) !== null) return true; // joined at the canonical alignment
   const cornerInU = s.cp.indexOf(7) < 4;
