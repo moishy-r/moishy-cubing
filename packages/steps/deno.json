@@ -1,6 +1,6 @@
 {
   "name": "@moishy/steps",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Reusable solver steps for speedsolving methods: block-building searches (Roux first block, 2x2x2, 2x2x3, cross) with pruning-guided A*, ready to compose into a method.",
   "exports": "./mod.ts",
   "license": "MIT",
