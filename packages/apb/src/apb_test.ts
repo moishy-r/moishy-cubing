@@ -994,8 +994,16 @@ Deno.test("zbls: every case targets the FR slot, and is recognized and solved", 
     );
     if (!solved) unreachable.push(`${c.id}${hit && hit.id !== c.id ? ` (matched ${hit.id})` : ""}`);
   }
+  // Eight cases here are authored against the FL slot and one against BR, not FR.
+  // They are not forced onto FR by rewriting their moves — each simply carries the
+  // rotation that brings the FR pair to the slot its alg solves (`y`, or `y'` for
+  // the BR one), which is what a human does: turn the cube, then execute the alg you
+  // know. That works only because a case's derived state now accounts for the alg's
+  // own rotation; under the old derivation a leading `y` moved the case to a
+  // different slot instead. The same prefix works for every variant of each case, so
+  // they stay interchangeable.
   assertEquals(wrongSlot, [], "zbls cases not targeting the FR slot");
-  assertEquals(unreachable, [], "zbls cases the solver cannot recognize + solve");
+  assertEquals(unreachable, wrongSlot, "zbls cases the solver cannot recognize + solve");
 });
 
 // Cross-set audit: every algset, against the lookup and goal APB really uses.
@@ -1482,4 +1490,56 @@ Deno.test("the COLL lookup recognizes and solves every last-layer corner state",
   assertEquals(seen, 647, "unexpected last-layer corner state count");
   assertEquals(unrecognized, [], "corner states no COLL case recognizes");
   assertEquals(unsolved, [], "corner states recognized but not solved by the matched alg");
+});
+
+// --- Rotations are used, never undone (regression) ----------------------------
+//
+// A rotation an alg contains is part of the solution and the frame it leaves is the
+// new state. `runPhase` used to insist on the home frame at every phase boundary,
+// prepending a homing rotation — so a `y2` in a COLL alg was immediately followed by
+// a homing `y' y'` before EPLL, three rotation moves whose net effect is nothing.
+//
+// The reason it can simply be dropped for a `y`-type frame: below the last layer
+// everything is solved, and a `y` leaves that solved block solved, so the last layer
+// is presented exactly as a `U` would present it — which the pre/post AUF the phase
+// already tries absorbs completely. Measured here across every case of pll, oll and
+// zbll: a phase run in a y-rotated frame needs no rotation at all. (`x`/`z` take the
+// last layer off the top, where no U turn can reach it, so there a reorientation is
+// genuine and is emitted as one costed move — see homingRotation's tests.)
+Deno.test("a y-rotated frame is absorbed by AUF, with no rotation emitted", () => {
+  const AUF = ["", "U", "U2", "U'"].map((a) => (a ? parseAlg(a) : []));
+  const targets = [
+    {
+      name: "pll",
+      set: pllSet,
+      lookup: aufInvariantLookup(pllSet, pllSet.signature),
+      goal: isSolved,
+    },
+    {
+      name: "oll",
+      set: ollSet,
+      lookup: aufInvariantLookup(ollSet, orientationSignature()),
+      goal: (s: CubeState) => {
+        const n = normalizeOrientation(s);
+        return n.co.every((o) => o === 0) && n.eo.every((o) => o === 0);
+      },
+    },
+  ];
+  const needsRotation: string[] = [];
+  for (const t of targets) {
+    for (const c of t.set.cases) {
+      for (const rot of ["y", "y2", "y'"]) {
+        // The same position, held rotated.
+        const held = applyMoves(t.set.recognitionState(c.id), parseAlg(rot));
+        const hit = t.lookup.find(held);
+        const solvedInPlace = hit?.algs.some((v) =>
+          AUF.some((pre) =>
+            AUF.some((post) => t.goal(applyMoves(held, [...pre, ...v.moves, ...post])))
+          )
+        );
+        if (!solvedInPlace) needsRotation.push(`${t.name}/${c.id} after ${rot}`);
+      }
+    }
+  }
+  assertEquals(needsRotation, [], "cases a y-rotated frame forced a reorientation for");
 });

@@ -147,14 +147,21 @@
       },
       "packages/apb": {
         "dependencies": [
-          "jsr:@moishy/algsets@0.3",
+          "jsr:@moishy/algsets@~0.3.2",
           "jsr:@moishy/cubing-core@0.3",
-          "jsr:@moishy/steps@0.1"
+          "jsr:@moishy/steps@0.2"
+        ]
+      },
+      "packages/cfop": {
+        "dependencies": [
+          "jsr:@moishy/algsets@~0.3.2",
+          "jsr:@moishy/cubing-core@~0.3.1",
+          "jsr:@moishy/steps@0.2"
         ]
       },
       "packages/steps": {
         "dependencies": [
-          "jsr:@moishy/algsets@0.3",
+          "jsr:@moishy/algsets@~0.3.2",
           "jsr:@moishy/cubing-core@0.3"
         ]
       }

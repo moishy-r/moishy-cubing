@@ -3,7 +3,8 @@
     "./packages/cubing-core",
     "./packages/algsets",
     "./packages/steps",
-    "./packages/apb"
+    "./packages/apb",
+    "./packages/cfop"
   ],
   "tasks": {
     "test": "deno test -A",

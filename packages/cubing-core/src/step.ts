@@ -305,6 +305,35 @@ function homeStart(start: CubeState): { homed: CubeState; homeMoves: Move[] } {
 }
 
 /**
+ * The frames an algorithmic phase may run in — the cube **as held**, and (only if
+ * that differs) the home frame.
+ *
+ * A rotated input does not have to be reoriented. For a last-layer alg a `y`-type
+ * frame difference is absorbed *entirely by AUF*: below the last layer everything
+ * is solved and therefore unchanged by the rotation, so a `y` and a `U` present the
+ * last layer identically and the pre/post AUF the phase already tries covers it.
+ * Measured across every case of pll (21), zbll (472) and oll (57), in all three `y`
+ * frames: 100% solve with no rotation emitted. Homing there would insert a
+ * whole-cube rotation the solve does not need and then charge for it — which is
+ * exactly how a real APB solve ended up containing `y2 y' y'`, a net identity.
+ *
+ * So both frames are offered and the cheaper wins. The as-held reading wins
+ * wherever AUF suffices; the reorientation survives only where the phase genuinely
+ * cannot proceed as the cube is held — an `x`/`z` frame before a U-layer alg, where
+ * the last layer is not on top and no U turn can put it there. That is a real
+ * reorientation a human would also make, and it is emitted as one costed move.
+ */
+function frameOptions(
+  start: CubeState,
+  frameRelative: boolean | undefined,
+): { homed: CubeState; homeMoves: Move[] }[] {
+  const asHeld = { homed: start, homeMoves: [] as Move[] };
+  if (frameRelative) return [asHeld];
+  const home = homeStart(start);
+  return home.homeMoves.length === 0 ? [asHeld] : [asHeld, home];
+}
+
+/**
  * The deadline a search phase actually runs under — the solve-global one, tightened
  * by the phase's own `timeBudgetMs` if it declares one — plus a test for whether a
  * thrown `TimeoutError` came from *that phase's* budget rather than the solve's.
@@ -406,63 +435,69 @@ export function runPhase(
   }
 
   // Algorithmic phase: recognize a case (up to AUF), then try each of its
-  // interchangeable algs and each post-AUF, keeping the cheapest that solves.
+  // interchangeable algs and each post-AUF, keeping the cheapest that solves —
+  // across both the as-held frame and the homed one (see `frameOptions`), so a
+  // rotation is only ever emitted when the phase truly cannot run as the cube is.
   const auf = aufOptions(phase.auf ?? ["U"]);
   let best: PhaseSegment | null = null;
 
-  // "Skip" solution: the phase's goal may already be satisfied after nothing but
-  // an AUF alignment — e.g. edge orientation is already done, or the last layer
-  // is already permuted. Recognition sets carry no identity case for this, so it
-  // is handled here rather than as data. A skip is usually the cheapest option,
-  // so it is seeded first and the case search only replaces it if truly cheaper.
-  for (const pre of auf) {
-    const endState = applyMoves(homed, pre);
-    if (!phase.goal(endState)) continue;
-    const moves = homeMoves.length > 0 ? [...homeMoves, ...pre] : [...pre];
-    const cost = segmentCost(moves, prevMove, costModel);
-    if (best && cost >= best.cost) continue;
-    best = {
-      phaseId: phase.id,
-      kind: "algorithmic",
-      moves,
-      cost,
-      startState: start,
-      endState,
-      auf: { pre, post: [] },
-    };
-  }
+  for (const frame of frameOptions(start, phase.frameRelative)) {
+    const base = frame.homed, hm = frame.homeMoves;
 
-  for (const pre of auf) {
-    const aligned = applyMoves(homed, pre);
-    const matched = phase.cases.find(aligned);
-    if (!matched) continue;
-    for (let vi = 0; vi < matched.algs.length; vi++) {
-      const variant = matched.algs[vi];
-      const afterAlg = applyMoves(aligned, variant.moves);
-      for (const post of auf) {
-        const moves = [...homeMoves, ...pre, ...variant.moves, ...post];
-        const endState = applyMoves(afterAlg, post);
-        if (!phase.goal(endState)) continue;
-        const cost = segmentCost(moves, prevMove, costModel);
-        if (best && cost >= best.cost) continue;
-        const offset = homeMoves.length + pre.length;
-        const checkpoints = variant.checkpoints?.map((c) => ({
-          label: c.label,
-          index: c.index + offset,
-        }));
-        best = {
-          phaseId: phase.id,
-          kind: "algorithmic",
-          moves,
-          cost,
-          startState: start,
-          endState,
-          caseId: matched.id,
-          variantIndex: vi,
-          auf: { pre, post },
-          checkpoints,
-          tags: matched.tags,
-        };
+    // "Skip" solution: the phase's goal may already be satisfied after nothing but
+    // an AUF alignment — e.g. edge orientation is already done, or the last layer
+    // is already permuted. Recognition sets carry no identity case for this, so it
+    // is handled here rather than as data. A skip is usually the cheapest option,
+    // so it is seeded first and the case search only replaces it if truly cheaper.
+    for (const pre of auf) {
+      const endState = applyMoves(base, pre);
+      if (!phase.goal(endState)) continue;
+      const moves = hm.length > 0 ? [...hm, ...pre] : [...pre];
+      const cost = segmentCost(moves, prevMove, costModel);
+      if (best && cost >= best.cost) continue;
+      best = {
+        phaseId: phase.id,
+        kind: "algorithmic",
+        moves,
+        cost,
+        startState: start,
+        endState,
+        auf: { pre, post: [] },
+      };
+    }
+
+    for (const pre of auf) {
+      const aligned = applyMoves(base, pre);
+      const matched = phase.cases.find(aligned);
+      if (!matched) continue;
+      for (let vi = 0; vi < matched.algs.length; vi++) {
+        const variant = matched.algs[vi];
+        const afterAlg = applyMoves(aligned, variant.moves);
+        for (const post of auf) {
+          const moves = [...hm, ...pre, ...variant.moves, ...post];
+          const endState = applyMoves(afterAlg, post);
+          if (!phase.goal(endState)) continue;
+          const cost = segmentCost(moves, prevMove, costModel);
+          if (best && cost >= best.cost) continue;
+          const offset = hm.length + pre.length;
+          const checkpoints = variant.checkpoints?.map((c) => ({
+            label: c.label,
+            index: c.index + offset,
+          }));
+          best = {
+            phaseId: phase.id,
+            kind: "algorithmic",
+            moves,
+            cost,
+            startState: start,
+            endState,
+            caseId: matched.id,
+            variantIndex: vi,
+            auf: { pre, post },
+            checkpoints,
+            tags: matched.tags,
+          };
+        }
       }
     }
   }
@@ -581,62 +616,67 @@ export function runPhaseCandidates(
   }
 
   // Algorithmic: one candidate per variant of the recognized case, each with
-  // its own cheapest (pre, post) AUF alignment that meets the goal.
+  // its own cheapest (pre, post) AUF alignment that meets the goal — evaluated in
+  // both the as-held and homed frames (see `frameOptions`), keeping the cheaper.
   const auf = aufOptions(phase.auf ?? ["U"]);
   const perVariant = new Map<number, PhaseSegment>();
-
-  // "Skip" candidate: the goal already met by an AUF alignment alone, no case
-  // alg needed (see runPhase). Included in the pool so lookahead can weigh it.
   let skip: PhaseSegment | null = null;
-  for (const pre of auf) {
-    const endState = applyMoves(homed, pre);
-    if (!phase.goal(endState)) continue;
-    const moves = homeMoves.length > 0 ? [...homeMoves, ...pre] : [...pre];
-    const cost = segmentCost(moves, prevMove, costModel);
-    if (skip && cost >= skip.cost) continue;
-    skip = {
-      phaseId: phase.id,
-      kind: "algorithmic",
-      moves,
-      cost,
-      startState: start,
-      endState,
-      auf: { pre, post: [] },
-    };
-  }
 
-  for (const pre of auf) {
-    const aligned = applyMoves(homed, pre);
-    const matched = phase.cases.find(aligned);
-    if (!matched) continue;
-    for (let vi = 0; vi < matched.algs.length; vi++) {
-      const variant = matched.algs[vi];
-      const afterAlg = applyMoves(aligned, variant.moves);
-      for (const post of auf) {
-        const moves = [...homeMoves, ...pre, ...variant.moves, ...post];
-        const endState = applyMoves(afterAlg, post);
-        if (!phase.goal(endState)) continue;
-        const cost = segmentCost(moves, prevMove, costModel);
-        const existing = perVariant.get(vi);
-        if (existing && cost >= existing.cost) continue;
-        const offset = homeMoves.length + pre.length;
-        const checkpoints = variant.checkpoints?.map((c) => ({
-          label: c.label,
-          index: c.index + offset,
-        }));
-        perVariant.set(vi, {
-          phaseId: phase.id,
-          kind: "algorithmic",
-          moves,
-          cost,
-          startState: start,
-          endState,
-          caseId: matched.id,
-          variantIndex: vi,
-          auf: { pre, post },
-          checkpoints,
-          tags: matched.tags,
-        });
+  for (const frame of frameOptions(start, phase.frameRelative)) {
+    const base = frame.homed, hm = frame.homeMoves;
+
+    // "Skip" candidate: the goal already met by an AUF alignment alone, no case
+    // alg needed (see runPhase). Included in the pool so lookahead can weigh it.
+    for (const pre of auf) {
+      const endState = applyMoves(base, pre);
+      if (!phase.goal(endState)) continue;
+      const moves = hm.length > 0 ? [...hm, ...pre] : [...pre];
+      const cost = segmentCost(moves, prevMove, costModel);
+      if (skip && cost >= skip.cost) continue;
+      skip = {
+        phaseId: phase.id,
+        kind: "algorithmic",
+        moves,
+        cost,
+        startState: start,
+        endState,
+        auf: { pre, post: [] },
+      };
+    }
+
+    for (const pre of auf) {
+      const aligned = applyMoves(base, pre);
+      const matched = phase.cases.find(aligned);
+      if (!matched) continue;
+      for (let vi = 0; vi < matched.algs.length; vi++) {
+        const variant = matched.algs[vi];
+        const afterAlg = applyMoves(aligned, variant.moves);
+        for (const post of auf) {
+          const moves = [...hm, ...pre, ...variant.moves, ...post];
+          const endState = applyMoves(afterAlg, post);
+          if (!phase.goal(endState)) continue;
+          const cost = segmentCost(moves, prevMove, costModel);
+          const existing = perVariant.get(vi);
+          if (existing && cost >= existing.cost) continue;
+          const offset = hm.length + pre.length;
+          const checkpoints = variant.checkpoints?.map((c) => ({
+            label: c.label,
+            index: c.index + offset,
+          }));
+          perVariant.set(vi, {
+            phaseId: phase.id,
+            kind: "algorithmic",
+            moves,
+            cost,
+            startState: start,
+            endState,
+            caseId: matched.id,
+            variantIndex: vi,
+            auf: { pre, post },
+            checkpoints,
+            tags: matched.tags,
+          });
+        }
       }
     }
   }

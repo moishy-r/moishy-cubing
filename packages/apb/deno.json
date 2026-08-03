@@ -1,13 +1,13 @@
 {
   "name": "@moishy/apb",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "A solver for the APB (Advanced Petrus Blocks) speedsolving method, producing human-executable solutions ranked by turning ergonomics.",
   "exports": "./mod.ts",
   "license": "MIT",
   "imports": {
     "@moishy/cubing-core": "jsr:@moishy/cubing-core@^0.3.0",
-    "@moishy/algsets": "jsr:@moishy/algsets@^0.3.0",
-    "@moishy/steps": "jsr:@moishy/steps@^0.1.0"
+    "@moishy/algsets": "jsr:@moishy/algsets@^0.3.2",
+    "@moishy/steps": "jsr:@moishy/steps@^0.2.0"
   },
   "publish": {
     "exclude": [

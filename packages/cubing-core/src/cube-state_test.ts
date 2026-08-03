@@ -1,11 +1,13 @@
 import { assert, assertEquals, assertFalse, assertThrows } from "@std/assert";
-import { NotationError, parseAlg } from "./notation.ts";
+import { formatAlg, NotationError, parseAlg } from "./notation.ts";
+import { centersSolved } from "./regions.ts";
 import {
   applyAlg,
   applyMove,
   applyMoves,
   cloneState,
   type CubeState,
+  homingRotation,
   isSolved,
   normalizeOrientation,
   SOLVED,
@@ -179,4 +181,41 @@ Deno.test("isSolved is invariant to whole-cube rotation but not to slice drift",
   }
   // normalizeOrientation homes a rotated solved cube exactly.
   assert(statesEqual(normalizeOrientation(applyAlg(solvedCube(), "x y'")), solvedCube()));
+});
+
+// A reorientation that is genuinely needed must cost the fewest moves possible. The
+// BFS that builds the orientation table used only quarter-turn generators, so a 180
+// came back as `y y` — inverted into a homing prefix, `y' y'`. That is two moves and
+// two charges for one turn of the wrists, and it showed up verbatim in a real APB
+// solve (`... y2 L U2 R' ... y' y' M2 U ...`, a net identity spread over three
+// rotations). Fourteen of the 24 orientations legitimately need two moves; the nine
+// single-move ones must never cost more than one.
+const SINGLE_MOVE_ORIENTATIONS = ["x", "x'", "x2", "y", "y'", "y2", "z", "z'", "z2"];
+
+Deno.test("homingRotation is minimal: a 180 reorientation is one move, not two", () => {
+  for (const alg of SINGLE_MOVE_ORIENTATIONS) {
+    const s = applyMoves(solvedCube(), parseAlg(alg));
+    const home = homingRotation(s);
+    assertEquals(home.length, 1, `${alg} homes via ${formatAlg(home)}, expected a single move`);
+    assert(centersSolved(applyMoves(s, home)), `${alg} not homed by ${formatAlg(home)}`);
+  }
+});
+
+Deno.test("homingRotation homes every orientation in at most two moves", () => {
+  const seen = new Set<string>();
+  const gens = ["x", "x'", "x2", "y", "y'", "y2", "z", "z'", "z2"];
+  const long: string[] = [];
+  for (const a of ["", ...gens]) {
+    for (const b of ["", ...gens]) {
+      const alg = [a, b].filter(Boolean).join(" ");
+      const s = alg === "" ? solvedCube() : applyMoves(solvedCube(), parseAlg(alg));
+      if (seen.has(s.cn.join(","))) continue;
+      seen.add(s.cn.join(","));
+      const home = homingRotation(s);
+      if (home.length > 2) long.push(`${alg || "(home)"} -> ${formatAlg(home)}`);
+      assert(centersSolved(applyMoves(s, home)), `${alg} not homed by ${formatAlg(home)}`);
+    }
+  }
+  assertEquals(seen.size, 24, "expected all 24 orientations to be reachable in two moves");
+  assertEquals(long, [], "orientations needing more than two moves to home");
 });

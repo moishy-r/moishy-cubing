@@ -81,8 +81,6 @@ import {
   type AlgorithmicPhase,
   applyMoves,
   axisCanonical,
-  type CaseLookup,
-  cornerSignature,
   type CubeState,
   eoSignature,
   fallThrough,
@@ -91,8 +89,6 @@ import {
   type Move,
   type MoveCostModel,
   type MoveFamily,
-  normalizeOrientation,
-  orientationSignature,
   parseAlg,
   pieceSignature,
   regionCoordinate,
@@ -117,7 +113,15 @@ import { wv as wvSet } from "@moishy/algsets/wv";
 import { sv as svSet } from "@moishy/algsets/sv";
 import { lxsBackSlot as lxsBackSlotSet } from "@moishy/algsets/lxs-back-slot";
 import { aufInvariantLookup, regionLookup } from "@moishy/algsets";
-import { block223Step, BLOCK_MOVES } from "@moishy/steps";
+import {
+  block223Step,
+  BLOCK_MOVES,
+  collEpllStrategy,
+  cornersOriented,
+  ocllPllStrategy,
+  ollPllStrategy,
+  pllLookup as pllLookupFor,
+} from "@moishy/steps";
 import {
   AFTER_BR,
   BLOCK223,
@@ -236,21 +240,13 @@ const zbll: MethodDefinition["steps"][number] = {
 // terminal here (reaches solved), so it too needs the both-AUF lookup — a plain
 // pre-AUF-only `regionLookup` would only recognize the quarter of PLL states
 // needing no post-AUF.
-const OCLL_IDS = new Set(["oll-21", "oll-22", "oll-23", "oll-24", "oll-25", "oll-26", "oll-27"]);
-const ocllLookup = aufInvariantLookup(ollSet, orientationSignature(), (c) => OCLL_IDS.has(c.id));
-const pllLookup = aufInvariantLookup(pllSet, pllSet.signature);
+const pllLookup = pllLookupFor(pllSet);
 const ocllPll: Replacement = {
   id: "ocllPll",
   label: "OCLL + PLL",
   region: ["zbll", "zbll"],
   mode: "force",
-  strategies: [{
-    id: "ocllPll",
-    phases: [
-      alg("ocll", (s) => normalizeOrientation(s).co.every((o) => o === 0), ocllLookup),
-      alg("pll", isSolved, pllLookup),
-    ],
-  }],
+  strategies: [ocllPllStrategy(ollSet, pllSet)],
 };
 
 // collEpll: COLL (orient + permute LL corners) then EPLL. EPLL is not its own
@@ -261,91 +257,15 @@ const ocllPll: Replacement = {
 // coll `t-3`/`t-4`, which have no rotation-free alg — still counts as solved, and
 // the next phase homes that tilted input (see cubing-core `homeStart`). Without
 // this the absolute check rejected those legitimately-tilted results outright.
-const cornersSolved = (s: CubeState) => {
-  const n = normalizeOrientation(s);
-  return n.cp.every((c, i) => c === i && n.co[i] === 0);
-};
-/**
- * Corners solved **up to AUF** — the correct test for "is this an EPLL case?".
- *
- * A case's recognition state is derived from `invert(algs[0])`, so it carries
- * whatever net U-rotation the alg leaves on the corners. Every one of the `z`
- * perm's five algs is M-slice-based, and their U turns permute the last-layer
- * corners: each leaves `cp = [2,3,0,1,...]` — the corners solved *up to a U2*.
- * The strict `cornersSolved` therefore rejected `z`, leaving the EPLL filter with
- * only 3 of its 4 cases (`h`, `ua`, `ub`) and making a Z-perm last layer
- * unsolvable by `collEpll`. This is not a data defect — all five variants agree,
- * and it is inherent to writing a Z perm with M slices.
- *
- * Folding AUF here is exactly right: recognition is built with
- * `aufInvariantLookup` (a two-sided U-coset), so a case whose corners are solved
- * up to a U turn *is* an EPLL case. The predicate still rejects the genuine
- * corner-permuting PLLs, whose corner permutation is not a U rotation.
- */
-const cornersSolvedUpToAUF = (s: CubeState) => AUF4.some((u) => cornersSolved(applyMoves(s, u)));
-// EPLL is terminal (reaches solved) -> both-AUF lookup like PLL.
-const epllLookup = aufInvariantLookup(
-  pllSet,
-  pllSet.signature,
-  (c) => cornersSolvedUpToAUF(pllSet.recognitionState(c.id)),
-);
-// COLL keys on the *corners* only (`cornerSignature`) — the coll-epll set's
-// default full-facelet signature pins the edge permutation EPLL is meant to fix,
-// so it never matched. Built with `aufInvariantLookup` (both-AUF, rotation-
-// invariant). Many COLL primaries end tilted; the cost race prefers a case's
-// rotation-free variant where one exists, and the few cases that have none
-// (`t-3`, `t-4`) now solve too — their tilted result satisfies the rotation-
-// invariant `cornersSolved` goal, and the following `epll` phase homes that
-// rotated input (see the "Rotation-GENERAL" note up top).
-//
-// Falls through to the corner-permuting PLLs for the corner states the COLL set
-// deliberately omits. `coll-epll` is faithful to its source (SpeedCubeDB's COLL):
-// its 40 cases are grouped by the seven OCLL *orientation* shapes, so it has no
-// case for a last layer whose corners are already **oriented but permuted** —
-// those are corner PLLs (A/E and friends), not COLL. APB's `coll` phase goal is
-// `cornersSolved`, so it must handle them anyway: all 23 such corner classes had
-// no case, and `collEpll` simply could not solve that last layer (~3.6% of corner
-// states; it surfaced as a force-mode failure once force stopped falling through
-// to `zbll`).
-//
-// This is the same "derive the half we don't author" move as `epll` above — no
-// new algorithm data. The filter is the exact complement of the EPLL one: PLLs
-// whose corner permutation is *not* just an AUF are precisely the cases that
-// permute corners, and each solves its own corner class. Keying on
-// `cornerSignature` ignores the edges they also move; that is fine, because a
-// corner-solving alg necessarily leaves an even edge permutation, which is an
-// EPLL case (the following phase). Several PLLs share a corner class — harmless,
-// first-defined wins and all of them solve it.
-//
-// The last resort is the COLL *skip*: if the corners are already solved up to a U
-// turn, no alg is needed and the phase contributes only the AUF that aligns them
-// (`runPhase` supplies it around the empty alg). Rare — 4 of the 648 corner states
-// — but reachable, and without it a forced `collEpll` would now hard-error rather
-// than emit nothing. Directly analogous to an OLL/PLL skip.
-const cornersAlreadySolved: CaseLookup = {
-  find: (s) => cornersSolvedUpToAUF(s) ? { id: "coll-skip", algs: [{ moves: [] }] } : null,
-};
-const collLookup = fallThrough(
-  aufInvariantLookup(collSet, cornerSignature()),
-  aufInvariantLookup(
-    pllSet,
-    cornerSignature(),
-    (c) => !cornersSolvedUpToAUF(pllSet.recognitionState(c.id)),
-  ),
-  cornersAlreadySolved,
-);
+// COLL + EPLL, both derived rather than authored — see `@moishy/steps`' last-layer
+// module for why each keys on what it does, and for the Z-perm/EPLL and
+// corners-oriented-but-permuted cases the naive filters miss.
 const collEpll: Replacement = {
   id: "collEpll",
   label: "COLL + EPLL",
   region: ["zbll", "zbll"],
   mode: "force",
-  strategies: [{
-    id: "collEpll",
-    phases: [
-      alg("coll", cornersSolved, collLookup),
-      alg("epll", isSolved, epllLookup),
-    ],
-  }],
+  strategies: [collEpllStrategy(collSet, pllSet)],
 };
 
 // eoPair (region [brPair, eo]): form the BR pair by search, then the insert that
@@ -467,28 +387,17 @@ const eodrLs: Replacement = {
 
 // --- Extras ------------------------------------------------------------------
 
-// Orientation goals (OLL/OCLL/WV) likewise up to whole-cube rotation.
-const cornersOriented = (s: CubeState) => normalizeOrientation(s).co.every((o) => o === 0);
-const edgesOriented = (s: CubeState) => normalizeOrientation(s).eo.every((o) => o === 0);
-
 // oll (region [eo..zbll], boundary trigger = whole F2L already solved): full OLL
 // then PLL, straight from an un-EO'd finished F2L. `pll` reused. OLL keys on
 // last-layer *orientation* only (`orientationSignature`); built via
 // `aufInvariantLookup` for both-AUF, rotation-invariant recognition (same as OCLL).
-const ollLookup = aufInvariantLookup(ollSet, orientationSignature());
 const ollExtra = {
   id: "oll",
   label: "OLL + PLL",
   region: ["eo", "zbll"] as [string, string],
   mode: "force" as const,
   trigger: { kind: "boundary" as const, test: regionSolved(F2L) },
-  strategies: [{
-    id: "ollPll",
-    phases: [
-      alg("oll", (s) => cornersOriented(s) && edgesOriented(s), ollLookup),
-      alg("pll", isSolved, pllLookup),
-    ],
-  }],
+  strategies: [ollPllStrategy(ollSet, pllSet)],
 };
 
 // zbls (region [eo, lxs], boundary trigger = DR already solved after brPair):
@@ -628,6 +537,10 @@ export const apbDefinition: MethodDefinition = {
         ["eo", "lxs"],
         ["lxs", "zbll"],
         ["ocll", "pll"],
+        // A COLL variant that ends tilted makes the following EPLL either pay a
+        // reorientation or take a dearer AUF-only alignment, so the choice between
+        // COLL variants is only correct with the continuation in view.
+        ["coll", "epll"],
         ["eodr", "ls"],
         ["frPair", "eoBackSlot"],
         ["eoBackSlot", "lxsBackSlot"],

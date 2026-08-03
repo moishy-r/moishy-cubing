@@ -14,9 +14,10 @@ it's the source of truth for "why does it work this way," not the chat history t
 - `@moishy/algsets` - algorithm case data, authored as typed TS modules, plus the `AlgSet` ->
   `CaseLookup` adapters. It owns the `AlgSet` type, which is why those adapters cannot sit in
   cubing-core without a cycle. No solving logic.
-- `@moishy/steps` - reusable _searches_: `blockSearch`, the standard block targets (Roux first
-  block, 2x2x2, 2x2x3, cross), the block cost model, and the six 2x2x3 strategies. What `algsets` is
-  for data, this is for search — a first block is the same search whoever calls it.
+- `@moishy/steps` - reusable _steps_: `blockSearch` and the standard block targets (Roux first
+  block, 2x2x2, 2x2x3, cross), the block cost model, the six 2x2x3 strategies, and the four F2L pair
+  steps. What `algsets` is for data, this is for the solving side — a first block is the same search
+  whoever calls it, and F2L is the same four slots whoever is filling them.
 - `@moishy/apb` - the APB method plugin. Reference implementation for "how to add a new method" -
   copy this package's shape for `@moishy/cfop`, `@moishy/roux`, etc. A method package should be
   mostly wiring: which algset backs each step, what its recognition keys on, how steps sequence.

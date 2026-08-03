@@ -268,7 +268,11 @@ export function applyAlg(s: CubeState, alg: string): CubeState {
 // rotation moves that produce it from the home frame, so any state can be rotated
 // back to the home frame (`normalizeOrientation`).
 const ORIENTATIONS: { cn: string; moves: Move[] }[] = (() => {
-  const gens = ["x", "y", "z", "x'", "y'", "z'"].map((m) => parseAlg(m));
+  // Half turns are generators too, so the BFS finds the shortest sequence in
+  // *moves*, not in quarter turns. Without them a 180 reorientation came out as
+  // `y y` (inverted: `y' y'`) — two moves, and two charges, for one turn of the
+  // wrists. A reorientation that is genuinely needed should cost exactly one move.
+  const gens = ["x", "y", "z", "x'", "y'", "z'", "x2", "y2", "z2"].map((m) => parseAlg(m));
   const seen = new Map<string, Move[]>();
   const home = solvedCube();
   seen.set(home.cn.join(","), []);

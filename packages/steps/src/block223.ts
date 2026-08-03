@@ -24,7 +24,7 @@ import {
   BLOCK223,
   BLOCK_COST_MODEL,
   blockSearch,
-  CROSS,
+  CROSS3,
   CROSS_PAIR_BACK,
   CROSS_PAIR_FRONT,
   DIRECT_GROUPS,
@@ -207,7 +207,7 @@ export const cross1Front: Strategy = {
   enabledByDefault: false,
   phaseChaining: false,
   phases: [
-    blockSearch("cross", CROSS, { maxDepth: 8 }),
+    blockSearch("cross", CROSS3, { maxDepth: 8 }),
     blockSearch("crossPairFront", CROSS_PAIR_FRONT, {
       heuristicRegion: { corners: [5], edges: [9] },
       guardGoal: true,
@@ -227,7 +227,7 @@ export const cross1Back: Strategy = {
   enabledByDefault: false,
   phaseChaining: false,
   phases: [
-    blockSearch("cross", CROSS, { maxDepth: 8 }),
+    blockSearch("cross", CROSS3, { maxDepth: 8 }),
     blockSearch("crossPairBack", CROSS_PAIR_BACK, {
       heuristicRegion: { corners: [6], edges: [10] },
       guardGoal: true,

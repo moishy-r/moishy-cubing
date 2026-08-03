@@ -20,7 +20,7 @@ Every set is its own subpath export, so you only pull in the data you need:
 import { pll } from "@moishy/algsets/pll";
 
 pll.cases.length; // 21
-const c = pll.byId("t-perm");
+const c = pll.get("t-perm");
 c?.algs[0].moves; // primary alg, parsed
 c?.algs.length; // interchangeable alternatives
 
@@ -37,6 +37,8 @@ lookahead worth having.
 | Import                          | Cases | Set                       |
 | ------------------------------- | ----- | ------------------------- |
 | `@moishy/algsets/zbll`          | 472   | ZBLL                      |
+| `@moishy/algsets/f2l`           | 41x4  | F2L, all four slots       |
+| `@moishy/algsets/advanced-f2l`  | 136   | Advanced F2L (all slots)  |
 | `@moishy/algsets/dfdb`          | 527   | DF/DB pair (APB block223) |
 | `@moishy/algsets/zbls`          | 301   | ZBLS                      |
 | `@moishy/algsets/eo-pair`       | 148   | EO Pair                   |
@@ -53,6 +55,22 @@ lookahead worth having.
 
 Notes:
 
+- **`f2l`** and **`advanced-f2l`** each export **four** `AlgSet`s, not one — `f2lFr` / `f2lFl` /
+  `f2lBl` / `f2lBr`, plus an `f2lBySlot` record — because recognition is derived per case and the
+  same case in a different slot is a different cube state. SpeedCubeDB publishes genuinely
+  slot-specific algs (not mirrors), so all four are kept.
+- **Alg order is load-bearing in both sets.** Each slot's primary is rotation-free and derives a
+  fixed-frame state for _that_ slot; later variants may contain `y` rotations, which CFOP uses
+  freely. A rotated primary would derive a state for a _different_ slot and silently mis-recognize —
+  the defect that broke 32 `zbls` cases.
+- **`advanced-f2l` does not follow the source's case numbering.** SpeedCubeDB groups Advanced cases
+  by case _shape_, and the algs under one heading solve different states (the piece is trapped in
+  different slots), so they are not interchangeable variants. Cases here are one-per-state: 54
+  headings become 42/35/28/31 states for fr/fl/bl/br. Case counts therefore differ per slot.
+- A method consuming these must recognize on the pair's location+orientation **plus whichever cubies
+  occupy the target slot**. On the pair alone, an advanced case whose pair sits in an ordinary
+  position (blocked slot) collides with the plain case for that position, whose alg cannot solve it
+  — 5-6 collisions per slot, and 0 once the occupant is in the key.
 - There is no `ocll-pll` set. OCLL + PLL needs no data of its own: OCLL is the seven `oll` cases
   21-27 and PLL is the `pll` set, which is how APB's `ocllPll` replacement builds it. An empty
   placeholder export existed until 0.2.0 and was removed.

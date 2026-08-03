@@ -8,12 +8,14 @@
  *
  * This entrypoint ships the authoring and validation machinery. The data lives
  * behind subpath exports so consumers import only what they need:
- * `@moishy/algsets/zbll`, `/pll`, `/oll`, `/dfdb`, and a dozen more (see the
- * package README for the full list).
+ * `@moishy/algsets/zbll`, `/pll`, `/oll`, `/dfdb`, `/f2l`, and a dozen more (see
+ * the package README for the full list). A few subpaths export several sets: `/f2l`
+ * and `/advanced-f2l` each ship one `AlgSet` per F2L slot, since a case's recognition
+ * state is slot-specific.
  *
  * ```ts
  * import { pll } from "@moishy/algsets/pll";
- * pll.byId("t-perm")?.algs[0].moves;
+ * pll.get("t-perm")?.algs[0].moves;
  * ```
  *
  * Each `AlgSet` implements `CaseLookup`, so it drops straight into an
@@ -22,7 +24,7 @@
  * @module
  */
 
-export const VERSION = "0.3.1";
+export const VERSION = "0.3.2";
 
 export {
   type AlgCaseInput,

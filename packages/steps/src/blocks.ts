@@ -90,12 +90,23 @@ export const BLOCK223 = { corners: [5, 6], edges: [5, 6, 7, 9, 10] } as const;
 export const FRONT_222 = { corners: [5], edges: [5, 6, 9] }; // DFL, DF/DL/FL
 export const BACK_222 = { corners: [6], edges: [6, 7, 10] }; // DBL, DL/DB/BL
 export const ROUX_FB = { corners: [5, 6], edges: [6, 9, 10] }; // the 1x2x3 (no DF/DB)
-export const CROSS = { corners: [], edges: [5, 6, 7] }; // DF, DL, DB
-// cross1 inserts its two F2L pairs one at a time, and races both orders (the best
+/**
+ * The D-layer cross: DR, DF, DL, DB. CFOP's first step, and the largest block that
+ * is edges-only.
+ */
+export const CROSS = { corners: [], edges: [4, 5, 6, 7] };
+/**
+ * Three of the four cross edges — DF, DL, DB — i.e. the cross *minus DR*. This is
+ * not a method's cross; it is the edge part of the bottom-left 2x2x3, and exists
+ * because APB's `cross1*` block strategies build it on the way to that block. A
+ * method wanting the real thing wants {@link CROSS}.
+ */
+export const CROSS3 = { corners: [], edges: [5, 6, 7] };
+// cross1 inserts its two F2L pairs one at a time (it builds CROSS3, not the cross), and races both orders (the best
 // order is scramble-dependent — ~0.5 moves/scramble on average). These are the
 // cross + the first pair for each order: front pair (DLF+FL) or back pair (DBL+BL).
-export const CROSS_PAIR_FRONT = { corners: [5], edges: [5, 6, 7, 9] }; // cross + DLF + FL
-export const CROSS_PAIR_BACK = { corners: [6], edges: [5, 6, 7, 10] }; // cross + DBL + BL
+export const CROSS_PAIR_FRONT = { corners: [5], edges: [5, 6, 7, 9] }; // CROSS3 + DLF + FL
+export const CROSS_PAIR_BACK = { corners: [6], edges: [5, 6, 7, 10] }; // CROSS3 + DBL + BL
 
 // `direct`'s pruning tables: overlapping sub-regions of the 2x2x3, maxed
 // (`regionHeuristicMulti`). The whole 7-piece block cannot be one combined table

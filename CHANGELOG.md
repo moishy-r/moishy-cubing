@@ -8,7 +8,174 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ## Unreleased
 
-Nothing yet.
+### Added
+
+- **`@moishy/algsets@0.3.2`: F2L and Advanced F2L case data, all four slots** —
+  `@moishy/algsets/f2l` (41 cases x 4 slots, 622 algs) and `@moishy/algsets/advanced-f2l`
+  (42/35/28/31 cases for fr/fl/bl/br, 664 algs), scraped from SpeedCubeDB's F2L and AdvancedF2L
+  pages, which publish genuinely slot-specific algorithms rather than mirrors. Each subpath exports
+  **four** `AlgSet`s (`f2lFr`/`f2lFl`/`f2lBl`/`f2lBr` plus an `f2lBySlot` record): recognition is
+  derived per case from its primary alg, so the same case in a different slot is a different state
+  and has to be a different set. Authored for `@moishy/cfop`, but nothing in either set is
+  CFOP-specific.
+
+  Four things had to be decided from the data rather than the source's presentation, each verified
+  by a test:
+
+  - **Alg order is load-bearing.** Every slot's primary is rotation-free and derives a genuine
+    fixed-frame state for _that_ slot (centers home, D-layer cross solved, the right slots open); a
+    primary containing a net `y` derives a state for a _different_ slot and silently mis-recognizes,
+    mechanically the same defect that broke 32 `zbls` cases. 16 plain and 41 advanced (case, slot)
+    pairs needed reordering to put an eligible primary first. Later variants are unconstrained and
+    many do rotate — CFOP uses rotations freely, and `runPhase` goal-checks every variant.
+  - **Advanced F2L's case numbering is not 1:1 with cube states, so this set does not follow it.**
+    SpeedCubeDB groups Advanced cases by the _shape_ of the case, and the algs under one heading
+    handle the piece being trapped in different slots — so they solve different states and are not
+    interchangeable variants at all. Stored verbatim, 117 of 208 front-right variants could not
+    solve their own case, and the states they _did_ solve were unrecognized. Cases are therefore
+    one-per-state (54 headings collapse to 42/35/28/31), with the contributing headings kept in
+    `name`.
+  - **Rotated algs are stored verbatim.** Nothing is de-rotated or rewritten: a primary containing a
+    `y` derives exactly the same state as a rotation-free one, because `defineAlgSet` now accounts
+    for the frame an alg lands in (see the Fixed entry below). An earlier pass here manufactured 17
+    rotation-free primaries to work around that bug; none survive.
+  - **A consumer must recognize on the pair _plus_ whichever cubies occupy the target slot.** An
+    advanced case whose pair sits in an ordinary position — what makes it advanced is a foreign
+    piece blocking the slot — has the same pair signature as the plain case for that position, whose
+    alg cannot solve it. Measured 5-6 such collisions per slot on the pair alone, 0 with the
+    occupant in the key, which is what makes `fallThrough(f2l, advancedF2l)` unambiguous.
+
+  Coverage is walked over the state space, not the stored cases: all 149 non-solved last-slot states
+  (the classic 41 up to AUF) are recognized. 5 Advanced algs are not kept — each needs the cross
+  _not_ already solved or leaves the centers drifted, so it cannot run in a fixed-frame CFOP solve;
+  they are listed in the module doc.
+
+### Added
+
+- **`@moishy/cfop@0.1.0`: a CFOP solver.** Cross, four F2L pair steps, OLL, PLL. Pure configuration
+  over `@moishy/steps` — the second method in the repo, and the test of whether extracting `steps`
+  was worth it. It was: the package is ~150 lines and every step it lists is shared.
+
+  The F2L steps are interchangeable and none names a slot; which pair each takes is decided by cost
+  per scramble (see the `steps@0.2.0` entry). Verified end to end on 20 scrambles, with each step's
+  own contract asserted at its boundary and a regression test that no solution contains a rotation
+  immediately undone by its inverse.
+
+  Deliberately absent, each for a stated reason rather than an oversight: X-cross (a `compete`
+  Replacement over `[cross, cross]`, since an X-cross is a normal F2L with one pair pre-solved, not
+  a separate process); the last-slot variants and Winter/Summer Variation (their data is authored
+  for the FR slot, while CFOP's last slot is whichever the first three steps did not take); and a
+  two-look last layer. That last one is worth recording: **APB's `ocllPll` and `collEpll` are not
+  reusable here.** Both OCLL and COLL assume the last-layer edges are already oriented — true in
+  APB, which has a core EO step, false in CFOP. Forcing either throws `SettingsError` at the `oll`
+  boundary, correctly, and there is a test pinning that.
+
+- **`@moishy/steps@0.2.0`: the shared last-layer wiring** — `ollStep`, `pllStep`, `ocllPllStrategy`,
+  `collEpllStrategy`, `ollPllStrategy`, the lookups behind them and the goals they use. APB now
+  imports these instead of defining its own; its 57 tests pass unchanged. The wiring is the part
+  worth sharing, not the data: each lookup exists because the algset's default full-facelet
+  signature does not match a live last layer (OLL keys on orientation, COLL on corners, and every
+  one needs both-AUF recognition).
+
+### Changed
+
+- **`@moishy/steps@0.2.0`: `CROSS` is now the real D-layer cross (DR, DF, DL, DB).** It was the
+  three edges DF/DL/DB — the edge part of APB's bottom-left 2x2x3, never a method's cross — while
+  the module doc advertised it as "CFOP's cross". The three-edge region is still available as
+  `CROSS3`, which is what `cross1Front`/`cross1Back` build. **Breaking**: a caller using `CROSS` to
+  mean the old three edges must switch to `CROSS3`.
+
+- **`@moishy/steps@0.2.0`: F2L ships as steps, not just searches.** `f2lSteps` gives the four
+  pair-insertion steps, plus the pieces they are built from (`F2L_SLOT`, `slotSignature`,
+  `anySlotLookup`, `f2lGoal`, `f2lSetupStrategy`, `slotAt`). The package README and module doc are
+  corrected to match: it ships reusable _steps_, and always did — `block223Step` was already one.
+
+  F2L is four interchangeable instances of the same work in a scramble-dependent order, which the
+  Step/Strategy/Phase model does not obviously express. It needs no new mechanism. A step's identity
+  is **"the Nth pair inserted"**, not "the FR pair": the goal of step N is "the cross is intact and
+  at least N slots are solved", and the lookup merges all four slots' candidates into one case whose
+  `algs` are every slot's options — so `runPhase`'s existing "try every alg, keep the cheapest that
+  reaches the goal" _is_ the pair race. Three things fall out:
+
+  - An already-solved slot is a free skip, so an X-cross (which replaces only the cross step, being
+    a normal F2L with one pair pre-solved) needs no F2L-side support at all.
+  - An Advanced F2L alg that frees a trapped piece opens the slot it came from; if that nets no
+    slot, the count goal rejects it. No special case.
+  - The last slot is its own Step, so ZBLS/OLS is an ordinary Replacement over `[f2l4, f2l4]` and
+    Winter/Summer Variation an ordinary checkpoint Extra — the shape APB already uses for
+    `[lxs, zbll]`.
+
+  Slots are tracked by cubie, so a mid-solve rotation never changes which pair a step means;
+  `slotAt` maps back to the physical position for display, which is what a solver holding the cube
+  sees.
+
+  Two things were measured rather than assumed, both of which cost a wrong first attempt:
+
+  - **Recognition keys on the pair alone, not on what occupies the slot.** Adding the occupant looks
+    right — it separates the few Advanced cases whose pair sits in an ordinary position and are
+    "advanced" only because a foreign piece blocks the slot. It is wrong twice: unnecessary (that
+    blocker belongs to another unsolved slot, so evicting it is free, and the plain alg does exactly
+    that — verified for all 6 shared FR positions), and destructive (both sets' states have the
+    other three slots solved, so their occupant is always a U-layer cubie, while a live mid-F2L slot
+    usually holds another slot's piece). Keyed on the occupant, **7 of 10 real scrambles stalled on
+    the first pair**. The two sets are merged per position instead, so both algs compete on cost.
+  - **The fallback is a setup, not a search.** Case data alone finishes F2L on 8 of 10 real
+    scrambles and stalls on the third pair of the rest, because neither set covers every way three
+    unsolved slots can hold each other's pieces. Searching for the whole insertion does not
+    terminate — 6 faces to depth 12 with only a pair-sized heuristic. What a solver actually does is
+    pull the stuck pair out with a trigger and read off the case it has become, so the fallback
+    searches only for a short prefix from which an insert _provably_ finishes the step, then defers
+    to the same lookup. That is a few hundred states, and it takes coverage to **10 of 10**. It is
+    registered alongside the algorithmic strategy and loses the cost race whenever a case applies.
+
+### Fixed
+
+- **`@moishy/cubing-core@0.3.1` / `@moishy/algsets@0.3.2`: rotations in algorithms now work.** A
+  rotation an alg contains is executed, and the frame it leaves is the state the solve continues
+  from. Three separate defects had made that untrue, all of them visible in one real APB solve which
+  contained `... y2 L U2 R' U L' U' R U' L U' L' y' y' M2 U M' U2 M U M2` — three rotation moves
+  whose net effect is nothing.
+
+  - **Recognition dropped an alg's own rotation.** `defineAlgSet` derived a case's state as
+    `solved · invert(alg)`, which is only correct when the alg has no net rotation. An alg carrying
+    rotation `p` solves its case into the `p` frame — `c · A = solved · p`, so
+    `c = solved · p · A⁻¹` — and dropping the `p` yields a state in a rotated frame that normalizes
+    to a _different_ case; for a slot-based set, one belonging to another slot. Verified against
+    ground truth on the newly scraped F2L data, where every published slot is known: with the `p`,
+    every rotated alg lands on its published slot; without it, none do. The correction is adopted
+    only when it yields a coherent fixed-frame state, which leaves alone the handful of ZBLL
+    primaries that mix rotations with wide moves (`x R2 D2 R U2 R' D2 R U2 l`) and were authored
+    against the raw derivation.
+  - **The runner re-homed at every phase boundary.** `runPhase` reoriented a rotated input back to
+    the home frame and charged for it, so a rotation could never persist. It now evaluates a phase
+    in both the as-held and homed frames and keeps the cheaper. For a `y`-type frame this needs no
+    rotation at all: below the last layer everything is solved, so a `y` presents the last layer
+    exactly as a `U` does and the pre/post AUF already tried absorbs it — measured across every case
+    of pll, oll and zbll. An `x`/`z` frame takes the last layer off the top where no U turn reaches
+    it, so there a reorientation is genuine and is emitted as one costed move.
+  - **`homingRotation` was not minimal.** Its orientation table was built by BFS over quarter-turn
+    generators only, so a 180 came back as two moves (`y' y'` rather than `y2`) — double cost for
+    one turn of the wrists, even when the reorientation was needed.
+
+  APB gets strictly better and no method needs changing: on the solve above, 61.51 → 49.13 with the
+  rotations gone entirely. `apb@0.2.4` also scopes lookahead across `coll → epll`, since a COLL
+  variant that ends tilted changes what EPLL costs and the choice is only correct with the
+  continuation in view.
+
+  **Also fixed, uncovered by this:** eight `zbls` cases (`f2l-6-2`, `f2l-6-7`, `f2l-8-5`,
+  `f2l-13-1`, `f2l-22-4`, `f2l-24-7`, `f2l-26-4`, `f2l-35-1`) were authored for the FL slot — one
+  (`f2l-8-5`) for BR — rather than FR. Every variant of each agreed on the same slot, which is what
+  ruled out the derivation being at fault: the old formula applied a second, compensating error to
+  exactly these rotated primaries and made them look correct, so the earlier pass that rotated 32
+  cases onto FR did not miss these by accident. They are not forced onto FR by rewriting their
+  moves. Each now carries the rotation that brings the FR pair to the slot its alg solves (`y`, or
+  `y'` for the BR one) — turn the cube, then execute the alg you know, which is what a solver
+  actually does and is only expressible now that a leading rotation no longer relocates the case.
+  The same prefix works for every variant of each case, so they stay interchangeable. All 301 zbls
+  cases now target FR, recognize and solve.
+
+- **`@moishy/algsets`: the README and module doc showed `pll.byId(...)`**, which has never existed —
+  the accessor is `get`.
 
 ---
 

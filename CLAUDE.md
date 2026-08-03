@@ -14,10 +14,11 @@ Dependency order is **`cubing-core` → `algsets` → `steps` → `apb`**; nothi
 - **`@moishy/algsets`** — algorithm case data plus `defineAlgSet`/validation, and the `AlgSet` →
   `CaseLookup` adapters. It owns the `AlgSet` type, which is why those adapters cannot live in
   cubing-core (that would cycle).
-- **`@moishy/steps`** — reusable _searches_: `blockSearch`, the standard block targets (Roux FB,
-  2x2x2, 2x2x3, cross), the block cost model, and the six 2x2x3 strategies. What algsets is for
-  data, this is for search. Depends on algsets for exactly one thing: `rouxFbDfdb`'s second phase
-  places DF/DB by alg, so it takes an `AlgSet`.
+- **`@moishy/steps`** — reusable _steps_: `blockSearch` and the standard block targets (Roux FB,
+  2x2x2, 2x2x3, cross), the block cost model, the six 2x2x3 strategies, and the four F2L pair steps.
+  What algsets is for data, this is for the solving side. Note `CROSS` is the four D-layer edges;
+  APB's 2x2x3 uses the three-edge `CROSS3`. Depends on algsets for exactly one thing: `rouxFbDfdb`'s
+  second phase places DF/DB by alg, so it takes an `AlgSet`.
 - **`@moishy/apb`** — the APB method. Pure configuration on top of the other three.
 
 Before writing a search in a method package, check whether `steps` already has it — a first block, a

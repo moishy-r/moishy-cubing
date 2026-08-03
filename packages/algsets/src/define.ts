@@ -17,6 +17,7 @@ import {
   type AlgVariant,
   applyMoves,
   type CaseLookup,
+  centersSolved,
   cloneState,
   type CubeState,
   invert,
@@ -174,7 +175,39 @@ export function defineAlgSet(input: AlgSetInput): AlgSet {
 
     // Recognition derives from the primary alg only (algs[0]); the harness
     // verifies the other variants solve the same state.
-    const state = applyMoves(solvedCube(), invert(algs[0].moves));
+    //
+    // An alg carrying a net whole-cube rotation `p` does not solve its case into
+    // the home frame — it solves it into the `p` frame:
+    //
+    //     c . A = solved . p      =>      c = solved . p . A^-1
+    //
+    // Deriving `solved . A^-1` drops the `p` and yields a state in a rotated
+    // frame, which normalizes to a DIFFERENT case — for a slot-based set, one
+    // belonging to another slot. That is silent mis-recognition, and it is what
+    // made 32 zbls cases look like they had been authored against the wrong slot.
+    // Seeding from the rotated solved cube is the whole fix: rotations in stored
+    // algs are then completely ordinary, and nothing has to be de-rotated.
+    // `p` is the alg's own rotation content — the `x`/`y`/`z` moves, in order.
+    //
+    // It must NOT be read off the end state's centers: a slice or wide move also
+    // moves the centers, but does not reorient the cube in your hands. That is
+    // *drift*, not a rotation, and the two are opposite cases — a drifting alg
+    // (DFDB's M-slice moves) still solves into the home frame and needs no
+    // correction, while a rotating alg does. Reading `cn` conflates them.
+    //
+    // The correction is adopted only when it yields a coherent fixed-frame state
+    // (centers home). It does whenever the alg's rotations are its whole frame
+    // story. It does not when the alg *also* carries wide/slice moves whose drift
+    // does not cancel against those rotations — a handful of ZBLL primaries like
+    // `x R2 D2 R U2 R' D2 R U2 l`. Those were authored against the raw derivation
+    // and end the cube drifted rather than rotated, so correcting them would move
+    // the case somewhere neither reading recognizes.
+    const p = algs[0].moves.filter((m) => m.family === "x" || m.family === "y" || m.family === "z");
+    let state = applyMoves(solvedCube(), invert(algs[0].moves));
+    if (p.length > 0) {
+      const corrected = applyMoves(applyMoves(solvedCube(), p), invert(algs[0].moves));
+      if (centersSolved(corrected)) state = corrected;
+    }
     cases.push(parsed);
     byId.set(c.id, parsed);
     recognition.set(c.id, state);
