@@ -52,6 +52,26 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ### Changed
 
+- **`@moishy/steps@0.2.0`: an F2L tie between slots now goes to a back slot.** Where two slots are
+  equally cheap, filling a back one leaves the FRONT slots open — and those are the ones you can
+  see; keeping a back slot open puts the next pair in your blind spot. Free to implement, because
+  `runPhase` replaces its best candidate only on a strict improvement, so the first-offered slot
+  wins a tie; the slots are simply offered back-first. And the ties are real rather than
+  hypothetical: mirrored algs are exactly equal under the cost model (`R U R'` and `L' U' L` are
+  both 0.8 + 1.0 + 0.8). Measured over 6 scrambles: CFOP mean cost 59.13 -> 58.41 at identical move
+  count.
+
+  It also lines up with what a last-slot alg set wants. Solving the back slots early leaves a FRONT
+  slot last, and the front slots are the ones at most a single `y` from FR, where `zbls` is authored
+  — while BL, the one that would need a `y2`, is the first filled rather than the last.
+
+  Worth recording what does _not_ work here: raising F2L lookahead depth to search pair orders.
+  `peekCost` does recurse to `depth`, so it looks as though depth 3 would evaluate whole orders for
+  free. Measured, each level costs ~13x (9.3s -> 125s over 6 scrambles, depth 3+ does not finish)
+  and the result is slightly _worse_ (cost 59.13 -> 59.24, moves 53.8 -> 55.2): `peekCost` returns
+  an optimistic minimum that the greedy walk then does not achieve, so the adjustment misleads.
+  Depth stays at 1; a constraint that has to hold belongs in a phase goal, not in lookahead.
+
 - **`@moishy/cubing-core@0.3.1`: rotations are no longer underpriced, so a regrip stops winning
   races it should lose.** 2H base costs go `y` 1.8 -> 2.6, `x` 2.0 -> 3.0, `z` 2.0 -> 3.2. The floor
   is not a matter of taste: for any step whose recognition is AUF-invariant — every last-layer step,

@@ -56,8 +56,27 @@ const AUF_STATES = ["", "U", "U2", "U'"].map((a) => (a ? parseAlg(a) : []));
 /** The four F2L slots, named by their home position in the fixed frame. */
 export type F2lSlot = "fr" | "fl" | "bl" | "br";
 
-/** Every slot, in a fixed order. */
+/** Every slot, in a fixed canonical order. */
 export const F2L_SLOTS: readonly F2lSlot[] = ["fr", "fl", "bl", "br"];
+
+/**
+ * The order slots are *offered* in when several could be solved — back slots first.
+ *
+ * This is a real solving preference, not a formality. Where two slots are equally
+ * cheap, filling a back one is better: it leaves the FRONT slots open, and those are
+ * the ones you can see. Keeping a back slot open puts the next pair in your blind spot.
+ *
+ * It costs nothing to implement because `runPhase` replaces its best candidate only on
+ * a strict improvement, so the first-offered wins a tie — and ties are common here
+ * rather than hypothetical, since mirrored algs are exactly equal under the cost model
+ * (`R U R'` and `L' U' L` are both 0.8 + 1.0 + 0.8).
+ *
+ * It also happens to line up with what a last-slot alg set wants: solving the back
+ * slots early leaves a FRONT slot last, and the front slots are the ones that are at
+ * most a single `y` from FR, where sets like `zbls` are authored. BL — the one that
+ * would need a `y2` — is the first to be filled, not the last.
+ */
+const OFFER_ORDER: readonly F2lSlot[] = ["bl", "br", "fr", "fl"];
 
 /** The corner and edge each slot holds (Kociemba indices). */
 export const F2L_SLOT: Readonly<Record<F2lSlot, PieceRegion>> = {
@@ -152,7 +171,8 @@ export function anySlotLookup(bySlot: Partial<Record<F2lSlot, CaseLookup>>): Cas
   return {
     find(state) {
       const algs: AlgVariant[] = [];
-      for (const slot of F2L_SLOTS) {
+      // Back slots first, so they win a tie — see OFFER_ORDER.
+      for (const slot of OFFER_ORDER) {
         const lookup = bySlot[slot];
         if (!lookup) continue;
         const hit = lookup.find(state);

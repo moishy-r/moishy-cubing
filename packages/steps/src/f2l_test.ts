@@ -197,3 +197,30 @@ Deno.test("f2lSteps yields four distinctly-identified steps, each with a fallbac
   }
   assertEquals(f2lStep(2, SETS, { id: "x", label: "Y" }).id, "x");
 });
+
+// The back-slot preference, and the mechanism that makes it free: `runPhase` replaces
+// its best candidate only on a strict improvement, so whichever slot is offered first
+// wins a tie. Mirrored algs tie exactly under the cost model, so this is a real
+// preference rather than a formality.
+Deno.test("a tie between slots is resolved in favour of a back slot", () => {
+  // Offer every slot a case, so the only thing under test is the order they come out in.
+  const always = (id: string) => ({
+    find: () => ({ id, algs: [{ moves: parseAlg("R U R'") }] }),
+  });
+  const offered = anySlotLookup({
+    fr: always("fr"),
+    fl: always("fl"),
+    bl: always("bl"),
+    br: always("br"),
+  }).find(solvedCube())!.algs.map((v) => variantSlot(v)?.slot);
+
+  assertEquals(offered.length, 4);
+  const firstBack = offered.findIndex((k) => k === "bl" || k === "br");
+  const firstFront = offered.findIndex((k) => k === "fr" || k === "fl");
+  assert(
+    firstBack < firstFront,
+    `a back slot must be offered before a front one to win the tie, got ${offered.join(",")}`,
+  );
+  // And the front slots are still offered — the preference is a tie-break, not a filter.
+  assertEquals(new Set(offered).size, 4);
+});
