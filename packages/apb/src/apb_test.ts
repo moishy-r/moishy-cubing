@@ -20,6 +20,7 @@ import {
   type CubeState,
   eoSignature,
   fallThrough,
+  formatAlg,
   invert,
   isSolved,
   type Move,
@@ -676,38 +677,46 @@ Deno.test("dual-CN solves verify as solved even in a rotated final frame", async
 });
 
 // Req: an alg that contains a whole-cube rotation is EXECUTED verbatim — never
-// rewritten into other moves. coll `t-3`/`t-4` have no rotation-free variant, so
-// a correct solution *must* contain a rotation; if rotations were being converted
-// to face moves the solution would have zero and this assertion would catch it.
+// rewritten into other moves.
+//
+// This used to key on coll `t-3`/`t-4`, the two cases that had no rotation-free
+// variant. They now do: 87 coll algs began with a pointless `y` (the same alg written
+// from three angles, doing by regrip what the phase's AUF does for free) and those
+// leading rotations are now the matching U turn. So the case is made with a *mid-alg*
+// rotation instead, which no AUF can replace — the E-perm's `x` is the classic one, and
+// zbll has 74 like it. Those must still be executed as written.
 Deno.test("rotation-containing algs are executed verbatim, never converted", async () => {
-  const { collEpll } = await import("@moishy/algsets/coll-epll");
-  const cornersSolved = (s: CubeState) => {
-    const n = normalizeOrientation(s);
-    return n.cp.every((c, i) => c === i && n.co[i] === 0);
-  };
+  const { zbll } = await import("@moishy/algsets/zbll");
+  const { defineAlgSet } = await import("@moishy/algsets");
+  const isRotation = (m: Move) => m.family === "x" || m.family === "y" || m.family === "z";
+
+  // Build the situation rather than hunt for it in the data: a one-case set whose only
+  // alg contains a rotation. (Every real set now offers a rotation-free variant for
+  // every case, which is the right state of affairs but leaves nothing to assert
+  // against — so the mechanism is tested directly.)
+  const donor = zbll.cases.find((c) => c.algs.some((a) => a.moves.some(isRotation)))!;
+  const variant = donor.algs.find((a) => a.moves.some(isRotation))!;
+  const onlyRotating = defineAlgSet({
+    id: "rotationOnly",
+    cases: [{ id: donor.id, algs: [formatAlg(variant.moves)] }],
+  });
+
   const phase: AlgorithmicPhase = {
     kind: "algorithmic",
-    id: "coll",
-    goal: cornersSolved,
-    cases: aufInvariantLookup(collEpll, cornerSignature()),
+    id: "rotationOnly",
+    goal: isSolved,
+    cases: aufInvariantLookup(onlyRotating, onlyRotating.signature),
     auf: ["U"],
   };
-  const isRotation = (m: Move) => m.family === "x" || m.family === "y" || m.family === "z";
-  for (const id of ["t-3", "t-4"]) {
-    assert(
-      collEpll.get(id)!.algs.every((a) => a.moves.some(isRotation)),
-      `precondition: every ${id} variant contains a rotation`,
-    );
-    const seg = runPhase(phase, collEpll.recognitionState(id))!;
-    assert(seg !== null, `${id}: recognized and solved`);
-    assert(cornersSolved(seg.endState), `${id}: corners solved (up to rotation)`);
-    assert(
-      seg.moves.some(isRotation),
-      `${id}: solution must contain a rotation (algs weren't converted to face moves)`,
-    );
-    // And the emitted moves genuinely solve the ORIGINAL (untouched) input.
-    assert(cornersSolved(applyMoves(collEpll.recognitionState(id), seg.moves)));
-  }
+  const state = onlyRotating.recognitionState(donor.id);
+  const seg = runPhase(phase, state);
+  assert(seg !== null, `${donor.id}: recognized and solved`);
+  assert(
+    seg.moves.some(isRotation),
+    `${donor.id}: solution must contain a rotation (the alg was not converted to face moves)`,
+  );
+  // And the emitted moves genuinely solve the ORIGINAL (untouched) input.
+  assert(isSolved(applyMoves(state, seg.moves)), `${donor.id}: emitted moves must solve it`);
 });
 
 // Regression: force-mode replacements/extras must actually FIRE against real,

@@ -50,6 +50,34 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
   _not_ already solved or leaves the centers drifted, so it cannot run in a fixed-frame CFOP solve;
   they are listed in the module doc.
 
+### Changed
+
+- **`@moishy/cubing-core@0.3.1`: rotations are no longer underpriced, so a regrip stops winning
+  races it should lose.** 2H base costs go `y` 1.8 -> 2.6, `x` 2.0 -> 3.0, `z` 2.0 -> 3.2. The floor
+  is not a matter of taste: for any step whose recognition is AUF-invariant — every last-layer step,
+  and the F2L slots — a whole-cube rotation can always be replaced by at most a pre-AUF plus a
+  post-AUF, i.e. two quarter turns. Priced below that, a rotation wins on cost alone. A real CFOP
+  solve emitted `y R U2 R' U' R U2 L' U R' U' L` (12.90) over the rotation-free
+  `U L' U R U' L U2 R' U R U2 R' U'` (13.10) — a regrip to save 0.2, which no solver would do. Now
+  the rotation-free route wins. Measured over 10 scrambles: CFOP mean cost 57.41 -> 57.87 (the
+  rotations that remain are honestly priced), mean move count 53.0 -> 53.1, spurious rotations 6 ->
+  5; APB unchanged, having emitted none. OH was already above the floor at 4.0. A test now pins the
+  invariant for all three models.
+
+- **`@moishy/algsets@0.3.2`: 87 of coll's 160 algs no longer start with a pointless `y`.** With the
+  F2L already solved, a leading whole-cube rotation on a last-layer alg does the same job as the U
+  turn the phase's AUF supplies for free — it is a transcription artifact, not technique, and it
+  costs a real regrip. The set carried the same alg written from three angles per case
+  (`y R U2 R'
+  U' R U' R'`, `y2 L' U' L U' L' U2 L`, `y' L U2 L' U' L U' L'`). Each leading
+  `y`/`y2`/`y'` is now the matching `U`/`U2`/`U'`, verified case by case to leave every case
+  recognizing exactly the states it did before. Leading rotations: 87 -> 0. Cases with no
+  rotation-free alg: 2 -> 0.
+
+  Mid-alg rotations are kept and always will be: the E-perm's `x` is real technique and no AUF can
+  replace it. pll, oll and zbll needed no change — they have no leading `y` at all, only `x`/`z`,
+  which are exactly the legitimate ones. Two tests guard this for coll.
+
 ### Added
 
 - **`@moishy/cfop@0.1.0`: a CFOP solver.** Cross, four F2L pair steps, OLL, PLL. Pure configuration

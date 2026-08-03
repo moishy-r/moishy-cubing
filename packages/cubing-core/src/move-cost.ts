@@ -69,7 +69,19 @@ export interface DefaultMoveCostOptions {
 //
 // 2H: wrist-turn faces (R/L) cheapest, U a fast index flick, slices (M/E/S)
 // and D more expensive, F/B awkward push turns. Wide moves cost slightly more
-// than their outer counterpart; rotations are a fixed regrip overhead.
+// than their outer counterpart.
+//
+// Rotations are a full regrip, and their cost has a floor that is not a matter of
+// taste. For any step whose recognition is AUF-invariant — every last-layer step, and
+// the F2L slots — a whole-cube rotation can always be replaced by at most a pre-AUF
+// plus a post-AUF, i.e. two quarter turns. So a rotation priced below 2 x U will win
+// races it has no business winning: at y = 1.8 a real CFOP solve emitted
+// `y R U2 R' U' R U2 L' U R' U' L` (12.90) over the rotation-free
+// `U L' U R U' L U2 R' U R U2 R' U'` (13.10) — a regrip chosen to save 0.2, which no
+// solver would do. Every rotation now exceeds that 2.0 floor with a regrip premium on
+// top, so a rotation is used when it genuinely helps and never merely because it was
+// underpriced. y is the cheapest of the three (the U face stays put, so the reference
+// survives); x and z move the U face and cost the most.
 
 const BASE_COST_2H: Record<MoveFamily, number> = {
   R: 0.8,
@@ -87,9 +99,9 @@ const BASE_COST_2H: Record<MoveFamily, number> = {
   d: 1.5,
   f: 1.4,
   b: 1.4,
-  x: 2.0,
-  y: 1.8,
-  z: 2.0,
+  x: 3.0,
+  y: 2.6,
+  z: 3.2,
 };
 
 // OH (left-hand baseline): R and U are the ergonomic gold standard; L, B, D

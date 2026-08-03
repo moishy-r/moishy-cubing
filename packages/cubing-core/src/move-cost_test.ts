@@ -49,19 +49,19 @@ Deno.test("2H Sune sums correctly across a real alg", () => {
 });
 
 Deno.test("rotations now get the half-turn multiplier (resolved open question)", () => {
-  assertEquals(score("x", twoH), 2.0);
-  assertEquals(score("x2", twoH), 3.3); // 2.0 * 1.65 — no longer exempt
-  assertEquals(score("y2", twoH), 2.97); // 1.8 * 1.65
+  assertEquals(score("x", twoH), 3.0);
+  assertEquals(score("x2", twoH), 4.95); // 3.0 * 1.65 — no longer exempt
+  assertEquals(score("y2", twoH), 4.29); // 2.6 * 1.65
 });
 
 Deno.test("consecutive identical rotations incur overwork", () => {
-  assertEquals(score("x x", twoH), 6.25); // 2.0 + 2.0 + 2.25
-  assertEquals(score("x y", twoH), 3.8); // 2.0 + 1.8, different families
+  assertEquals(score("x x", twoH), 8.25); // 3.0 + 3.0 + 2.25
+  assertEquals(score("x y", twoH), 5.6); // 3.0 + 2.6, different families
 });
 
 Deno.test("rotations adjacent to face moves add no transition penalty", () => {
-  assertEquals(score("R x", twoH), 2.8); // 0.8 + 2.0
-  assertEquals(score("x R", twoH), 2.8); // 2.0 + 0.8
+  assertEquals(score("R x", twoH), 3.8); // 0.8 + 3.0
+  assertEquals(score("x R", twoH), 3.8); // 3.0 + 0.8
 });
 
 Deno.test("OH base costs and grip-fatigue penalty", () => {
@@ -131,4 +131,25 @@ Deno.test("block cost model is move-count-biased: fewer clean moves beats more",
   // Every move carries a floor, so a shorter sequence of clean moves wins even
   // when a longer one is individually all-cheap.
   assert(scoreAlg(parseAlg("R U R'"), block) < scoreAlg(parseAlg("R U R' U R"), block));
+});
+
+// The floor that keeps a regrip from winning a race it should lose. For any step whose
+// recognition is AUF-invariant — every last-layer step, and the F2L slots — a whole-cube
+// rotation can always be replaced by at most a pre-AUF plus a post-AUF. Priced below
+// two quarter turns, a rotation wins on cost alone: at y = 1.8 a real CFOP solve spent
+// a regrip to save 0.2. Every rotation must stay above that floor.
+Deno.test("a rotation costs more than the two AUF turns that can replace it", () => {
+  // A pre-AUF and a post-AUF sit at opposite ends of the alg, so the pair costs two
+  // separate U turns — NOT `score("U U'")`, which would add the same-family overwork
+  // penalty for two adjacent turns that would in any case cancel.
+  for (const model of [twoH, oh, ohRight]) {
+    const u = model.cost(parseAlg("U")[0], { prevMove: null, index: 0 });
+    for (const rotation of ["x", "y", "z"]) {
+      const cost = score(rotation, model);
+      assert(
+        cost > 2 * u,
+        `${rotation} costs ${cost}, not more than the ${2 * u} of the AUF pair that replaces it`,
+      );
+    }
+  }
 });
