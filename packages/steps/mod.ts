@@ -44,6 +44,15 @@ export {
 } from "./src/blocks.ts";
 
 export {
+  alignOpenSlotToFront,
+  alignSlotToFront,
+  f2lGoalLeavingOpen,
+  lastSlotSignature,
+  zblsPhase,
+  zblsReplacement,
+} from "./src/last-slot.ts";
+
+export {
   collEpllStrategy,
   collLookup,
   cornersOriented,
@@ -67,6 +76,7 @@ export {
   F2L_SLOT,
   F2L_SLOTS,
   f2lGoal,
+  f2lLookup,
   f2lSetupStrategy,
   type F2lSlot,
   f2lStep,

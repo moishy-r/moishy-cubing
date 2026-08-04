@@ -280,11 +280,7 @@ export function f2lSetupStrategy(n: number, lookup: CaseLookup): Strategy {
  * order given, so a method passes its plain F2L set and its advanced one and gets
  * both. Give four steps `n = 1..4` and the whole of F2L is covered.
  */
-export function f2lStep(
-  n: number,
-  sets: readonly Readonly<Record<F2lSlot, AlgSet>>[],
-  opts: { id?: string; label?: string } = {},
-): Step {
+export function f2lLookup(sets: readonly Readonly<Record<F2lSlot, AlgSet>>[]): CaseLookup {
   const bySlot: Partial<Record<F2lSlot, CaseLookup>> = {};
   for (const slot of F2L_SLOTS) {
     const sig = slotSignature(slot);
@@ -307,7 +303,21 @@ export function f2lStep(
       },
     };
   }
-  const lookup = anySlotLookup(bySlot);
+  return anySlotLookup(bySlot);
+}
+
+/**
+ * The Nth F2L step (`n` is 1-based): insert one more pair, whichever is cheapest.
+ *
+ * `sets` supplies the per-slot case data; several sets per slot are merged, so a method
+ * passes its plain F2L set and its advanced one and gets both competing.
+ */
+export function f2lStep(
+  n: number,
+  sets: readonly Readonly<Record<F2lSlot, AlgSet>>[],
+  opts: { id?: string; label?: string } = {},
+): Step {
+  const lookup = f2lLookup(sets);
   return {
     id: opts.id ?? `f2l${n}`,
     label: opts.label ?? `F2L ${n}`,

@@ -100,6 +100,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ### Added
 
+- **`@moishy/steps`: last-slot variants, and `@moishy/cfop` wires ZBLS.** A new `last-slot` module
+  with the reusable pieces: `f2lGoalLeavingOpen` (reserve a slot for a last-slot set),
+  `alignSlotToFront` / `alignOpenSlotToFront` (bring the open slot round to the physical
+  front-right), `lastSlotSignature`, and `zblsReplacement`. CFOP registers ZBLS as a `compete`
+  replacement over the whole `[f2l1, f2l4]` span — the span is all four steps because the constraint
+  is on the pair _order_, not just the final insert.
+
+  These sets are authored for the FR slot, since that is the one solvers learn, so two strategies
+  race to get there: reserve the FR pair deliberately (a goal on the three inserts, not a lookahead
+  preference — a constraint that must hold belongs in a goal), or insert greedily and align whatever
+  is left. Alignment is at most a single `y`: a slot diagonally opposite is deliberately
+  unreachable, since a `y2` to set up a last slot is not something a solver does, so the phase
+  offers only `y`/`y'` and the strategy drops out of the race instead.
+
+  **Measured: ZBLS does not pay for itself in CFOP, and `compete` correctly never fires it.** Over 8
+  scrambles a route exists on 4 and is cheaper on none — mean cost 58.87 -> 68.31. Structural rather
+  than a wiring fault: its payoff is that OLL becomes an OCLL, and full OLL was already about that
+  cheap, so the longer insert is not repaid. One scramble got an OLL _skip_ and was still 12.33
+  worse. ZBLS is built to feed ZBLL, which is a different method. Kept for completeness and correct
+  under `force`.
+
 - **`@moishy/cfop@0.1.0`: a CFOP solver.** Cross, four F2L pair steps, OLL, PLL. Pure configuration
   over `@moishy/steps` — the second method in the repo, and the test of whether extracting `steps`
   was worth it. It was: the package is ~150 lines and every step it lists is shared.

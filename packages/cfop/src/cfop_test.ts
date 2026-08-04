@@ -8,6 +8,7 @@ import {
   solvedCube,
 } from "@moishy/cubing-core";
 import { CROSS, F2L, solvedSlotCount } from "@moishy/steps";
+import { normalizeOrientation } from "@moishy/cubing-core";
 import { Method, type MethodDefinition } from "@moishy/cubing-core";
 import { ocllPllStrategy } from "@moishy/steps";
 import { oll as ollSet } from "@moishy/algsets/oll";
@@ -56,7 +57,7 @@ Deno.test("the method definition is the shape CFOP describes", () => {
       `${step.id} names a slot; F2L steps must be interchangeable`,
     );
   }
-  assertEquals(cfopDefinition.replacements, []);
+  assertEquals(cfopDefinition.replacements?.map((r) => r.id), ["zbls"]);
 });
 
 Deno.test("VERSION matches the manifest", async () => {
@@ -149,4 +150,88 @@ Deno.test("APB's two-look last layer is correctly not applicable to CFOP", async
     Error,
     "ocllPll",
   );
+});
+
+// ZBLS: insert three pairs, then finish the fourth with an alg that orients the
+// last-layer edges on the way. The span is all four F2L steps because the constraint is
+// on the pair *order* — the data is authored for the front-right slot, so the earlier
+// steps have to leave a usable one open.
+Deno.test("ZBLS is opt-in, and off by default", async () => {
+  const res = await cfop.solve(SCRAMBLES[0]);
+  assert(
+    !res.segments.some((s) => s.unitId === "zbls"),
+    "zbls must not fire unless enabled",
+  );
+});
+
+// ZBLS, forced. In `compete` it correctly never fires — see the test below and the
+// module doc: in CFOP it costs about 9 more than it saves, because its payoff is that
+// OLL becomes an OCLL, and full OLL was already about that cheap. (Its real payoff
+// needs ZBLL, which is a different method.) So the thing to verify is that the route
+// is CORRECT where it exists, not that it wins.
+Deno.test("ZBLS, forced, solves and lands every edge oriented", async () => {
+  const F2L_REGION = regionSolved(F2L);
+  let applicable = 0, reserved = 0, aligned = 0;
+  for (const scramble of SCRAMBLES) {
+    let res;
+    try {
+      res = await cfop.solve(scramble, {
+        replacements: { zbls: { enabled: true, mode: "force" } },
+      });
+    } catch {
+      // No ZBLS route on this scramble — a forced unit with no candidate is a hard
+      // error by design, and the commonest cause is the last slot landing diagonally
+      // opposite FR, which would need a y2.
+      continue;
+    }
+    applicable++;
+    assert(res.solved, `unsolved with zbls forced: ${scramble}`);
+    const framed = applyMoves(solvedCube(), [
+      ...invert(res.orientation),
+      ...parseAlg(scramble),
+      ...res.orientation,
+    ]);
+    assert(isSolved(applyMoves(framed, res.solution)), `wrong solution for "${scramble}"`);
+
+    const seg = res.segments.find((s) => s.unitId === "zbls")!;
+    assert(seg, `zbls forced but produced no segment on "${scramble}"`);
+    if (seg.strategyId === "zblsReserved") reserved++;
+    if (seg.strategyId === "zblsAligned") aligned++;
+
+    // What ZBLS promises: F2L complete AND every edge oriented, so OLL is an OCLL.
+    const after = seg.phases.at(-1)!.endState;
+    assert(F2L_REGION(after), `zbls left F2L incomplete on "${scramble}"`);
+    assert(
+      normalizeOrientation(after).eo.every((o) => o === 0),
+      `zbls did not orient every edge on "${scramble}"`,
+    );
+
+    // Alignment is at most a single y. A y2 to set up the last slot is not a thing a
+    // solver does, so the phase offers only y and y' and drops out otherwise.
+    for (const p of seg.phases) {
+      if (p.phaseId !== "align") continue;
+      assert(p.moves.length <= 1, `align emitted ${p.moves.length} moves on "${scramble}"`);
+      for (const m of p.moves) {
+        assertEquals(m.family, "y", `align emitted a non-y move on "${scramble}"`);
+        assert(m.amount !== 2, `align emitted a y2 on "${scramble}"`);
+      }
+    }
+  }
+  // Measured, not aspirational: roughly half the scrambles admit a ZBLS route. Zero
+  // would mean the wiring broke.
+  assert(applicable > 0, "no scramble admitted a ZBLS route at all");
+  assertEquals(reserved + aligned, applicable, "each firing should name one strategy");
+});
+
+// A compete unit is judged on the whole solve, so enabling it can never make things
+// worse. This is the property that makes it safe to leave on.
+Deno.test("enabling ZBLS never makes a solve more expensive", async () => {
+  for (const scramble of SCRAMBLES.slice(0, 8)) {
+    const off = await cfop.solve(scramble);
+    const on = await cfop.solve(scramble, { replacements: { zbls: { enabled: true } } });
+    assert(
+      on.cost <= off.cost + 1e-9,
+      `zbls made "${scramble}" worse: ${off.cost.toFixed(2)} -> ${on.cost.toFixed(2)}`,
+    );
+  }
 });

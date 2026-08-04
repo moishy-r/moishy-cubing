@@ -35,7 +35,16 @@ import { advancedF2lBySlot } from "@moishy/algsets/advanced-f2l";
 import { f2lBySlot } from "@moishy/algsets/f2l";
 import { oll as ollSet } from "@moishy/algsets/oll";
 import { pll as pllSet } from "@moishy/algsets/pll";
-import { blockSearch, CROSS, f2lSteps, ollStep, pllStep } from "@moishy/steps";
+import {
+  blockSearch,
+  CROSS,
+  f2lLookup,
+  f2lSteps,
+  ollStep,
+  pllStep,
+  zblsReplacement,
+} from "@moishy/steps";
+import { zbls as zblsSet } from "@moishy/algsets/zbls";
 
 // --- Step: cross -------------------------------------------------------------
 //
@@ -55,26 +64,49 @@ const cross: MethodDefinition["steps"][number] = {
 // `advanced-f2l` covers pairs with a piece trapped in another slot, which the classic
 // 41 do not. Each step also carries a setup fallback for the mid-F2L tangles neither
 // set covers — see `@moishy/steps`' f2l module.
-const f2l = f2lSteps([f2lBySlot, advancedF2lBySlot]);
+const F2L_SETS = [f2lBySlot, advancedF2lBySlot];
+const f2l = f2lSteps(F2L_SETS);
 
 // --- Steps: oll, pll ---------------------------------------------------------
 const oll = ollStep(ollSet);
 const pll = pllStep(pllSet);
 
 // --- Replacements ------------------------------------------------------------
-//
-// None yet, and the two obvious candidates are the reason to be careful here.
-//
-// APB's `ocllPll` and `collEpll` are NOT reusable as CFOP's two-look last layer, even
-// though the step ids line up. Both OCLL and COLL assume the last-layer **edges are
-// already oriented** — in APB they are, because EO is a core step before the last
-// layer; in CFOP nothing has oriented them when OLL begins. Forcing either here throws
-// `SettingsError` at the `oll` boundary, correctly: the case table genuinely does not
-// cover the state.
-//
-// A real two-look OLL for CFOP is *edge orientation* then OCLL, which needs the
-// edge-orienting cases as their own filtered set — data work, not wiring. Until then
-// full OLL is the only last-layer route, which is what CFOP is anyway.
+
+/**
+ * ZBLS over the whole F2L span: insert three pairs, then finish the fourth with an alg
+ * that orients the last-layer edges on the way, so OLL is guaranteed to be one of the
+ * seven OCLL shapes.
+ *
+ * The span is all four F2L steps, not just `f2l4`, because the constraint is on the pair
+ * *order*: the data is authored for the front-right slot, so the earlier steps are the
+ * ones that have to leave a usable slot open. `@moishy/steps` registers two strategies
+ * for that — reserve FR deliberately, or insert greedily and align whatever is left with
+ * a single `y` — and the cost race picks. Never a `y2`.
+ *
+ * `compete`, so the runner solves the span both ways and keeps the cheaper whole solve.
+ * ZBLS spends moves in F2L to save them in the last layer, so whether it wins is a real
+ * cost question rather than something to decide in advance. Opt-in and off by default.
+ *
+ * **Measured: it does not pay for itself in CFOP, and `compete` correctly never fires
+ * it.** Over 8 scrambles a ZBLS route exists on 4 and is cheaper on none — mean cost
+ * 58.87 -> 68.31. The reason is structural rather than a wiring fault: ZBLS's payoff is
+ * that OLL becomes one of the seven OCLL shapes, and full OLL was already about that
+ * cheap, so the longer insert is not repaid. One scramble even got an OLL *skip* and was
+ * still 12.33 worse. The payoff ZBLS is built for is ZBLL, which solves the whole last
+ * layer in one alg — a different method. Force it with
+ * `replacements: { zbls: { enabled: true, mode: "force" } }` to see it regardless; it is
+ * correct, just not cheaper.
+ */
+const zbls = zblsReplacement(zblsSet, f2lLookup(F2L_SETS));
+
+// Not reusable, and worth recording why: APB's `ocllPll` and `collEpll` line up with
+// CFOP's `[oll, pll]` region but both OCLL and COLL assume the last-layer **edges are
+// already oriented**. In APB they are, because EO is a core step; in CFOP nothing has
+// oriented them when OLL begins. Forcing either throws `SettingsError` at the `oll`
+// boundary, correctly — the case table genuinely does not cover the state. A real
+// two-look OLL for CFOP is edge orientation then OCLL, which needs the edge-orienting
+// cases as their own filtered set: data work, not wiring.
 
 // --- Colour neutrality --------------------------------------------------------
 //
@@ -106,7 +138,7 @@ export const cfopDefinition: MethodDefinition = {
   id: "cfop",
   label: "CFOP",
   steps: [cross, ...f2l, oll, pll],
-  replacements: [],
+  replacements: [zbls],
   extras: [],
   recommendedSettings: {
     colorNeutrality: DUAL_CN_BOTTOM,
