@@ -27,6 +27,9 @@ import {
   type AlgorithmicPhase,
   type CaseLookup,
   type CubeState,
+  type Extra,
+  fallThrough,
+  orientationSignature,
   parseAlg,
   pieceSignature,
   regionSolved,
@@ -34,6 +37,7 @@ import {
   type Replacement,
 } from "@moishy/cubing-core";
 import { CROSS } from "./blocks.ts";
+import { llOriented } from "./last-layer.ts";
 import {
   F2L,
   F2L_SLOT,
@@ -207,3 +211,76 @@ export function zblsReplacement(
 
 /** Exported for a method that wants to assemble its own last-slot strategy. */
 export { zblsPhase };
+
+// --- Winter / Summer Variation ------------------------------------------------
+
+/**
+ * WV/SV recognition: last-layer orientation, plus the last pair's position.
+ *
+ * Read *mid-insert*, at the moment the pair is set up on top and about to go in. These
+ * algs insert the pair while orienting the last-layer corners, landing on PLL — so
+ * recognition keys on the orientation (like OLL) plus the pair setup that distinguishes
+ * the pre-insert positions, and must NOT pin the last-layer permutation, which PLL
+ * still fixes. The sets' own full-facelet signature does pin it, and so never matches.
+ */
+export function wvSvSignature(slot: F2lSlot = "fr"): (s: CubeState) => string {
+  const pair = pieceSignature(F2L_SLOT[slot].corners, F2L_SLOT[slot].edges);
+  return (s) => `${orientationSignature()(s)}/${pair(s)}`;
+}
+
+/**
+ * Winter/Summer Variation as a checkpoint Extra: part-way through the last insert,
+ * splice an alg that finishes the pair *and* orients the last-layer corners.
+ *
+ * The runner scans every prefix of the chosen last-slot alg for a point where the pair
+ * is set up on top and a WV/SV case is recognized, then races that splice against
+ * finishing normally — no hand-placed checkpoints needed.
+ *
+ * It fires rarely, and the arithmetic is worth stating rather than discovering. WV
+ * requires the last-layer **edges already oriented** before the insert, which with F2L
+ * otherwise complete happens on about 1 solve in 8 (the four LL edges must have an even
+ * number misoriented, giving 8 states, one of which is all-oriented). On top of that the
+ * data is authored for the front-right slot, so the last slot has to be there or within
+ * a single `y` — hence the alignment phase, which costs nothing when it is already
+ * right and drops the extra when a `y2` would be needed.
+ *
+ * Unlike ZBLS its payoff lands *inside* OLL rather than merely reshaping it: the last
+ * layer comes out fully oriented, so the region covers the OLL step outright.
+ */
+export function wvSvExtra(
+  wv: AlgSet,
+  sv: AlgSet,
+  opts: { id?: string; region?: [string, string]; slot?: F2lSlot } = {},
+): Extra {
+  const slot = opts.slot ?? "fr";
+  const sig = wvSvSignature(slot);
+  return {
+    id: opts.id ?? "winterSummerVariation",
+    label: "Winter/Summer Variation",
+    region: opts.region ?? ["f2l4", "oll"],
+    // `compete`, not `force`. This is an opportunistic shortcut, so "use it only if it
+    // helps" is exactly right — and it is not always cheaper: splicing WV mid-insert
+    // buys a solved OLL but spends a longer insert to get it, which does not always
+    // repay. Forced, it fired and made a measured solve worse (55.75 -> 58.58).
+    mode: "compete",
+    trigger: { kind: "checkpoint" },
+    strategies: [{
+      id: "wvSv",
+      phases: [
+        alignOpenSlotToFront("wvSvAlign"),
+        {
+          kind: "algorithmic",
+          id: "wvSv",
+          // Covers both steps of the region: the pair goes in AND the last layer ends
+          // fully oriented, so the next thing is PLL.
+          goal: (s) => regionSolved(F2L)(s) && llOriented(s),
+          cases: fallThrough(
+            aufInvariantLookup(wv, sig),
+            aufInvariantLookup(sv, sig),
+          ),
+          auf: ["U"],
+        },
+      ],
+    }],
+  };
+}

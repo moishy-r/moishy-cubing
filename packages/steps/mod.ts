@@ -48,6 +48,8 @@ export {
   alignSlotToFront,
   f2lGoalLeavingOpen,
   lastSlotSignature,
+  wvSvExtra,
+  wvSvSignature,
   zblsPhase,
   zblsReplacement,
 } from "./src/last-slot.ts";
@@ -68,6 +70,7 @@ export {
   ollStep,
   pllLookup,
   pllStep,
+  zbllStrategy,
 } from "./src/last-layer.ts";
 
 export {

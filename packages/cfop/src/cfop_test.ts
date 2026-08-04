@@ -57,7 +57,8 @@ Deno.test("the method definition is the shape CFOP describes", () => {
       `${step.id} names a slot; F2L steps must be interchangeable`,
     );
   }
-  assertEquals(cfopDefinition.replacements?.map((r) => r.id), ["zbls"]);
+  assertEquals(cfopDefinition.replacements?.map((r) => r.id), ["zbls", "zbll", "collEpll"]);
+  assertEquals(cfopDefinition.extras?.map((e) => e.id), ["winterSummerVariation"]);
 });
 
 Deno.test("VERSION matches the manifest", async () => {
@@ -234,4 +235,65 @@ Deno.test("enabling ZBLS never makes a solve more expensive", async () => {
       `zbls made "${scramble}" worse: ${off.cost.toFixed(2)} -> ${on.cost.toFixed(2)}`,
     );
   }
+});
+
+// ZBLL over [oll, pll]: the whole last layer in one alg, but only once the edges are
+// already oriented. On its own that happens by luck (the four LL edges must all come out
+// oriented); paired with ZBLS it is what ZB actually is.
+Deno.test("ZBLL fires on its own only when the edges happen to be oriented", async () => {
+  let fired = 0;
+  for (const scramble of SCRAMBLES) {
+    const res = await cfop.solve(scramble, { replacements: { zbll: { enabled: true } } });
+    assert(res.solved, `unsolved with zbll enabled: ${scramble}`);
+    const framed = applyMoves(solvedCube(), [
+      ...invert(res.orientation),
+      ...parseAlg(scramble),
+      ...res.orientation,
+    ]);
+    assert(isSolved(applyMoves(framed, res.solution)), `wrong solution for "${scramble}"`);
+    const seg = res.segments.find((s) => s.unitId === "zbll");
+    if (!seg) continue;
+    fired++;
+    // When it does fire it must genuinely finish the cube in that one unit.
+    assert(isSolved(seg.phases.at(-1)!.endState), `zbll did not solve on "${scramble}"`);
+  }
+  assert(fired > 0, "zbll never fired — has the edges-oriented case stopped being reachable?");
+});
+
+// ZBLS + ZBLL is the pairing the two are designed for, and it is where ZBLS finally pays:
+// spend a few moves orienting the edges during the last insert, collect the whole last
+// layer in one alg. Measured over 30 random scrambles, on the 8 where a ZBLS route
+// exists: last-layer cost 22.14 -> 15.89, whole solve 55.85 -> 55.27, best case
+// 62.98 -> 46.13. ZBLS must be FORCED to see it — see the note in cfop.ts about why a
+// compete unit whose payoff lands outside its own region is never selected.
+Deno.test("ZBLS + ZBLL solves, and the last layer collapses to one alg", async () => {
+  let applicable = 0, withZbll = 0;
+  for (const scramble of SCRAMBLES) {
+    let res;
+    try {
+      res = await cfop.solve(scramble, {
+        replacements: { zbls: { enabled: true, mode: "force" }, zbll: { enabled: true } },
+      });
+    } catch {
+      continue; // no ZBLS route on this scramble
+    }
+    applicable++;
+    assert(res.solved, `unsolved: ${scramble}`);
+    const framed = applyMoves(solvedCube(), [
+      ...invert(res.orientation),
+      ...parseAlg(scramble),
+      ...res.orientation,
+    ]);
+    assert(isSolved(applyMoves(framed, res.solution)), `wrong solution for "${scramble}"`);
+    if (res.segments.some((s) => s.unitId === "zbll")) {
+      withZbll++;
+      // ZBLS oriented the edges, so the last layer went in one unit rather than two.
+      assert(
+        !res.segments.some((s) => s.unitId === "oll"),
+        `both zbll and oll ran on "${scramble}"`,
+      );
+    }
+  }
+  assert(applicable > 0, "no scramble admitted a ZBLS route");
+  assert(withZbll > 0, "ZBLS never handed a solved-edge last layer to ZBLL");
 });

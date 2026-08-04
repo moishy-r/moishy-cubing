@@ -217,3 +217,29 @@ export function ollPllStrategy(oll: AlgSet, pll: AlgSet, id = "ollPll"): Strateg
     ],
   };
 }
+
+/**
+ * ZBLL as one strategy: the whole last layer in a single alg, given the edges are
+ * already oriented.
+ *
+ * That precondition is the point — ZBLL is what a last-slot set like ZBLS is *for*.
+ * Orienting the edges during the last insert costs a few moves and buys the entire last
+ * layer in one alg, which is a trade that only shows up when both halves are wired.
+ * Falls through to PLL for the corners-already-solved states the 472-case set omits.
+ */
+export function zbllStrategy(zbll: AlgSet, pll: AlgSet, id = "zbll"): Strategy {
+  return {
+    id,
+    label: "ZBLL",
+    phases: [{
+      kind: "algorithmic",
+      id: "zbll",
+      goal: isSolved,
+      cases: fallThrough(
+        aufInvariantLookup(zbll, zbll.signature),
+        aufInvariantLookup(pll, pll.signature),
+      ),
+      auf: ["U"],
+    }],
+  };
+}

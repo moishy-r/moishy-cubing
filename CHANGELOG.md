@@ -121,6 +121,36 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
   worse. ZBLS is built to feed ZBLL, which is a different method. Kept for completeness and correct
   under `force`.
 
+- **`@moishy/steps` + `@moishy/cfop`: Winter/Summer Variation, ZBLL and COLL+EPLL.** `wvSvExtra`
+  (checkpoint Extra over `[f2l4, oll]`) and `zbllStrategy` join the shared modules; CFOP registers
+  WV/SV as an extra and ZBLL / COLL+EPLL as `compete` replacements over `[oll, pll]`.
+
+  Three measured results, none of them the expected one:
+
+  - **ZBLL on its own is a clear win**: mean cost 60.04 -> 58.48 and 56.0 -> 54.7 moves over 25
+    scrambles, firing on 5 of them — the ones where the last-layer edges happen to come out oriented
+    after F2L.
+  - **WV/SV never pays in CFOP.** Under `force` it fired and made a solve _worse_ (55.75 -> 58.58),
+    so it is `compete` — at which point it fires on 0 of 60. Splicing WV mid-insert buys a solved
+    OLL but spends a longer insert to get it, and a lucky short insert plus a short OLL beats it.
+  - **ZBLS + ZBLL is the pairing that works**, and it validates what ZBLS is for: over 30 scrambles,
+    on the 8 with a ZBLS route, last-layer cost **22.14 -> 15.89** and whole solve 55.85 -> 55.27,
+    best case **62.98 -> 46.13** (62 moves to 45).
+
+  **But ZBLS must be forced for that pairing to happen, and the reason is an engine limitation worth
+  recording.** A `compete` unit is chosen by the span DP on the cost of its _own_ region, and ZBLS's
+  entire payoff lands in a different region — the last layer. The DP's exit lookahead peeks only the
+  plain next step, never another replacement, so it cannot see the ZBLL that justifies ZBLS and
+  rejects it locally every time. Not worked around here. The shape of a real fix is visible though:
+  in a method where ZBLS and ZBLL are _core steps_, nothing has to justify itself region-locally and
+  the problem disappears — an argument for ZB being its own method rather than CFOP with two options
+  enabled.
+
+  A broader caveat these three share: the cost model scores turning ergonomics, not pauses. The
+  practical value of a last-slot variant is often one fewer alg to _recognise_, which MCC cannot
+  see, so techniques whose benefit is flow rather than move count will always look worse here than
+  they are.
+
 - **`@moishy/cfop@0.1.0`: a CFOP solver.** Cross, four F2L pair steps, OLL, PLL. Pure configuration
   over `@moishy/steps` — the second method in the repo, and the test of whether extracting `steps`
   was worth it. It was: the package is ~150 lines and every step it lists is shared.

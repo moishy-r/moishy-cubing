@@ -30,21 +30,28 @@
 // is worse than absent. The step shape is ready for them: `[f2l4, f2l4]` for a
 // replacement, `[f2l4, oll]` for the extra.
 
-import { type MethodDefinition, type Move, parseAlg } from "@moishy/cubing-core";
+import { type MethodDefinition, type Move, parseAlg, type Replacement } from "@moishy/cubing-core";
 import { advancedF2lBySlot } from "@moishy/algsets/advanced-f2l";
 import { f2lBySlot } from "@moishy/algsets/f2l";
 import { oll as ollSet } from "@moishy/algsets/oll";
 import { pll as pllSet } from "@moishy/algsets/pll";
 import {
   blockSearch,
+  collEpllStrategy,
   CROSS,
   f2lLookup,
   f2lSteps,
   ollStep,
   pllStep,
+  wvSvExtra,
+  zbllStrategy,
   zblsReplacement,
 } from "@moishy/steps";
 import { zbls as zblsSet } from "@moishy/algsets/zbls";
+import { collEpll as collSet } from "@moishy/algsets/coll-epll";
+import { zbll as zbllSet } from "@moishy/algsets/zbll";
+import { sv as svSet } from "@moishy/algsets/sv";
+import { wv as wvSet } from "@moishy/algsets/wv";
 
 // --- Step: cross -------------------------------------------------------------
 //
@@ -100,6 +107,48 @@ const pll = pllStep(pllSet);
  */
 const zbls = zblsReplacement(zblsSet, f2lLookup(F2L_SETS));
 
+/**
+ * ZBLL over `[oll, pll]`: the whole last layer in one alg.
+ *
+ * Only applicable once the last-layer edges are already oriented, which in CFOP means
+ * something upstream did it — i.e. ZBLS. Enable both and the pair becomes what ZB
+ * actually is: spend a few moves orienting edges during the last insert, collect the
+ * entire last layer in a single alg. `compete`, so on the scrambles where the edges are
+ * not oriented it simply produces no candidate and the normal OLL/PLL runs.
+ */
+const zbll: Replacement = {
+  id: "zbll",
+  label: "ZBLL",
+  region: ["oll", "pll"],
+  mode: "compete",
+  strategies: [zbllStrategy(zbllSet, pllSet)],
+};
+
+/**
+ * COLL + EPLL over `[oll, pll]`. Like ZBLL it needs the edges already oriented, so it is
+ * a companion to ZBLS rather than something CFOP can use on its own.
+ */
+const collEpll: Replacement = {
+  id: "collEpll",
+  label: "COLL + EPLL",
+  region: ["oll", "pll"],
+  mode: "compete",
+  strategies: [collEpllStrategy(collSet, pllSet)],
+};
+
+// --- Extras ------------------------------------------------------------------
+
+/**
+ * Winter/Summer Variation: part-way through the last insert, splice an alg that
+ * finishes the pair *and* orients the last-layer corners, so OLL is done too.
+ *
+ * Unlike ZBLS its payoff lands inside OLL rather than reshaping it — the region covers
+ * `[f2l4, oll]` outright and the next thing is PLL. It fires rarely by construction:
+ * WV needs the last-layer edges already oriented, which happens on about 1 solve in 8,
+ * and the data is FR-authored so the last slot must be there or a single `y` away.
+ */
+const winterSummerVariation = wvSvExtra(wvSet, svSet);
+
 // Not reusable, and worth recording why: APB's `ocllPll` and `collEpll` line up with
 // CFOP's `[oll, pll]` region but both OCLL and COLL assume the last-layer **edges are
 // already oriented**. In APB they are, because EO is a core step; in CFOP nothing has
@@ -138,8 +187,8 @@ export const cfopDefinition: MethodDefinition = {
   id: "cfop",
   label: "CFOP",
   steps: [cross, ...f2l, oll, pll],
-  replacements: [zbls],
-  extras: [],
+  replacements: [zbls, zbll, collEpll],
+  extras: [winterSummerVariation],
   recommendedSettings: {
     colorNeutrality: DUAL_CN_BOTTOM,
     lookahead: {
