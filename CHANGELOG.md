@@ -50,7 +50,37 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
   _not_ already solved or leaves the centers drifted, so it cannot run in a fixed-frame CFOP solve;
   they are listed in the module doc.
 
+### Fixed
+
+- **`@moishy/algsets`: `aufInvariantLookup` re-derived recognition with the pre-fix formula, so 24
+  `zbls` cases could not be found by the very lookup built from them.** It recomputed
+  `solved . invert(algs[0])` itself instead of asking the set for `recognitionState(id)` — silently
+  reintroducing the bug `defineAlgSet` had just been fixed for, since an alg carrying a net rotation
+  solves its case into the _rotated_ frame and that formula yields a state for a different case. One
+  line, and it is why a fix has to be made in the one place a value is derived rather than in each
+  copy.
+
 ### Changed
+
+- **`@moishy/algsets`: `zbls` is re-sourced wholly from the community ZBLS spreadsheet** (algs by
+  Chad Batten and Tao Yu) — 299 cases, 641 algs — replacing a set stitched together from several
+  sources. There is no SpeedCubeDB-style page for ZBLS, so consistency of source matters more here
+  than usual: a mixed set is exactly where slot and frame inconsistencies creep in.
+
+  It shows: the ten cases previously authored against the FL/BR slot are simply gone, and the APB
+  test that recorded them as known exceptions now asserts an empty list. Nine of those had been
+  patched by hand with a leading rotation; one consistent source removed the need.
+
+  Of the sheet's 328 cells, 24 are empty and five more do not become distinct cases: `f2l-12-5`
+  offers only `R d' R U2 R' U2 F'`, whose wide `d'` leaves the centres drifted rather than rotated,
+  so it never solves into a coherent fixed frame; and four are the _same_ ZBLS state as an earlier
+  heading, merged into it keeping both headings' algs (`f2l-26-7`, `f2l-34-2`, `f2l-41-1`,
+  `f2l-41-5`). A ZBLS case _is_ a pair position plus an edge-orientation pattern, so two headings
+  agreeing on both differ only in last-layer corners, which ZBLS does not touch. The merge is keyed
+  on the AUF coset the consuming lookup indexes, which removes exactly the collisions that would
+  otherwise let one case silently shadow another — the defect that once broke 27 cases here. (One of
+  the four, `f2l-34-2` -> `f2l-33-2`, was found by hand previously; the keyed merge rediscovers it.)
+  A further 6 individual algs are dropped for not solving the case they are listed under.
 
 - **`@moishy/steps@0.2.0`: an F2L tie between slots now goes to a back slot.** Where two slots are
   equally cheap, filling a back one leaves the FRONT slots open — and those are the ones you can

@@ -1,12 +1,43 @@
 /**
  * ZBLS — algorithm case data for `@moishy/algsets`.
  *
- * Solves the last slot while orienting the last-layer edges.
+ * Solve the last F2L slot while orienting the last-layer edges, so the OLL that follows
+ * is one of the seven OCLL shapes — or, paired with ZBLL, the whole last layer goes in
+ * one alg. That pairing is what ZBLS is for.
  *
- * ZBLS — solve the last slot while orienting last-layer edges (ZBLL setup). From the zbls Google
- * Sheet (https://docs.google.com/spreadsheets/d/1s8Q2VM2c1eV3oLIxFfM4exvABO0AcCeMCUdMiYKnzC0).
- * subset = the source's F2L case grouping (F2L 1..41). Authored per
- * packages/algsets/AUTHORING.md — algs only; recognition/AUF/cost are derived.
+ * From the community ZBLS spreadsheet, algs by **Chad Batten and Tao Yu**. That sheet is
+ * the source the community actually uses; there is no SpeedCubeDB-style page for ZBLS, so
+ * taking every alg from one place matters more here than usual — a set stitched together
+ * from several sources is where slot and frame inconsistencies creep in.
+ *
+ * Authored for the **front-right slot**, which is the one solvers learn. The sheet has an
+ * "Other slots" tab, but it is explicitly "random algs I found" for BR/FL/BL, so it is
+ * not used: a method whose last slot is elsewhere rotates to bring it to FR rather than
+ * relying on per-slot data.
+ *
+ * 299 cases, 641 algs, from the sheet's 41 F2L headings x 8
+ * edge-orientation sub-cases (`f2l-<heading>-<sub>`). Of those 328 cells, 24 are empty in
+ * the sheet and five more do not survive as distinct cases:
+ *
+ *   * `f2l-12-5` offers only `R d' R U2 R' U2 F'`, whose wide `d'` leaves the
+ *     centres drifted rather than rotated, so it never solves into a coherent fixed frame.
+ *   * Four are the *same* ZBLS state as an earlier heading and are merged into it, keeping
+ *     both headings' algs as variants: `f2l-26-7`->`f2l-26-6`,
+ *     `f2l-34-2`->`f2l-33-2`, `f2l-41-1`->`f2l-37-4`, `f2l-41-5`->`f2l-37-8`.
+ *     A ZBLS case *is* a pair position plus an edge-orientation pattern; two headings that
+ *     agree on both differ only in last-layer corners, which ZBLS does not touch. The
+ *     merge is keyed on the AUF coset the consuming lookup actually indexes, so it removes
+ *     exactly the collisions that would otherwise let one case silently shadow another —
+ *     the defect that once broke 27 cases here.
+ *
+ * A further 6 individual algs are dropped: they do not solve the case they are listed
+ * under, under any AUF. Every alg kept is verified to solve its own case.
+ *
+ * Every case's primary is verified to derive a genuine FR-slot ZBLS state — cross solved,
+ * FR open, the other three slots in — and to reach the goal from it. Rotations inside an
+ * alg are kept and executed as written; `defineAlgSet` accounts for an alg's own
+ * rotation when deriving its state, so a leading `y` is unremarkable rather than a
+ * defect.
  *
  * ```ts
  * import { zbls } from "@moishy/algsets/zbls";
@@ -29,59 +60,87 @@ export const zbls: AlgSet = defineAlgSet({
       id: "f2l-1-3",
       subset: "F2L 1",
       algs: [
-        "U2' R' F R F' R U2 R'",
+        "U2 R' F R F' R U2 R'",
         "U R B U' B' R'",
         "U R' F R F2 U F",
         "U2 F2 r U r' F",
-        "y' U2' R2' F R F' R",
+        "y' U2 R2 F R F' R",
       ],
     },
     {
       id: "f2l-1-4",
       subset: "F2L 1",
-      algs: ["R' U' F U R U' F'", "U F' L' U' L F", "U2 R U2 B U B' U' R'"],
+      algs: [
+        "R' U' F U R U' F'",
+        "U F' L' U' L F",
+        "U2 R U2 B U B' U' R'",
+      ],
     },
     {
       id: "f2l-1-5",
       subset: "F2L 1",
-      algs: ["R' U' F U R2 U' R' F'", "U R U R' U2' R' F R F'", "U R U R' U2 M' U R U' r'"],
+      algs: [
+        "R' U' F U R2 U' R' F'",
+        "U R U R' U2 R' F R F'",
+        "U R U R' U2 M' U R U' r'",
+      ],
     },
     {
       id: "f2l-1-6",
       subset: "F2L 1",
-      algs: ["M U R U' R' U' M'", "U S' R U' R' S", "U2 R U' B U' B' R'"],
+      algs: [
+        "M U R U' R' U' M'",
+        "U S' R U' R' S",
+        "U2 R U' B U' B' R'",
+      ],
     },
     { id: "f2l-1-7", subset: "F2L 1", algs: ["R' F R2 U R' U' F'", "U2 R U' R' U' R' F R F'"] },
     {
       id: "f2l-1-8",
       subset: "F2L 1",
-      algs: ["M' U R U' r2 U2' R U R' U r", "y R' F' R U2 M' U' M", "U2 R' F R F' U2 R' F R F'"],
+      algs: [
+        "M' U R U' r2 U2 R U R' U r",
+        "y R' F' R U2 M' U' M",
+        "U2 R' F R F' U2 R' F R F'",
+      ],
     },
-    { id: "f2l-2-1", subset: "F2L 2", algs: ["U' F' U F"] },
+    { id: "f2l-2-1", subset: "F2L 2", algs: ["y U' L' U L"] },
     { id: "f2l-2-2", subset: "F2L 2", algs: ["F R' F' R", "r U R' U' M"] },
     {
       id: "f2l-2-3",
       subset: "F2L 2",
-      algs: ["U' r U' r' U r U r'", "U2 R2 B' R' B R'", "U2 l R U' R' U l'"],
+      algs: [
+        "U' r U' r' U r U r'",
+        "U2 R2 B' R' B R'",
+        "U2 l R U' R' U l'",
+      ],
     },
     {
       id: "f2l-2-4",
       subset: "F2L 2",
-      algs: ["U' R B U B' R'", "d' F R U R' F'", "U2' R U R' U' R' F R F' R U' R'"],
+      algs: [
+        "U' R B U B' R'",
+        "d' F R U R' F'",
+        "U2 R U R' U' R' F R F' R U' R'",
+      ],
     },
     { id: "f2l-2-5", subset: "F2L 2", algs: ["U R' D' r U' r' D R", "U' R2 D r' U r D' R2"] },
     { id: "f2l-2-6", subset: "F2L 2", algs: ["U' R' D' r U r' D R", "U' F2 r U r' U F"] },
     { id: "f2l-2-7", subset: "F2L 2", algs: ["R U2 R D r' U' r D' R2"] },
-    { id: "f2l-2-8", subset: "F2L 2", algs: ["U' R U' R2' D' r U r' D R", "r U r' U2 M' U M"] },
-    { id: "f2l-3-1", subset: "F2L 3", algs: ["F' U' F"] },
+    { id: "f2l-2-8", subset: "F2L 2", algs: ["U' R U' R2 D' r U r' D R", "r U r' U2 M' U M"] },
+    { id: "f2l-3-1", subset: "F2L 3", algs: ["y L' U' L"] },
     {
       id: "f2l-3-2",
       subset: "F2L 3",
-      algs: ["S U R U' R' S'", "R U' R' F' r U' r' F2", "M y' R' U' R U S'"],
+      algs: [
+        "S U R U' R' S'",
+        "R U' R' F' r U' r' F2",
+        "M y' R' U' R U S'",
+      ],
     },
     { id: "f2l-3-3", subset: "F2L 3", algs: ["F' r U' r' F2 R U' R'"] },
     { id: "f2l-3-4", subset: "F2L 3", algs: ["U' R' F R U R U' R2 F' R"] },
-    { id: "f2l-3-5", subset: "F2L 3", algs: ["M' F' U' F M"] },
+    { id: "f2l-3-5", subset: "F2L 3", algs: ["y' S' R' U' R S"] },
     { id: "f2l-3-6", subset: "F2L 3", algs: ["U R2 D r' U' r D' R2"] },
     { id: "f2l-3-7", subset: "F2L 3", algs: ["U2 R' D' r U' r' D R2 U' R'"] },
     { id: "f2l-3-8", subset: "F2L 3", algs: ["R' F R2 U' M' U2 r' U' F'"] },
@@ -89,76 +148,114 @@ export const zbls: AlgSet = defineAlgSet({
     {
       id: "f2l-4-2",
       subset: "F2L 4",
-      algs: ["U M U' R U R' M'", "R U2 R' U' R' F R F'", "R U R' F R U R' U' F'"],
+      algs: [
+        "U M U' R U R' M'",
+        "R U2 R' U' R' F R F'",
+        "R U R' F R U R' U' F'",
+      ],
     },
     { id: "f2l-4-3", subset: "F2L 4", algs: ["U' F' U2 F U R U' R'", "R U R' F U R U' R' F'"] },
     { id: "f2l-4-4", subset: "F2L 4", algs: ["U2 r U' r' U' r U r'", "R U' R' U2 R' F R F'"] },
     {
       id: "f2l-4-5",
       subset: "F2L 4",
-      algs: ["R U R' U' F R U R' U' F'", "R U y R U R' U' F'", "S' R U R' S"],
+      algs: [
+        "R U R' U' F R U R' U' F'",
+        "R U y R U R' U' F'",
+        "S' R U R' S",
+      ],
     },
     {
       id: "f2l-4-6",
       subset: "F2L 4",
-      algs: ["R U2 B U' B' R'", "U F U R U' R2' F' R", "R U R' U' r' U2 R U R' U r"],
+      algs: [
+        "R U2 B U' B' R'",
+        "U F U R U' R2 F' R",
+        "R U R' U' r' U2 R U R' U r",
+      ],
     },
-    { id: "f2l-4-7", subset: "F2L 4", algs: ["R U' R2' F R F' R U2' R'", "R U' R' F2 r U r' F"] },
+    { id: "f2l-4-7", subset: "F2L 4", algs: ["R U' R2 F R F' R U2 R'", "R U' R' F2 r U r' F"] },
     {
       id: "f2l-4-8",
       subset: "F2L 4",
       algs: [
         "R' D' r U' r' D R2 U R'",
-        "R U' r' U r U2' r' U' r U2' R'",
-        "R U' R2' F R F' U2 R' F R F'",
+        "R U' r' U r U2 r' U' r U2 R'",
+        "R U' R2 F R F' U2 R' F R F'",
       ],
     },
     { id: "f2l-5-1", subset: "F2L 5", algs: ["U' R U R' U2 R U' R'"] },
     {
       id: "f2l-5-2",
       subset: "F2L 5",
-      algs: ["U2 R U' R' U2 R U' R' U R' F R F'", "R U' R B2 r' U' r B' R2"],
+      algs: [
+        "U2 R U' R' U2 R U' R' U R' F R F'",
+        "R U' R B2 r' U' r B' R2",
+      ],
     },
-    { id: "f2l-5-3", subset: "F2L 5", algs: ["U f' U F U' F' U' f"] },
+    {
+      id: "f2l-5-3",
+      subset: "F2L 5",
+      algs: [
+        "y' U r' U R U' R' U' r",
+        "r U' r' U' r U r' F' r U' r' F2",
+      ],
+    },
     { id: "f2l-5-4", subset: "F2L 5", algs: ["R' D' R U R' D F R F'"] },
     { id: "f2l-5-5", subset: "F2L 5", algs: ["U' R U R' U R' F R F'"] },
     { id: "f2l-5-6", subset: "F2L 5", algs: ["U' r U R' U' R2 r' U2 R'"] },
     {
       id: "f2l-5-7",
       subset: "F2L 5",
-      algs: ["U' F R U R' U' F' R U2 R'", "U R U' R' U' R' F R F' R U R'"],
+      algs: [
+        "U' F R U R' U' F' R U2 R'",
+        "U R U' R' U' R' F R F' R U R'",
+      ],
     },
     {
       id: "f2l-5-8",
       subset: "F2L 5",
-      algs: ["U2 R2 D r' U' r D' R' U' R'", "U' r U' r' U2 r U r' U' R U' R'"],
+      algs: [
+        "U2 R2 D r' U' r D' R' U' R'",
+        "U' r U' r' U2 r U r' U' R U' R'",
+      ],
     },
-    { id: "f2l-6-1", subset: "F2L 6", algs: ["U F' U' F U F' U2 F", "R2 B U B' U' R2"] },
+    { id: "f2l-6-1", subset: "F2L 6", algs: ["y' U R' U' R U R' U2 R", "y F2 R U R' U' F2"] },
     {
       id: "f2l-6-2",
       subset: "F2L 6",
       algs: [
-        "y U F U' F' y' U' F' U F U' F' U F",
-        "y U2 F' L' U' L U F2 U' F'",
-        "y F U F' U' F U F' U' L' U' L",
+        "U R U' R' y' U' R' U R U' R' U R",
+        "U2 R' F' U' F U R2 U' R'",
+        "R U R' U' R U R' U' F' U' F",
       ],
     },
     { id: "f2l-6-3", subset: "F2L 6", algs: ["U' r U' R' U R U r'"] },
     { id: "f2l-6-4", subset: "F2L 6", algs: ["R' D' F r U2 r' F D R"] },
-    { id: "f2l-6-5", subset: "F2L 6", algs: ["U F' U' F U' F R' F' R"] },
+    {
+      id: "f2l-6-5",
+      subset: "F2L 6",
+      algs: [
+        "y U L' U' L U' L F' L' F",
+        "F R U' R' U' R U R' F2 U F",
+      ],
+    },
     {
       id: "f2l-6-6",
       subset: "F2L 6",
-      algs: ["U' R' F R F' R U2' R2' F R F'", "R2 D r' U' r D' R' U R'"],
+      algs: [
+        "U' R' F R F' R U2 R2 F R F'",
+        "R2 D r' U' r D' R' U R'",
+      ],
     },
     {
       id: "f2l-6-7",
       subset: "F2L 6",
       algs: [
-        "y U2 y' F' L' U' L U2 F",
-        "y U' F' L2 F U' L U' F U2 F' L2",
-        "y U2 L' B' U' B U2 L",
-        "y U F U F2 L F L' f U' f' U' f U f'",
+        "U2 y' R' F' U' F U2 R",
+        "U' R' F2 R U' F U' R U2 R' F2",
+        "U2 F' L' U' L U2 F",
+        "U R U R2 F R F' r U' r' U' r U r'",
       ],
     },
     {
@@ -166,7 +263,7 @@ export const zbls: AlgSet = defineAlgSet({
       subset: "F2L 6",
       algs: [
         "U M' U M U2 r U R' U M",
-        "U R U R D r' U' r D' R2' U' R U R'",
+        "U R U R D r' U' r D' R2 U' R U R'",
         "U R U' R' d' L' U L2 F' L' F",
       ],
     },
@@ -174,7 +271,11 @@ export const zbls: AlgSet = defineAlgSet({
     {
       id: "f2l-7-2",
       subset: "F2L 7",
-      algs: ["R U R' U R U' R2 F R F'", "U R' F R F' R U' R' U R U R'", "U R F U R U' R' F' R'"],
+      algs: [
+        "R U R' U R U' R2 F R F'",
+        "U R' F R F' R U' R' U R U R'",
+        "U R F U R U' R' F' R'",
+      ],
     },
     { id: "f2l-7-3", subset: "F2L 7", algs: ["R' D' R U2 R' D F R F'"] },
     {
@@ -182,7 +283,7 @@ export const zbls: AlgSet = defineAlgSet({
       subset: "F2L 7",
       algs: [
         "R' D' r U2 r' D F R F'",
-        "y' R2' F R F' U R U2' R' U R",
+        "y' R2 F R F' U R U2 R' U R",
         "F2 r U r' F R U R' U2 R U R'",
       ],
     },
@@ -190,38 +291,53 @@ export const zbls: AlgSet = defineAlgSet({
     {
       id: "f2l-7-6",
       subset: "F2L 7",
-      algs: ["F R' F' R U2 R U' R' U R U' R'", "r' F' R2 U R' U2 R U' R2 F r"],
+      algs: [
+        "F R' F' R U2 R U' R' U R U' R'",
+        "r' F' R2 U R' U2 R U' R2 F r",
+      ],
     },
     {
       id: "f2l-7-7",
       subset: "F2L 7",
-      algs: ["U R U' R' U R' F R F' R U R'", "U' R B r' U r B2 U' R'"],
+      algs: [
+        "U R U' R' U R' F R F' R U R'",
+        "U' R B r' U r B2 U' R'",
+      ],
     },
     { id: "f2l-7-8", subset: "F2L 7", algs: ["M' U' M U2 r U' r'"] },
-    { id: "f2l-8-1", subset: "F2L 8", algs: ["U F' U2 F U2 F' U F"] },
+    { id: "f2l-8-1", subset: "F2L 8", algs: ["y' U R' U2 R U2 R' U R"] },
     {
       id: "f2l-8-2",
       subset: "F2L 8",
-      algs: ["B' R' U' R2 U R' B", "U2 R U' R' F' U' F U' R U R'"],
+      algs: [
+        "B' R' U' R2 U R' B",
+        "U2 R U' R' F' U' F U' R U R'",
+      ],
     },
     {
       id: "f2l-8-3",
       subset: "F2L 8",
-      algs: ["r' U2 R2 U R2' U r", "U2 r' D' r U r' D r2 U' R' U R U r'"],
+      algs: [
+        "r' U2 R2 U R2 U r",
+        "U2 r' D' r U r' D r2 U' R' U R U r'",
+      ],
     },
     {
       id: "f2l-8-4",
       subset: "F2L 8",
       algs: [
-        "U F U' F' d F' U F U' F' U F",
-        "f' U2 F2 U F' U' F' U2 f",
-        "F b U' F' U L' b' U2 F U' F'",
+        "r' U2 R2 U R' U' R' U2 r",
+        "U R U' R' d R' U R U' R' U R",
+        "R l U' R' U F' l' U2 R U' R'",
       ],
     },
     {
       id: "f2l-8-5",
       subset: "F2L 8",
-      algs: ["y' U y F' U2 F U' F R' F' R", "y' b' U2 B2 U B2 R' U R b"],
+      algs: [
+        "U y L' U2 L U' L F' L' F",
+        "r' U2 R2 U R2 F' U F r",
+      ],
     },
     {
       id: "f2l-8-6",
@@ -236,37 +352,54 @@ export const zbls: AlgSet = defineAlgSet({
       id: "f2l-8-7",
       subset: "F2L 8",
       algs: [
-        "U2 r' U r2 U' r2' U' r U2' r U r'",
-        "U' r' F' r U r U' r2' F2 r F",
+        "U2 r' U r2 U' r2 U' r U2 r U r'",
+        "U' r' F' r U r U' r2 F2 r F",
         "r' U2 R U R' U r2 U' R' U' R U r'",
       ],
     },
     { id: "f2l-8-8", subset: "F2L 8", algs: ["r U r' U' R U' M' U r'"] },
-    { id: "f2l-9-1", subset: "F2L 9", algs: ["U2 F' U F U F' U' F"] },
+    {
+      id: "f2l-9-1",
+      subset: "F2L 9",
+      algs: [
+        "y' U2 R' U R U R' U' R",
+        "U y' R' U' R U' R' U' R",
+        "R' D' R U' R' D R F' U' F",
+      ],
+    },
     { id: "f2l-9-2", subset: "F2L 9", algs: ["F R U R' U' F' R U' R'"] },
-    { id: "f2l-9-3", subset: "F2L 9", algs: ["U' F U' F' d F' U' F", "L2 f U f' U' f' L f U' L"] },
+    { id: "f2l-9-3", subset: "F2L 9", algs: ["F2 r U r' U' r' F r U' F", "U' R U' R' d R' U' R"] },
     { id: "f2l-9-4", subset: "F2L 9", algs: ["U r U R' U' M R U' R'", "R' F R U2 r U2 r' U2 F'"] },
     {
       id: "f2l-9-5",
       subset: "F2L 9",
-      algs: ["F R U R' U' F' U' R' F R F'", "M' U R2 r' U2 M' U r'"],
+      algs: [
+        "F R U R' U' F' U' R' F R F'",
+        "M' U R2 r' U2 M' U r'",
+      ],
     },
     {
       id: "f2l-9-6",
       subset: "F2L 9",
-      algs: ["U' r U2 r' U' r U' r' U r U2 r'", "U r U' r' U2' r U r' R U' R'"],
+      algs: [
+        "U' r U2 r' U' r U' r' U r U2 r'",
+        "U r U' r' U2 r U r' R U' R'",
+      ],
     },
     {
       id: "f2l-9-7",
       subset: "F2L 9",
-      algs: ["U r U r' S' r U' r' S r U' r'", "R' F R2 U' R' U' r U2 r' U' F'"],
+      algs: [
+        "U r U r' S' r U' r' S r U' r'",
+        "R' F R2 U' R' U' r U2 r' U' F'",
+      ],
     },
     {
       id: "f2l-9-8",
       subset: "F2L 9",
       algs: [
         "U r U r' U2 M' U M R U' R'",
-        "U2 R U R' U' R' F R F' R U2' R2' F R F'",
+        "U2 R U R' U' R' F R F' R U2 R2 F R F'",
         "U2 R U R D r' U' r D' R' U R'",
         "R' F2 R2 U' R' U' R' F' R2 U R' F2",
       ],
@@ -275,48 +408,70 @@ export const zbls: AlgSet = defineAlgSet({
     {
       id: "f2l-10-2",
       subset: "F2L 10",
-      algs: ["F R' F' R U R' F R F' R U R'", "r' D' r U r' D R r U R'"],
+      algs: [
+        "F R' F' R U R' F R F' R U R'",
+        "r' D' r U r' D R r U R'",
+      ],
     },
-    { id: "f2l-10-3", subset: "F2L 10", algs: ["R U R2 F R F' R U R'", "U2' r U' R' U' R U r'"] },
+    { id: "f2l-10-3", subset: "F2L 10", algs: ["R U R2 F R F' R U R'", "U2 r U' R' U' R U r'"] },
     {
       id: "f2l-10-4",
       subset: "F2L 10",
       algs: [
         "U' r' D' r U' r' D r2 U' r' U' r U r'",
         "U' F' U' F r U' r' U' r U r'",
-        "R' D2 r U' r2' D r D2 R",
-        "R' F R F' U2' R U R' U' R U R'",
+        "R' D2 r U' r2 D r D2 R",
+        "R' F R F' U2 R U R' U' R U R'",
       ],
     },
     {
       id: "f2l-10-5",
       subset: "F2L 10",
-      algs: ["U F R' F' R U2 R U' R'", "R U R' F' U F U R U' R'"],
+      algs: [
+        "U F R' F' R U2 R U' R'",
+        "R U R' F' U F U R U' R'",
+      ],
     },
     {
       id: "f2l-10-6",
       subset: "F2L 10",
-      algs: ["U2 R U' R' U r U' r' U' r U r'", "R B' R' U' R U B U2 R'"],
+      algs: [
+        "U2 R U' R' U r U' r' U' r U r'",
+        "R B' R' U' R U B U2 R'",
+      ],
     },
     {
       id: "f2l-10-7",
       subset: "F2L 10",
-      algs: ["U' R U R' U' r U' r' U' r U r'", "R' F' R U R U' R' F' r U r' F"],
+      algs: [
+        "U' R U R' U' r U' r' U' r U r'",
+        "R' F' R U R U' R' F' r U r' F",
+      ],
     },
     {
       id: "f2l-10-8",
       subset: "F2L 10",
       algs: [
-        "r U' r' U' r U r' U2' R' F R F'",
+        "r U' r' U' r U r' U2 R' F R F'",
         "R U' R D r' U' r D' R' U' R'",
         "R' D' R U M' U r' D R2 U R'",
       ],
     },
-    { id: "f2l-11-1", subset: "F2L 11", algs: ["F U2 F2 U' F2 U' F'"] },
+    {
+      id: "f2l-11-1",
+      subset: "F2L 11",
+      algs: [
+        "y' R U2 R2 U' R2 U' R'",
+        "R U2 R' U R U R' F' U' F",
+      ],
+    },
     {
       id: "f2l-11-2",
       subset: "F2L 11",
-      algs: ["U' R U R' U' R U' R' U' F' U' F", "R U' R' U R U' R2' F R F' R U' R'"],
+      algs: [
+        "U' R U R' U' R U' R' U' F' U' F",
+        "R U' R' U R U' R2 F R F' R U' R'",
+      ],
     },
     { id: "f2l-11-3", subset: "F2L 11", algs: ["R U R' U' R U' R' F' U' F"] },
     { id: "f2l-11-4", subset: "F2L 11", algs: ["U' R U2 R' U F' U' F"] },
@@ -326,14 +481,17 @@ export const zbls: AlgSet = defineAlgSet({
       subset: "F2L 11",
       algs: [
         "R U2 R' U' r U' r' U2 r U r'",
-        "r' U' R2 U' R2' U2' r F' U F",
-        "R U' R' U' R U' R2' F R F2 U' F",
+        "r' U' R2 U' R2 U2 r F' U F",
+        "R U' R' U' R U' R2 F R F2 U' F",
       ],
     },
     {
       id: "f2l-11-7",
       subset: "F2L 11",
-      algs: ["F' L' U' L U' L' U L U' F", "R' D' r U r U R U' r2' D"],
+      algs: [
+        "F' L' U' L U' L' U L U' F",
+        "R' D' r U r U R U' r2 D",
+      ],
     },
     {
       id: "f2l-11-8",
@@ -349,35 +507,53 @@ export const zbls: AlgSet = defineAlgSet({
     {
       id: "f2l-12-3",
       subset: "F2L 12",
-      algs: ["R U' R' U R U' R' U R' F R F'", "U r U' R' U' R U r' U' R U R'"],
+      algs: [
+        "R U' R' U R U' R' U R' F R F'",
+        "U r U' R' U' R U r' U' R U R'",
+      ],
     },
     { id: "f2l-12-4", subset: "F2L 12", algs: ["U F' U2 F U' R U R'"] },
-    { id: "f2l-12-5", subset: "F2L 12", algs: ["B d' B U2 B' U2 R'"] },
     {
       id: "f2l-12-6",
       subset: "F2L 12",
-      algs: ["R U M' U' M U2 M' U' r'", "U2 R' F2 r U r' F R2 U R'"],
+      algs: [
+        "R U M' U' M U2 M' U' r'",
+        "U2 R' F2 r U r' F R2 U R'",
+      ],
     },
     { id: "f2l-12-7", subset: "F2L 12", algs: ["R U R' U R' F R F' R U R'"] },
     {
       id: "f2l-12-8",
       subset: "F2L 12",
-      algs: ["R' D' R U2 M' U r' D R2 U R'", "R U2 R' U' M' U' M U2' r U' r'"],
+      algs: [
+        "R' D' R U2 M' U r' D R2 U R'",
+        "R U2 R' U' M' U' M U2 r U' r'",
+      ],
     },
     {
       id: "f2l-13-1",
       subset: "F2L 13",
-      algs: ["y U y' F' U F U' F' U' F", "y F' D' F U F' D F L' U' L"],
+      algs: [
+        "U y' R' U R U' R' U' R",
+        "R' D' R U R' D R F' U' F",
+      ],
     },
     {
       id: "f2l-13-2",
       subset: "F2L 13",
-      algs: ["R2 D R' U R D' R2 F' U' F", "U R U' R' U R U' R' U' y' R' U R"],
+      algs: [
+        "R2 D R' U R D' R2 F' U' F",
+        "U R U' R' U R U' R' U' y' R' U R",
+      ],
     },
     {
       id: "f2l-13-3",
       subset: "F2L 13",
-      algs: ["M' U' R U R' U2 R U' r'", "R U' R' U R' F R F' R U' R'", "R U R' U R U' R' F' U' F"],
+      algs: [
+        "M' U' R U R' U2 R U' r'",
+        "R U' R' U R' F R F' R U' R'",
+        "R U R' U R U' R' F' U' F",
+      ],
     },
     { id: "f2l-13-4", subset: "F2L 13", algs: ["R' F' r U R U2 r' F2"] },
     {
@@ -393,7 +569,10 @@ export const zbls: AlgSet = defineAlgSet({
     {
       id: "f2l-13-7",
       subset: "F2L 13",
-      algs: ["R' F R U2 r U' r' U2 F'", "U2' r U2' r' U' r U r' U r U2' r'"],
+      algs: [
+        "R' F R U2 r U' r' U2 F'",
+        "U2 r U2 r' U' r U r' U r U2 r'",
+      ],
     },
     { id: "f2l-13-8", subset: "F2L 13", algs: ["U2 R U R D r' U r D' R' U R'"] },
     { id: "f2l-14-1", subset: "F2L 14", algs: ["U' R U' R' U R U R'"] },
@@ -412,21 +591,28 @@ export const zbls: AlgSet = defineAlgSet({
     {
       id: "f2l-14-6",
       subset: "F2L 14",
-      algs: ["R U R' U' F' U' F U R U R'", "U2 r U R' U R U2 r' U R U' R'", "R B r' U r B2 U2' R'"],
+      algs: [
+        "R U R' U' F' U' F U R U R'",
+        "U2 r U R' U R U2 r' U R U' R'",
+        "R B r' U r B2 U2 R'",
+      ],
     },
     {
       id: "f2l-14-7",
       subset: "F2L 14",
-      algs: ["F' r U' r' F2 U' R U R'", "U' R U' R' U' r U' r' U' r U r'"],
+      algs: [
+        "F' r U' r' F2 U' R U R'",
+        "U' R U' R' U' r U' r' U' r U r'",
+      ],
     },
     {
       id: "f2l-14-8",
       subset: "F2L 14",
       algs: [
-        "U2 r U' r' U M' U2' R U r'",
-        "R' F R F' R U' R' U R U2' R2' F R F'",
+        "U2 r U' r' U M' U2 R U r'",
+        "R' F R F' R U' R' U R U2 R2 F R F'",
         "U2 r U' r' U2 r U r' U R U R'",
-        "U R2 D r' U r D' R2' U2' R U R'",
+        "U R2 D r' U r D' R2 U2 R U R'",
       ],
     },
     {
@@ -442,26 +628,30 @@ export const zbls: AlgSet = defineAlgSet({
     {
       id: "f2l-15-3",
       subset: "F2L 15",
-      algs: ["F' U L' U L U2' F", "F' U F U2 R U R'", "U R' F R F' U R U R'"],
+      algs: [
+        "F' U L' U L U2 F",
+        "F' U F U2 R U R'",
+        "U R' F R F' U R U R'",
+      ],
     },
     {
       id: "f2l-15-4",
       subset: "F2L 15",
       algs: [
-        "R U2' R' U R U R2' F R F'",
+        "R U2 R' U R U R2 F R F'",
         "R' D' R U' R' D F R F'",
-        "U' R' F R F' R U R' U2' R U R'",
-        "y' R2' F R F' R U2' R' U R",
+        "U' R' F R F' R U R' U2 R U R'",
+        "y' R2 F R F' R U2 R' U R",
       ],
     },
     { id: "f2l-15-5", subset: "F2L 15", algs: ["R U R' U2 R U' R2 F R F'"] },
-    { id: "f2l-15-6", subset: "F2L 15", algs: ["R U2' R2' F R F' U' R U2' R'"] },
+    { id: "f2l-15-6", subset: "F2L 15", algs: ["R U2 R2 F R F' U' R U2 R'"] },
     { id: "f2l-15-7", subset: "F2L 15", algs: ["M U R U R' U' r U' R'"] },
     {
       id: "f2l-15-8",
       subset: "F2L 15",
       algs: [
-        "l U r U' r2' F r U2 l'",
+        "l U r U' r2 F r U2 l'",
         "U R U' R D r' U r D' R' U' R'",
         "r' U' R U M' U' R' F U R U' F'",
       ],
@@ -473,45 +663,59 @@ export const zbls: AlgSet = defineAlgSet({
         "U M' U R U' r' U' R U R'",
         "r U r' U r U2 r' U' r U' r'",
         "U F R' F' R2 U' R' U R' F R F'",
-        "F' U R U R' U R U2' R' F",
+        "F' U R U R' U R U2 R' F",
       ],
     },
     {
       id: "f2l-16-2",
       subset: "F2L 16",
-      algs: ["R U R' U2' R U' R' U' F' U F", "U F R U R' U' F' U R U' R'", "y' M' U' r' U r U M"],
+      algs: [
+        "R U R' U2 R U' R' U' F' U F",
+        "U F R U R' U' F' U R U' R'",
+        "y' M' U' r' U r U M",
+      ],
     },
     { id: "f2l-16-3", subset: "F2L 16", algs: ["F' U2 L' U' L U' F", "R U' R' U2 F' U' F"] },
     {
       id: "f2l-16-4",
       subset: "F2L 16",
-      algs: ["U F U R U' R' F' R U R'", "l R U' R' U l' U2 R U' R'", "R' D' R U R' D R F R' F' R"],
+      algs: [
+        "U F U R U' R' F' R U R'",
+        "l R U' R' U l' U2 R U' R'",
+        "R' D' R U R' D R F R' F' R",
+      ],
     },
     {
       id: "f2l-16-5",
       subset: "F2L 16",
       algs: [
         "r U' r' U l' U2 R U' R' U2 l",
-        "U2 r' F' r U' r' F2' r2 U' r' U2' r U r'",
+        "U2 r' F' r U' r' F2 r2 U' r' U2 r U r'",
         "U r U' r' U2 r U r' U r U' r' U' r U r'",
       ],
     },
     {
       id: "f2l-16-6",
       subset: "F2L 16",
-      algs: ["U2 R' D' r U' M U' R' D R", "U r U' r' U2' r U r' U' R U R'"],
+      algs: [
+        "U2 R' D' r U' M U' R' D R",
+        "U r U' r' U2 r U r' U' R U R'",
+      ],
     },
     {
       id: "f2l-16-7",
       subset: "F2L 16",
-      algs: ["F' U R U R' U' R' F2 R F'", "U2 R U R' r U' r' U2' r U r'"],
+      algs: [
+        "F' U R U R' U' R' F2 R F'",
+        "U2 R U R' r U' r' U2 r U r'",
+      ],
     },
     {
       id: "f2l-16-8",
       subset: "F2L 16",
       algs: [
         "U' r U' R' U' M U2 r U r'",
-        "U R U2' R' r U' r' U2' r U r'",
+        "U R U2 R' r U' r' U2 r U r'",
         "U R U2 R' F' L' U2 L F",
         "R U' R2 D' r U' r' D R2 U' R'",
       ],
@@ -520,15 +724,18 @@ export const zbls: AlgSet = defineAlgSet({
     {
       id: "f2l-17-2",
       subset: "F2L 17",
-      algs: ["F' U' F U R U' R' U R U' R'", "R U2' R' U r U' r' U' r U r'"],
+      algs: [
+        "F' U' F U R U' R' U R U' R'",
+        "R U2 R' U r U' r' U' r U r'",
+      ],
     },
     { id: "f2l-17-3", subset: "F2L 17", algs: ["R U R' U' F R' F' R2 U R'"] },
     {
       id: "f2l-17-4",
       subset: "F2L 17",
       algs: [
-        "F' U2' F R U R' U2 R U' R'",
-        "y' M U' R' U2 R U' R' U R U2' M'",
+        "F' U2 F R U R' U2 R U' R'",
+        "y' M U' R' U2 R U' R' U R U2 M'",
         "R U l' U R' U' R U R' U' l",
         "B' R U' R U R' U' R2 U B",
       ],
@@ -547,36 +754,51 @@ export const zbls: AlgSet = defineAlgSet({
     {
       id: "f2l-17-7",
       subset: "F2L 17",
-      algs: ["R U' R' r U' R' U' R U r'", "R U' M' U' R' U' R U r'"],
+      algs: [
+        "R U' R' r U' R' U' R U r'",
+        "R U' M' U' R' U' R U r'",
+      ],
     },
     {
       id: "f2l-17-8",
       subset: "F2L 17",
-      algs: ["r' D' r U2' r' D r2 U' R' U2' R U r'", "F' r U' r' F2 R U2' R2 F R F'"],
+      algs: [
+        "r' D' r U2 r' D r2 U' R' U2 R U r'",
+        "F' r U' r' F2 R U2 R2 F R F'",
+      ],
     },
     {
       id: "f2l-18-1",
       subset: "F2L 18",
-      algs: ["R' F R F' R U' R' U R U' R'", "y' R' U2 R U R' U' R"],
+      algs: [
+        "R' F R F' R U' R' U R U' R'",
+        "y' R' U2 R U R' U' R",
+      ],
     },
     {
       id: "f2l-18-2",
       subset: "F2L 18",
-      algs: ["R U' R' F' U' F U R U' R'", "R U R' d' L' U L U' L' U L"],
+      algs: [
+        "R U' R' F' U' F U R U' R'",
+        "R U R' d' L' U L U' L' U L",
+      ],
     },
     {
       id: "f2l-18-3",
       subset: "F2L 18",
       algs: [
         "R U' R' F' U F U R U R'",
-        "U R U' R2' F R F' U R U' R'",
+        "U R U' R2 F R F' U R U' R'",
         "U R' F R F' R U' R' U F' U' F",
       ],
     },
     {
       id: "f2l-18-4",
       subset: "F2L 18",
-      algs: ["R' F R F' R U' R2' F R F'", "R U R' U' R U2 R' F' U2 F"],
+      algs: [
+        "R' F R F' R U' R2 F R F'",
+        "R U R' U' R U2 R' F' U2 F",
+      ],
     },
     {
       id: "f2l-18-5",
@@ -584,7 +806,7 @@ export const zbls: AlgSet = defineAlgSet({
       algs: [
         "r U R' U R U r' U M' U2 R U r'",
         "U' R2 D' r U' r' D r U R2 U' r'",
-        "R' D' R U2 R' D R r U' r' U2' r U r'",
+        "R' D' R U2 R' D R r U' r' U2 r U r'",
         "M' U2 r' F2 R U2 r U' r' U2 F",
         "R U2 R' r U r' U2 r U R' U R r'",
       ],
@@ -592,28 +814,37 @@ export const zbls: AlgSet = defineAlgSet({
     {
       id: "f2l-18-6",
       subset: "F2L 18",
-      algs: ["R U' R2' F R F' r U' r' U' r U r'", "R' D R2 U2' r' U2 R U r D' R2"],
+      algs: [
+        "R U' R2 F R F' r U' r' U' r U r'",
+        "R' D R2 U2 r' U2 R U r D' R2",
+      ],
     },
     {
       id: "f2l-18-7",
       subset: "F2L 18",
       algs: [
-        "B U B' d' b' R b2 U' b' R",
-        "B U B' R' F' U2 F U' R",
-        "B U' B D b' U' b D' B2 U' B U B'",
-        "U R2 b U b' U R B U2 B'",
+        "R U R' F' L' U2 L U' F",
+        "R U R' d' r' F r2 U' r' F",
+        "R U' R D r' U' r D' R2 U' R U R'",
+        "U F2 r U r' U F R U2 R'",
       ],
     },
     {
       id: "f2l-18-8",
       subset: "F2L 18",
-      algs: ["F R' F' R2 U' R' U R U2' R2' F R F'", "F R U R' U' F' R U2' R2 F R F'"],
+      algs: [
+        "F R' F' R2 U' R' U R U2 R2 F R F'",
+        "F R U R' U' F' R U2 R2 F R F'",
+      ],
     },
     { id: "f2l-19-1", subset: "F2L 19", algs: ["U R U2 R' U R U' R'"] },
     {
       id: "f2l-19-2",
       subset: "F2L 19",
-      algs: ["R' U R U' R2 F R2 U R' U' R F'", "U' R U' R' U r U' R' U2' R U r'"],
+      algs: [
+        "R' U R U' R2 F R2 U R' U' R F'",
+        "U' R U' R' U r U' R' U2 R U r'",
+      ],
     },
     {
       id: "f2l-19-3",
@@ -621,7 +852,7 @@ export const zbls: AlgSet = defineAlgSet({
       algs: [
         "U R' F R F' R U' R' U2 R U' R'",
         "F' U R U R' U' R' F R2 U R'",
-        "U R U2' r' U R U' R' U' M'",
+        "U R U2 r' U R U' R' U' M'",
       ],
     },
     {
@@ -630,7 +861,7 @@ export const zbls: AlgSet = defineAlgSet({
       algs: [
         "F' U' F U2 R U' R' U R U' R'",
         "U' r U' R' U' R U r' U R U' R'",
-        "U R U2' R' U R U R' U2' R' F R F'",
+        "U R U2 R' U R U R' U2 R' F R F'",
       ],
     },
     {
@@ -647,7 +878,10 @@ export const zbls: AlgSet = defineAlgSet({
     {
       id: "f2l-19-8",
       subset: "F2L 19",
-      algs: ["U2 R U R2' r U' M U2' r U' r'", "R' U' F' U F2 R2 U R' U' R' F' R"],
+      algs: [
+        "U2 R U R2 r U' M U2 r U' r'",
+        "R' U' F' U F2 R2 U R' U' R' F' R",
+      ],
     },
     { id: "f2l-20-1", subset: "F2L 20", algs: ["y' U' R' U2 R U' R' U R y"] },
     {
@@ -655,32 +889,35 @@ export const zbls: AlgSet = defineAlgSet({
       subset: "F2L 20",
       algs: [
         "R' U' R' F R F' U R2 U' R'",
-        "U2' r U' R' U R U r' F' U' F",
-        "x R' U R U' R' U R U2' x' U' F",
-        "U2' R U' R' U F' r U' r' F2'",
+        "U2 r U' R' U R U r' F' U' F",
+        "x R' U R U' R' U R U2 x' U' F",
+        "U2 R U' R' U F' r U' r' F2",
       ],
     },
     {
       id: "f2l-20-3",
       subset: "F2L 20",
       algs: [
-        "U' F U' F' U F U' F' d F' U F",
-        "F' L2 f U2 F U' f2 L f L",
-        "M F U2 F' U' F U F' U M'",
+        "R' F2 r U2 R U' r2 F r F",
+        "U' R U' R' U R U' R' d R' U R",
+        "S R U2 R' U' R U R' U S'",
       ],
     },
     { id: "f2l-20-4", subset: "F2L 20", algs: ["U' R U' R2 F R F' R U' R'"] },
     {
       id: "f2l-20-5",
       subset: "F2L 20",
-      algs: ["R' F2 R U' F U R' F2 R", "U' r U' r' U2 r U r' R U R' U R U' R'"],
+      algs: [
+        "R' F2 R U' F U R' F2 R",
+        "U' r U' r' U2 r U r' R U R' U R U' R'",
+      ],
     },
     {
       id: "f2l-20-6",
       subset: "F2L 20",
       algs: [
-        "r' D' r U r' D r2 U' r' U2' r U r'",
-        "U' R U' r' U r U2' r' U' r U R'",
+        "r' D' r U r' D r2 U' r' U2 r U r'",
+        "U' R U' r' U r U2 r' U' r U R'",
         "F D R2 U' R' U2 R U R2 D' F'",
       ],
     },
@@ -689,7 +926,7 @@ export const zbls: AlgSet = defineAlgSet({
       id: "f2l-20-8",
       subset: "F2L 20",
       algs: [
-        "U' R U' R2' F R F' U' R' F R F'",
+        "U' R U' R2 F R F' U' R' F R F'",
         "U' R U R' U r U' r' U2 r U r'",
         "U2 R U' R' U' r U' r' U2 r U r'",
         "U R U' R2 F R F2 U' F",
@@ -697,12 +934,12 @@ export const zbls: AlgSet = defineAlgSet({
     },
     { id: "f2l-21-1", subset: "F2L 21", algs: ["U2 R U R' U R U' R'"] },
     { id: "f2l-21-2", subset: "F2L 21", algs: ["U R' F R F' U' R U2 R'", "U2 F' U' F R U R'"] },
-    { id: "f2l-21-3", subset: "F2L 21", algs: ["U2' R U R2' F R F'", "U2 R B' R B R2"] },
+    { id: "f2l-21-3", subset: "F2L 21", algs: ["U2 R U R2 F R F'", "U2 R B' R B R2"] },
     {
       id: "f2l-21-4",
       subset: "F2L 21",
       algs: [
-        "U R U' R' U2 R U' R2' F R F'",
+        "U R U' R' U2 R U' R2 F R F'",
         "R U R' U' F' U F R U R'",
         "U2 F' r U R' U' r' F2 R F'",
       ],
@@ -714,7 +951,7 @@ export const zbls: AlgSet = defineAlgSet({
       subset: "F2L 21",
       algs: [
         "U F R' F' R2 U' R' U R U R'",
-        "U2' R U r' U R U' R' U' M'",
+        "U2 R U r' U R U' R' U' M'",
         "r' U2 R' U R2 U' R U2 r",
       ],
     },
@@ -722,68 +959,95 @@ export const zbls: AlgSet = defineAlgSet({
       id: "f2l-21-8",
       subset: "F2L 21",
       algs: [
-        "U2' F' r' F2 r2 U' r' F2",
+        "U2 F' r' F2 r2 U' r' F2",
         "U R' F R F2 U' F R U2 R'",
-        "U M' U R U' r' U R U R2' F R F'",
+        "U M' U R U' r' U R U R2 F R F'",
       ],
     },
     {
       id: "f2l-22-1",
       subset: "F2L 22",
-      algs: ["y' R' U R U2 R' U' R y", "U2 R' F R F' R U R' U R U' R'"],
+      algs: [
+        "y' R' U R U2 R' U' R y",
+        "U2 R' F R F' R U R' U R U' R'",
+      ],
     },
-    { id: "f2l-22-2", subset: "F2L 22", algs: ["U2' R U R' F' U' F", "y' R' F' U F U R y"] },
+    { id: "f2l-22-2", subset: "F2L 22", algs: ["U2 R U R' F' U' F", "y' R' F' U F U R y"] },
     { id: "f2l-22-3", subset: "F2L 22", algs: ["U2 F' r U' r' F2"] },
     {
       id: "f2l-22-4",
       subset: "F2L 22",
-      algs: ["y U F U' F' U' F U' F' y' F' U' F", "y F2 U2 F2 L F L' F U2 F2"],
+      algs: [
+        "U R U' R' U' R U' R' y' R' U' R",
+        "R2 U2 R2 F R F' R U2 R2",
+      ],
     },
-    { id: "f2l-22-5", subset: "F2L 22", algs: ["r U' r' U2' r U r'", "F' L' U2 L F"] },
+    { id: "f2l-22-5", subset: "F2L 22", algs: ["r U' r' U2 r U r'", "F' L' U2 L F"] },
     {
       id: "f2l-22-6",
       subset: "F2L 22",
-      algs: ["U2 R' F R F2 U' F R U R'", "U' r U' r' U' r U r' F' U' F"],
+      algs: [
+        "U2 R' F R F2 U' F R U R'",
+        "U' r U' r' U' r U r' F' U' F",
+      ],
     },
     {
       id: "f2l-22-7",
       subset: "F2L 22",
-      algs: ["U2' R' F R F' R U R2' F R F'", "r U' r' U2 y' R U R U' R' y"],
+      algs: [
+        "U2 R' F R F' R U R2 F R F'",
+        "r U' r' U2 y' R U R U' R' y",
+      ],
     },
     {
       id: "f2l-22-8",
       subset: "F2L 22",
       algs: [
         "U' R U2 r' U r U2 r' U' r U R'",
-        "U' F R' F' R U2' r U' r' U r U r'",
+        "U' F R' F' R U2 r U' r' U r U r'",
         "M' U R U' r' F2 r U r' U2 F",
       ],
     },
     {
       id: "f2l-23-1",
       subset: "F2L 23",
-      algs: ["U2 R2 U2' R' U' R U' R2'", "R U' R2' D' R U2 R' D R"],
+      algs: [
+        "U2 R2 U2 R' U' R U' R2",
+        "R U' R2 D' R U2 R' D R",
+      ],
     },
     {
       id: "f2l-23-2",
       subset: "F2L 23",
-      algs: ["U2 R U2 R' U' R U' R2 F R F'", "U2 R U R' U' R U' R' U R' F R F'"],
+      algs: [
+        "U2 R U2 R' U' R U' R2 F R F'",
+        "U2 R U R' U' R U' R' U R' F R F'",
+      ],
     },
     {
       id: "f2l-23-3",
       subset: "F2L 23",
-      algs: ["U R U' R' U' R U' R2' F R F'", "F' U' F U' R U' R' U R U' R'"],
+      algs: [
+        "U R U' R' U' R U' R2 F R F'",
+        "F' U' F U' R U' R' U R U' R'",
+      ],
     },
     {
       id: "f2l-23-4",
       subset: "F2L 23",
-      algs: ["U R' F R F' R U R' U2 R U' R'", "F U R U' R' F' U' F' U' F"],
+      algs: [
+        "U R' F R F' R U R' U2 R U' R'",
+        "F U R U' R' F' U' F' U' F",
+      ],
     },
     { id: "f2l-23-5", subset: "F2L 23", algs: ["U F R' F' R U R U R'", "R U R' F' U F R U R'"] },
     {
       id: "f2l-23-6",
       subset: "F2L 23",
-      algs: ["R U2' R' U r U' R' U' R U r'", "R U2 R' F' U F U' R U R'"],
+      algs: [
+        "R U2 R' U r U' R' U' R U r'",
+        "R U2 R' F' U F U' R U R'",
+      ],
     },
     {
       id: "f2l-23-7",
@@ -791,7 +1055,6 @@ export const zbls: AlgSet = defineAlgSet({
       algs: [
         "U2 r U' r' U r U r' U R U' R'",
         "M U2 R U R' U r U' R'",
-        "U2' r U' r' U r U r' U R U' R'",
       ],
     },
     {
@@ -799,42 +1062,54 @@ export const zbls: AlgSet = defineAlgSet({
       subset: "F2L 23",
       algs: [
         "U F R' F' R U S' R U R' S",
-        "F' U' F U' R U' R2' F R F'",
-        "U' R' F R F' U2' R U' R' U R' F R F'",
+        "F' U' F U' R U' R2 F R F'",
+        "U' R' F R F' U2 R U' R' U R' F R F'",
         "U F R' F' R2 r' U R U R' U' M'",
         "U' F2 r U r' U' r' F' r2 U' r' F2",
       ],
     },
-    { id: "f2l-24-1", subset: "F2L 24", algs: ["U' R U R2' F R F' R U' R'"] },
+    { id: "f2l-24-1", subset: "F2L 24", algs: ["U' R U R2 F R F' R U' R'"] },
     { id: "f2l-24-2", subset: "F2L 24", algs: ["R U' R' U r U' R' U R U r'"] },
     {
       id: "f2l-24-3",
       subset: "F2L 24",
       algs: [
-        "F U F' d F' U F U' F' U F",
-        "y U' B' U B U B' U B2 L' B' L",
-        "F U' F2 L' U' L U F2 U' F'",
-        "U' F U F' U F U' b U' F' U F'",
-        "U L' f' L f L F U F'",
+        "y U' L' U L U L' U L2 F' L' F",
+        "R U R' d R' U R U' R' U R",
+        "R U' R2 F' U' F U R2 U' R'",
+        "U' R U R' U R U' l U' R' U R'",
+        "U F' r' F r F R U R'",
       ],
     },
     { id: "f2l-24-4", subset: "F2L 24", algs: ["F U R U' R' F' R U' R'"] },
     {
       id: "f2l-24-5",
       subset: "F2L 24",
-      algs: ["U' R U' R' U r U' r' U2' r U r'", "F U R U' R' F2 U' F R U' R'"],
+      algs: [
+        "U' R U' R' U r U' r' U2 r U r'",
+        "F U R U' R' F2 U' F R U' R'",
+      ],
     },
-    { id: "f2l-24-6", subset: "F2L 24", algs: ["F' U' F' L F L' U2 F"] },
+    {
+      id: "f2l-24-6",
+      subset: "F2L 24",
+      algs: [
+        "y' R' U' R' F R F' U2 R",
+        "r U' r' U' r U r2 D' r U2 r' D r",
+        "r U R' U R U r' U' r U r'",
+        "r U' r' U' r U r' F' U2 F",
+      ],
+    },
     {
       id: "f2l-24-7",
       subset: "F2L 24",
       algs: [
-        "y y' y' M' U2 R' U' R U' r' U R y",
-        "y U f U' f' U2 f U f' F U2 F' U F U' F'",
-        "y L' U' f U2 F' U' F U' f' U2 L",
-        "y U2 F' L F y' F U2 F U F' U F2",
-        "y U' F U' F' L' B' U' B U' L",
-        "y U' L' U f' L f U f' L f U' L",
+        "y' M' U2 R' U' R U' r' U R",
+        "U r U' r' U2 r U r' R U2 R' U R U' R'",
+        "F' U' r U2 R' U' R U' r' U2 F",
+        "U2 R' F R y' R U2 R U R' U R2",
+        "U' R U' R' F' L' U' L U' F",
+        "U' F' U r' F r U r' F r U' F",
       ],
     },
     {
@@ -844,30 +1119,43 @@ export const zbls: AlgSet = defineAlgSet({
         "R U' R2 D' r U r' R U R' D R",
         "R U R' d R' U R l U' R' U x",
         "R U R' U2 F' r' F2 r U' F",
-        "U2 R U R' U' r U2' r' U' r U' r' U r U2' r'",
+        "U2 R U R' U' r U2 r' U' r U' r' U r U2 r'",
       ],
     },
     {
       id: "f2l-25-1",
       subset: "F2L 25",
-      algs: ["R' F' R U R U' R' F", "U' F' R U R' U' R' F R", "R' U' R' U' R' U R U R"],
+      algs: [
+        "R' F' R U R U' R' F",
+        "U' F' R U R' U' R' F R",
+        "R' U' R' U' R' U R U R",
+      ],
     },
     { id: "f2l-25-2", subset: "F2L 25", algs: ["U' M' U R U' r' R U R'", "U' R' F R F' R U R'"] },
     { id: "f2l-25-3", subset: "F2L 25", algs: ["U' F' U F U R U' R'", "L D R' F R F' D' L'"] },
     {
       id: "f2l-25-4",
       subset: "F2L 25",
-      algs: ["U' F' U' F U R U R'", "R2' U R U' R' U F R2 F' R'"],
+      algs: [
+        "U' F' U' F U R U R'",
+        "R2 U R U' R' U F R2 F' R'",
+      ],
     },
     {
       id: "f2l-25-5",
       subset: "F2L 25",
-      algs: ["r U r' U2 r U R' U2 R U' r'", "F2 r U2 R' U' r' F2 R F'"],
+      algs: [
+        "r U r' U2 r U R' U2 R U' r'",
+        "F2 r U2 R' U' r' F2 R F'",
+      ],
     },
     {
       id: "f2l-25-6",
       subset: "F2L 25",
-      algs: ["U2 r U2' R' U R U' R' U2' R U' r'", "r' U' R' U' R' U R U r"],
+      algs: [
+        "U2 r U2 R' U R U' R' U2 R U' r'",
+        "r' U' R' U' R' U R U r",
+      ],
     },
     {
       id: "f2l-25-7",
@@ -881,7 +1169,10 @@ export const zbls: AlgSet = defineAlgSet({
     {
       id: "f2l-25-8",
       subset: "F2L 25",
-      algs: ["U R2 D r' U r D' R' U' R'", "r U r' U2 r U R' U' R U2 r'"],
+      algs: [
+        "U R2 D r' U r D' R' U' R'",
+        "r U r' U2 r U R' U' R U2 r'",
+      ],
     },
     {
       id: "f2l-26-1",
@@ -890,39 +1181,45 @@ export const zbls: AlgSet = defineAlgSet({
         "L E' L' U L E L'",
         "U2 L E' L' U' L E L'",
         "U2 R U' R' U' r U' R' U R U r'",
-        "r2 U2' R2' F R2 U2' r2' F",
+        "r2 U2 R2 F R2 U2 r2 F",
       ],
     },
     {
       id: "f2l-26-2",
       subset: "F2L 26",
-      algs: ["U R U' R' F R' F' R", "U R U' M' U R' U' M", "R2 U R' U' R' F R F' R'"],
+      algs: [
+        "U R U' R' F R' F' R",
+        "U R U' M' U R' U' M",
+        "R2 U R' U' R' F R F' R'",
+      ],
     },
     { id: "f2l-26-3", subset: "F2L 26", algs: ["U R U' R' U' F' U F"] },
-    { id: "f2l-26-4", subset: "F2L 26", algs: ["y U F U F' U' y' F' U' F"] },
+    { id: "f2l-26-4", subset: "F2L 26", algs: ["U R U R' U' y' R' U' R", "F U' r U M U' R' U F'"] },
     {
       id: "f2l-26-5",
       subset: "F2L 26",
-      algs: ["r U R' U2 R U r' U2 r U' r'", "R' D' R U M' U' r' D R"],
+      algs: [
+        "r U R' U2 R U r' U2 r U' r'",
+        "R' D' R U M' U' r' D R",
+      ],
     },
     {
       id: "f2l-26-6",
       subset: "F2L 26",
       algs: [
-        "r U r' U2' r U' R' U2' R U' r'",
+        "r U r' U2 r U' R' U2 R U' r'",
         "R' D' R U' M' U r' D R",
         "y' r U R U R U' R' U' r'",
+        "r U2 B U' B' U2 r'",
       ],
-    },
-    {
-      id: "f2l-26-7",
-      subset: "F2L 26",
-      algs: ["r U2' B U' B' U2' r'"],
     },
     {
       id: "f2l-26-8",
       subset: "F2L 26",
-      algs: ["r U2 R' U R U' r' U2 r U' r'", "U R U R D r' U' r D' R2'"],
+      algs: [
+        "r U2 R' U R U' r' U2 r U' r'",
+        "U R U R D r' U' r D' R2",
+      ],
     },
     { id: "f2l-27-1", subset: "F2L 27", algs: ["R U' R' U R U' R'"] },
     { id: "f2l-27-2", subset: "F2L 27", algs: ["R U' R2 F R2 U R' U' F'"] },
@@ -941,56 +1238,91 @@ export const zbls: AlgSet = defineAlgSet({
       id: "f2l-27-6",
       subset: "F2L 27",
       algs: [
-        "U2 r U' r' U r U r' R U2' R'",
+        "U2 r U' r' U r U r' R U2 R'",
         "R U' R2 U' F U R2 U' R' F'",
-        "R U' R' U R U R' U2' R' F R F'",
+        "R U' R' U R U R' U2 R' F R F'",
       ],
     },
     {
       id: "f2l-27-7",
       subset: "F2L 27",
-      algs: ["R U' R2 U' F U R U' F'", "U2 R U R' U R U R2' F R F'"],
+      algs: [
+        "R U' R2 U' F U R U' F'",
+        "U2 R U R' U R U R2 F R F'",
+      ],
     },
     {
       id: "f2l-27-8",
       subset: "F2L 27",
-      algs: ["U' R U' R2 r U' M U2 r U' r'", "R U' R' y R' F' R U2 M' U' M"],
+      algs: [
+        "U' R U' R2 r U' M U2 r U' r'",
+        "R U' R' y R' F' R U2 M' U' M",
+      ],
     },
     { id: "f2l-28-1", subset: "F2L 28", algs: ["y' R' U R U' R' U R y"] },
     {
       id: "f2l-28-2",
       subset: "F2L 28",
-      algs: ["F U F' d F' U2 F", "F U F' f' D' f U' f' D f", "L U F U' F2 L' F2 U F'"],
+      algs: [
+        "R U R' r' D' r U' r' D r",
+        "R U R' d R' U2 R",
+        "F U R U' R2 F' R2 U R'",
+      ],
     },
     { id: "f2l-28-3", subset: "F2L 28", algs: ["R U2 l U' R' U l'"] },
     {
       id: "f2l-28-4",
       subset: "F2L 28",
-      algs: ["R U2 R' y' R' U2 R y", "U2 R' F R F' r U' r' U2' r U r'"],
+      algs: [
+        "R U2 R' y' R' U2 R y",
+        "U2 R' F R F' r U' r' U2 r U r'",
+      ],
     },
-    { id: "f2l-28-5", subset: "F2L 28", algs: ["b' R b2 U' b' R"] },
+    { id: "f2l-28-5", subset: "F2L 28", algs: ["y r' F r2 U' r' F", "F' U2 r U' r' F2"] },
     {
       id: "f2l-28-6",
       subset: "F2L 28",
-      algs: ["R U2 R' U R2 D r' U r D' R2'", "R U R' F R U R' U' F2 U' F"],
+      algs: [
+        "R U2 R' U R2 D r' U r D' R2",
+        "R U R' F R U R' U' F2 U' F",
+      ],
     },
-    { id: "f2l-28-7", subset: "F2L 28", algs: ["F' U F U' R B U B' R'"] },
+    {
+      id: "f2l-28-7",
+      subset: "F2L 28",
+      algs: [
+        "y L' U L U' F R U R' F'",
+        "R U2 R' U' F R U R' U' F2 U' F",
+        "R U' R' r U' R' U' R r' U' r U r'",
+      ],
+    },
     {
       id: "f2l-28-8",
       subset: "F2L 28",
-      algs: ["U r U r' U2 M' U M R U R'", "R U2' R2' F R F2 U2' F"],
+      algs: [
+        "U r U r' U2 M' U M R U R'",
+        "R U2 R2 F R F2 U2 F",
+      ],
     },
-    { id: "f2l-29-1", subset: "F2L 29", algs: ["F' U' F U F' U' F"] },
+    {
+      id: "f2l-29-1",
+      subset: "F2L 29",
+      algs: [
+        "y' R' U' R U R' U' R",
+        "R' F R F' U R U' R'",
+        "M' U R U' r' U R U' R'",
+      ],
+    },
     { id: "f2l-29-2", subset: "F2L 29", algs: ["U2 R U' R' F' U' F"] },
     { id: "f2l-29-3", subset: "F2L 29", algs: ["R' F R F' R' F R F'", "x R' U R U' R' U R U' x'"] },
     {
       id: "f2l-29-4",
       subset: "F2L 29",
       algs: [
-        "R' F R F' U R U R' U2' R' F R F'",
-        "U' F R' F' R2 U' R2' D' R U2 R' D R",
-        "U2 R U' R' U' R' F R U R U' R2' F' R",
-        "R U' R2' D' r U' r' D F R F'",
+        "R' F R F' U R U R' U2 R' F R F'",
+        "U' F R' F' R2 U' R2 D' R U2 R' D R",
+        "U2 R U' R' U' R' F R U R U' R2 F' R",
+        "R U' R2 D' r U' r' D F R F'",
         "r U2 R' U' R U' r' R U' R' U R U' R'",
       ],
     },
@@ -999,7 +1331,7 @@ export const zbls: AlgSet = defineAlgSet({
       id: "f2l-29-6",
       subset: "F2L 29",
       algs: [
-        "U R2 D r' U' r D' R2' U' R U2 R'",
+        "U R2 D r' U' r D' R2 U' R U2 R'",
         "F' r2 D2 r' U r D2 r' U2 r' F2",
         "U2 r U' r' U2 r U r' U' R U2 R' U R U R'",
       ],
@@ -1007,7 +1339,7 @@ export const zbls: AlgSet = defineAlgSet({
     { id: "f2l-29-7", subset: "F2L 29", algs: ["U' R U R' U' r U' r' U2 r U r'"] },
     { id: "f2l-29-8", subset: "F2L 29", algs: ["M' U' M U2 r U' R' U R U' r'"] },
     { id: "f2l-30-1", subset: "F2L 30", algs: ["R U R' U' R U R'"] },
-    { id: "f2l-30-2", subset: "F2L 30", algs: ["U2' F' U F R U R'", "R U R' F U R U' R2 F' R"] },
+    { id: "f2l-30-2", subset: "F2L 30", algs: ["U2 F' U F R U R'", "R U R' F U R U' R2 F' R"] },
     { id: "f2l-30-3", subset: "F2L 30", algs: ["x U R' U' R U R' U' l"] },
     { id: "f2l-30-4", subset: "F2L 30", algs: ["U2 R' F R F' R U' R' U2 R U R'"] },
     { id: "f2l-30-5", subset: "F2L 30", algs: ["U' F R' F' R2 U R'"] },
@@ -1018,19 +1350,22 @@ export const zbls: AlgSet = defineAlgSet({
       subset: "F2L 30",
       algs: [
         "R U R' U' R' D' r U r' D R2 U R'",
-        "r U R' U' R U r' U2' M' U M",
+        "r U R' U' R U r' U2 M' U M",
         "U' F' U2 r' F r2 U' r' F2",
       ],
     },
     { id: "f2l-31-1", subset: "F2L 31", algs: ["R U' R' U F' U F", "R U' R' U y' R' U R y"] },
     { id: "f2l-31-2", subset: "F2L 31", algs: ["U' R' F R F' R U' R'"] },
     { id: "f2l-31-3", subset: "F2L 31", algs: ["R U2 R' U' F R' F' R"] },
-    { id: "f2l-31-4", subset: "F2L 31", algs: ["F' U F R U2' R'", "R' F' R U R U' R' U2 F"] },
+    { id: "f2l-31-4", subset: "F2L 31", algs: ["F' U F R U2 R'", "R' F' R U R U' R' U2 F"] },
     { id: "f2l-31-5", subset: "F2L 31", algs: ["r U' r' U M' U R U r'"] },
     {
       id: "f2l-31-6",
       subset: "F2L 31",
-      algs: ["U' R' F R F' U' R' F R F'", "F2 r U r' U2 F R U' R'"],
+      algs: [
+        "U' R' F R F' U' R' F R F'",
+        "F2 r U r' U2 F R U' R'",
+      ],
     },
     { id: "f2l-31-7", subset: "F2L 31", algs: ["R U2 R2 D' r U' r' D R"] },
     { id: "f2l-31-8", subset: "F2L 31", algs: ["r U' R' U' M U' r U r'"] },
@@ -1051,7 +1386,11 @@ export const zbls: AlgSet = defineAlgSet({
     {
       id: "f2l-32-5",
       subset: "F2L 32",
-      algs: ["U F' L F L' d F' U' F", "U2 L' U f' L' f U' L", "U2 F' L F L2 f U' f' L2"],
+      algs: [
+        "U2 F' U r' F' r U' F",
+        "U R' F R F' d R' U' R",
+        "U2 R' F R F2 r U' r' F2",
+      ],
     },
     {
       id: "f2l-32-6",
@@ -1076,23 +1415,26 @@ export const zbls: AlgSet = defineAlgSet({
       id: "f2l-32-8",
       subset: "F2L 32",
       algs: [
-        "U2' r U2' r' U2 r U' r' U2 r U2' r'",
-        "U2' R' F R F' U2' r U' r' U2' r U r'",
-        "y U2 R' F2 R U2' R' F R U2' R' F2 R",
-        "r U M U2 r R2' U2' R U r'",
+        "U2 r U2 r' U2 r U' r' U2 r U2 r'",
+        "U2 R' F R F' U2 r U' r' U2 r U r'",
+        "y U2 R' F2 R U2 R' F R U2 R' F2 R",
+        "r U M U2 r R2 U2 R U r'",
       ],
     },
     { id: "f2l-33-1", subset: "F2L 33", algs: ["U' R U' R' U2 R U' R'"] },
     {
       id: "f2l-33-2",
       subset: "F2L 33",
-      algs: ["R U M U' R' U r U' R'", "U' R U' R' F' U' F R U2 R'"],
+      algs: [
+        "R U M U' R' U r U' R'",
+        "U' R U' R' F' U' F R U2 R'",
+      ],
     },
     {
       id: "f2l-33-3",
       subset: "F2L 33",
       algs: [
-        "U' R U' R' U2' R U R' U2' R' F R F'",
+        "U' R U' R' U2 R U R' U2 R' F R F'",
         "R' F R F' R2 U R' U' R' F R F' R'",
         "r2 D r2 U' R2 r' U r2 D' R2 r'",
       ],
@@ -1101,18 +1443,35 @@ export const zbls: AlgSet = defineAlgSet({
     {
       id: "f2l-33-5",
       subset: "F2L 33",
-      algs: ["U r U' r' U r U r' R U' R'", "M' U' R U r' U2 r U' r'"],
+      algs: [
+        "U r U' r' U r U r' R U' R'",
+        "M' U' R U r' U2 r U' r'",
+      ],
     },
     {
       id: "f2l-33-6",
       subset: "F2L 33",
-      algs: ["U' R U' R' U R' F R F'", "U' R U' R' U M' U R U' r'"],
+      algs: [
+        "U' R U' R' U R' F R F'",
+        "U' R U' R' U M' U R U' r'",
+      ],
     },
-    { id: "f2l-33-7", subset: "F2L 33", algs: ["U2 R B U2 B' U2 R'"] },
+    {
+      id: "f2l-33-7",
+      subset: "F2L 33",
+      algs: [
+        "y U2 F R U2 R' U2 F'",
+        "R U R' U' F' U' F U' R U2 R'",
+        "U' F' U2 L' U2 L F",
+      ],
+    },
     {
       id: "f2l-33-8",
       subset: "F2L 33",
-      algs: ["U' F R' F' R2 U2' R2' F R F'", "D' r U' r' F2 U R' F R F2 D"],
+      algs: [
+        "U' F R' F' R2 U2 R2 F R F'",
+        "D' r U' r' F2 U R' F R F2 D",
+      ],
     },
     { id: "f2l-34-1", subset: "F2L 34", algs: ["U R' D' R U' R' D R", "U' R' D' R U R' D R"] },
     {
@@ -1120,7 +1479,7 @@ export const zbls: AlgSet = defineAlgSet({
       subset: "F2L 34",
       algs: [
         "U R U' R' F R' F' R2 U R'",
-        "U' R U2' R' U' r U' r' U' r U r'",
+        "U' R U2 R' U' r U' r' U' r U r'",
         "R U' R' U' R' F R F' U R U R'",
         "r U r' U R U2 R' U r U' r'",
       ],
@@ -1130,79 +1489,122 @@ export const zbls: AlgSet = defineAlgSet({
       subset: "F2L 34",
       algs: [
         "U r U' R' U R U r' U' R U R'",
-        "y' U R2' F R F' R U' R' U R",
+        "y' U R2 F R F' R U' R' U R",
         "U R U' R' U' F' U F R U R'",
         "F U R2 D2 R' U' R D2 R2 F'",
       ],
     },
-    { id: "f2l-34-5", subset: "F2L 34", algs: ["U F' U F U' F R' F' R"] },
+    {
+      id: "f2l-34-5",
+      subset: "F2L 34",
+      algs: [
+        "y U L' U L U' L F' L' F",
+        "U r U R' U' M U' R U R'",
+        "r' D' r U2 r' U' F2 U F2 D r",
+      ],
+    },
     {
       id: "f2l-34-6",
       subset: "F2L 34",
-      algs: ["U R U M' U' r' U' r U r'", "F U' R2 D2 R' U' R D2 R2 U F'"],
+      algs: [
+        "U R U M' U' r' U' r U r'",
+        "F U' R2 D2 R' U' R D2 R2 U F'",
+      ],
     },
     {
       id: "f2l-34-7",
       subset: "F2L 34",
-      algs: ["R U R' U2 R' F R F' R U R'", "U2 R U' R' U r U' R' U' R U r'"],
+      algs: [
+        "R U R' U2 R' F R F' R U R'",
+        "U2 R U' R' U r U' R' U' R U r'",
+      ],
     },
     {
       id: "f2l-34-8",
       subset: "F2L 34",
-      algs: ["U r U2' r' U2' r U r' U2' r U2' r'", "R U R D r' U r D' R' U' R'"],
+      algs: [
+        "U r U2 r' U2 r U r' U2 r U2 r'",
+        "R U R D r' U r D' R' U' R'",
+      ],
     },
     {
       id: "f2l-35-1",
       subset: "F2L 35",
-      algs: ["y U2 F U F' y' U' F' U F", "y F' D' f U' f' D L F L'"],
+      algs: [
+        "U2 R U R' y' U' R' U R",
+        "R' D' r U' r' D F R F'",
+      ],
     },
     {
       id: "f2l-35-2",
       subset: "F2L 35",
       algs: [
-        "U' F U F' d F' U' F",
-        "F U F2 L F L' F' L F L'",
-        "F U F' b' U F U' F' U F U'",
-        "F U F' b' U F U' F' U F U' z'",
+        "U M' U R U' M U' R'",
+        "U' R U R' d R' U' R",
+        "R U R2 F R F' R' F R F'",
+        "R U R' l' U R U' R' U R U' x'",
       ],
     },
     {
       id: "f2l-35-3",
       subset: "F2L 35",
-      algs: ["U2 R U' R' U' F' U' F", "R U R2 F R F' U R U' R'"],
+      algs: [
+        "U2 R U' R' U' F' U' F",
+        "R U R2 F R F' U R U' R'",
+      ],
     },
     {
       id: "f2l-35-4",
       subset: "F2L 35",
-      algs: ["U2' R U R' F R' F' R", "R2 D R' U2 R D' R2 F' U' F"],
+      algs: [
+        "U2 R U R' F R' F' R",
+        "R2 D R' U2 R D' R2 F' U' F",
+      ],
     },
     {
       id: "f2l-35-5",
       subset: "F2L 35",
-      algs: ["R2 D r' U' r D' R2 U R U' R'", "U2 r U' r' U R' F R F' r U2' r'"],
+      algs: [
+        "R2 D r' U' r D' R2 U R U' R'",
+        "U2 r U' r' U R' F R F' r U2 r'",
+      ],
     },
     { id: "f2l-35-6", subset: "F2L 35", algs: ["U2 R U' R D r' U' r D' R2"] },
     { id: "f2l-35-7", subset: "F2L 35", algs: ["R' D' r U' r' D R U R U' R'"] },
     {
       id: "f2l-35-8",
       subset: "F2L 35",
-      algs: ["U R' D' r U r' D R2 U2' R'", "R' F R F' U2' R' F R F' R U R'"],
+      algs: [
+        "U R' D' r U r' D R2 U2 R'",
+        "R' F R F' U2 R' F R F' R U R'",
+      ],
     },
     { id: "f2l-36-1", subset: "F2L 36", algs: ["U F' U' F U' R U R'"] },
     {
       id: "f2l-36-2",
       subset: "F2L 36",
-      algs: ["U2 F' U' F U R U' R'", "R U R' U R U' R' d' r' F r", "R U R' F U2' r U r' U2' F'"],
+      algs: [
+        "U2 F' U' F U R U' R'",
+        "R U R' U R U' R' d' r' F r",
+        "R U R' F U2 r U r' U2 F'",
+      ],
     },
     {
       id: "f2l-36-3",
       subset: "F2L 36",
-      algs: ["U2' R' F R F' U2 R U R'", "R U R' F R S R' F' R S' R'", "R U R2 U' R F' R' U R F"],
+      algs: [
+        "U2 R' F R F' U2 R U R'",
+        "R U R' F R S R' F' R S' R'",
+        "R U R2 U' R F' R' U R F",
+      ],
     },
     {
       id: "f2l-36-4",
       subset: "F2L 36",
-      algs: ["F' U' F R U R' U' R U R'", "R U R U R' U' R' F R F' R'"],
+      algs: [
+        "F' U' F R U R' U' R U R'",
+        "R U R U R' U' R' F R F' R'",
+      ],
     },
     { id: "f2l-36-5", subset: "F2L 36", algs: ["R2 D r' U r D' R' U R'"] },
     { id: "f2l-36-6", subset: "F2L 36", algs: ["U2 R' F R F' r U' r' U' r U r'"] },
@@ -1210,9 +1612,9 @@ export const zbls: AlgSet = defineAlgSet({
       id: "f2l-36-7",
       subset: "F2L 36",
       algs: [
-        "U2 R2 D r' U' r D' R2' U' R U R'",
-        "R' F' r U2 r' F2 R2 U2' R' U' F",
-        "F' U2' r' F2 r2 U' r' F U' F",
+        "U2 R2 D r' U' r D' R2 U' R U R'",
+        "R' F' r U2 r' F2 R2 U2 R' U' F",
+        "F' U2 r' F2 r2 U' r' F U' F",
         "R2 D R' U2 R r' U' r D' R' U R'",
       ],
     },
@@ -1221,9 +1623,9 @@ export const zbls: AlgSet = defineAlgSet({
       subset: "F2L 36",
       algs: [
         "R U M' U2 f R f' U2 r'",
-        "U F' U' F2 U R U' R2' F' R",
-        "R U R2' D' r U r' D R U' R U R'",
-        "R U R2' D' r U' r' D R U R U R'",
+        "U F' U' F2 U R U' R2 F' R",
+        "R U R2 D' r U r' D R U' R U R'",
+        "R U R2 D' r U' r' D R U R U R'",
         "R' F2 D' F' D R U R U' R2 F' R",
       ],
     },
@@ -1232,68 +1634,80 @@ export const zbls: AlgSet = defineAlgSet({
       subset: "F2L 37",
       algs: [
         "U' R' F R F' R U' R' U R U' R' U2 R U' R'",
-        "U' R' F R F' R' U2' R2 U R2' U R",
+        "U' R' F R F' R' U2 R2 U R2 U R",
         "R U M' U2 M U R' F' R S R' F R S' R'",
-        "U L E' L' U' L E L2' E2 L U L' E2 L",
-        "U' L E' L' U L E L2' E2 L U' L' E2 L",
-        "U R2 U R' U' R' U2' r U R U' r' R'",
+        "U L E' L' U' L E L2 E2 L U L' E2 L",
+        "U' L E' L' U L E L2 E2 L U' L' E2 L",
+        "U R2 U R' U' R' U2 r U R U' r' R'",
         "R U' R' B' R' U' R2 U R' B",
       ],
     },
     {
-      id: "f2l-37-2",
+      id: "f2l-37-4",
+      subset: "F2L 37",
+      algs: [
+        "U' R U R' F U R U' R' F' R U R'",
+        "R U R' U' R U' R' U2 F' U' F",
+      ],
+    },
+    {
+      id: "f2l-37-5",
       subset: "F2L 37",
       algs: [
         "U' r U' r' R U R' U r U' r' R U R'",
-        "R' F R F' U F' U2' F U' R U R'",
+        "R' F R F' U F' U2 F U' R U R'",
         "R' F R F2 U' F U' R U R' U' R U R'",
         "R U' R' U R' F R F2 U2 F R U R'",
       ],
     },
+    { id: "f2l-37-8", subset: "F2L 37", algs: ["R U' M' U' r' U2 r U r'"] },
     { id: "f2l-38-1", subset: "F2L 38", algs: ["R2 U2 R' U' R U' R' U2 R'"] },
     {
       id: "f2l-38-2",
       subset: "F2L 38",
-      algs: ["U R U' R' U' R U R' U R' F R F'", "R' F R U R U' R2 F' R U' R U2' R'"],
+      algs: [
+        "U R U' R' U' R U R' U R' F R F'",
+        "R' F R U R U' R2 F' R U' R U2 R'",
+      ],
     },
-    { id: "f2l-38-3", subset: "F2L 38", algs: ["F R' F' R2 U2' R' U' R U R'"] },
+    { id: "f2l-38-5", subset: "F2L 38", algs: ["F R' F' R2 U2 R' U' R U R'"] },
     {
-      id: "f2l-38-4",
+      id: "f2l-38-6",
       subset: "F2L 38",
       algs: [
         "M' U R U' R' U' R U' r' U2 r U' r'",
-        "R U' R' U' r U' r' U2' r U r' R U2 R'",
-        "R U2' B2 r' U' r B' R2 F R F'",
+        "R U' R' U' r U' r' U2 r U r' R U2 R'",
+        "R U2 B2 r' U' r B' R2 F R F'",
         "R U' R' U2 R2 D r' U' r D' R' U' R'",
       ],
     },
     { id: "f2l-39-1", subset: "F2L 39", algs: ["R U2 R' U R U' R' U R U R'"] },
-    { id: "f2l-39-2", subset: "F2L 39", algs: ["R U2' R' U R' F R2 U R' U' R' F' R"] },
-    { id: "f2l-39-3", subset: "F2L 39", algs: ["R U' R' U R U2 R2 F R F'"] },
+    { id: "f2l-39-2", subset: "F2L 39", algs: ["R U2 R' U R' F R2 U R' U' R' F' R"] },
+    { id: "f2l-39-5", subset: "F2L 39", algs: ["R U' R' U R U2 R2 F R F'"] },
     {
-      id: "f2l-39-4",
+      id: "f2l-39-6",
       subset: "F2L 39",
       algs: [
-        "R U2' R' r U' r' U M' U2' R U r'",
-        "r' U' R2 U' R2' U2' r F' r' F2 r F",
-        "R U R D r' U r D' R2' U2' R U R'",
+        "R U2 R' r U' r' U M' U2 R U r'",
+        "r' U' R2 U' R2 U2 r F' r' F2 r F",
+        "R U R D r' U r D' R2 U2 R U R'",
       ],
     },
     {
       id: "f2l-40-1",
       subset: "F2L 40",
-      algs: ["U R U' R' F R U R' U' F' R U' R'", "F2 r U r' F U2' R U R'"],
+      algs: [
+        "U R U' R' F R U R' U' F' R U' R'",
+        "F2 r U r' F U2 R U R'",
+      ],
     },
     {
-      id: "f2l-40-2",
+      id: "f2l-40-5",
       subset: "F2L 40",
-      algs: ["r U' r' U2' r U r' R U R'", "R' F R D R U R U' R2 D' F'"],
+      algs: [
+        "r U' r' U2 r U r' R U R'",
+        "R' F R D R U R U' R2 D' F'",
+      ],
     },
-    {
-      id: "f2l-41-1",
-      subset: "F2L 41",
-      algs: ["U' R U R' F U R U' R' F' R U R'", "R U R' U' R U' R' U2 F' U' F"],
-    },
-    { id: "f2l-41-2", subset: "F2L 41", algs: ["R U' M' U' r' U2 r U r'"] },
   ],
 });

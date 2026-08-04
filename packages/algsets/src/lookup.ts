@@ -18,7 +18,6 @@ import {
   type CaseLookup,
   compose,
   type CubeState,
-  invert,
   type Move,
   normalizeOrientation,
   solvedCube,
@@ -128,7 +127,13 @@ export function aufInvariantLookup(
   const bySig = new Map<string, AlgCase>();
   for (const c of algSet.cases) {
     if (caseFilter && !caseFilter(c)) continue;
-    const r = applyMoves(solvedCube(), invert(c.algs[0].moves));
+    // Ask the set for the case's state rather than re-deriving it. Recomputing
+    // `solved . invert(algs[0])` here silently reintroduced the bug `defineAlgSet` was
+    // fixed for: an alg carrying a net whole-cube rotation solves its case into the
+    // ROTATED frame, so that formula yields a state for a different case entirely. This
+    // lookup then indexed rotated-primary cases under the wrong key, and 24 zbls cases
+    // could not be found by the very lookup built from them.
+    const r = algSet.recognitionState(c.id);
     for (const pre of U_STATES) {
       for (const post of U_STATES) {
         const key = sig(compose(compose(pre, r), post));

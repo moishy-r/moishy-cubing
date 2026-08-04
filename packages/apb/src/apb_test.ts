@@ -1003,16 +1003,16 @@ Deno.test("zbls: every case targets the FR slot, and is recognized and solved", 
     );
     if (!solved) unreachable.push(`${c.id}${hit && hit.id !== c.id ? ` (matched ${hit.id})` : ""}`);
   }
-  // Eight cases here are authored against the FL slot and one against BR, not FR.
-  // They are not forced onto FR by rewriting their moves — each simply carries the
-  // rotation that brings the FR pair to the slot its alg solves (`y`, or `y'` for
-  // the BR one), which is what a human does: turn the cube, then execute the alg you
-  // know. That works only because a case's derived state now accounts for the alg's
-  // own rotation; under the old derivation a leading `y` moved the case to a
-  // different slot instead. The same prefix works for every variant of each case, so
-  // they stay interchangeable.
+  // Both empty, and it took replacing the data to get there. The set now comes wholly
+  // from the community ZBLS spreadsheet (algs by Chad Batten and Tao Yu) rather than
+  // being stitched together from several sources, and every one of its 301 cases derives
+  // a genuine FR-slot state. The previous mixed-source set had ten cases that were
+  // really FL or BR — invisible until `defineAlgSet` started accounting for an alg's own
+  // rotation, because the old derivation applied a second, compensating error to exactly
+  // those rotated primaries and made them look correct. Nine of them had been patched by
+  // hand with a leading rotation; a single consistent source removed the need.
   assertEquals(wrongSlot, [], "zbls cases not targeting the FR slot");
-  assertEquals(unreachable, wrongSlot, "zbls cases the solver cannot recognize + solve");
+  assertEquals(unreachable, [], "zbls cases the solver cannot recognize + solve");
 });
 
 // Cross-set audit: every algset, against the lookup and goal APB really uses.
