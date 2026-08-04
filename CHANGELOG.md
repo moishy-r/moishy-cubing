@@ -63,24 +63,38 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 ### Changed
 
 - **`@moishy/algsets`: `zbls` is re-sourced wholly from the community ZBLS spreadsheet** (algs by
-  Chad Batten and Tao Yu) — 299 cases, 641 algs — replacing a set stitched together from several
+  Chad Batten and Tao Yu) — 301 cases, 645 algs — replacing a set stitched together from several
   sources. There is no SpeedCubeDB-style page for ZBLS, so consistency of source matters more here
   than usual: a mixed set is exactly where slot and frame inconsistencies creep in.
 
   It shows: the ten cases previously authored against the FL/BR slot are simply gone, and the APB
-  test that recorded them as known exceptions now asserts an empty list. Nine of those had been
-  patched by hand with a leading rotation; one consistent source removed the need.
+  test that recorded them as known exceptions now asserts an empty list. Nine had been patched by
+  hand with a leading rotation; one consistent source removed the need.
 
-  Of the sheet's 328 cells, 24 are empty and five more do not become distinct cases: `f2l-12-5`
-  offers only `R d' R U2 R' U2 F'`, whose wide `d'` leaves the centres drifted rather than rotated,
-  so it never solves into a coherent fixed frame; and four are the _same_ ZBLS state as an earlier
-  heading, merged into it keeping both headings' algs (`f2l-26-7`, `f2l-34-2`, `f2l-41-1`,
-  `f2l-41-5`). A ZBLS case _is_ a pair position plus an edge-orientation pattern, so two headings
-  agreeing on both differ only in last-layer corners, which ZBLS does not touch. The merge is keyed
-  on the AUF coset the consuming lookup indexes, which removes exactly the collisions that would
-  otherwise let one case silently shadow another — the defect that once broke 27 cases here. (One of
-  the four, `f2l-34-2` -> `f2l-33-2`, was found by hand previously; the keyed merge rediscovers it.)
-  A further 6 individual algs are dropped for not solving the case they are listed under.
+  **The sheet's grid is not uniform, and assuming it is produces phantom findings.** Headings 1-40
+  sit on a 5-row pitch, but F2L 41's heading is only three rows below F2L 37's, so a reader that
+  assumes even spacing runs headings 37-40 into 41's cells. A first pass did exactly that and
+  reported two "duplicate" cases that were the same cells read twice. Blocks 37-41 are genuinely
+  short (2, 4, 4, 2, 2 sub-cases filled), which is why the sheet holds 302 cells rather than 328 —
+  and 302 is the canonical ZBLS count, which is the check that the geometry is now right.
+
+  Two things that shape how a case is read, both learned the hard way:
+
+  - A case's state comes from the **largest group of algs in its cell that agree with each other**,
+    not the first alg that parses. First-match let a single outlier define the case and discard the
+    majority: at I35 one alg disagreed with five, at N15 one with two. Those two outliers are the
+    only algs dropped.
+  - That state must come from a **well-framed** member of the group. A wide `d` leaves the centres
+    drifted rather than rotated, so it cannot define a case — but it solves one perfectly well and
+    is kept as a variant. Taking the group's first alg regardless briefly rejected eight `d`-bearing
+    cases outright.
+
+  One case is excluded: `f2l-12-5` (sheet cell S13) offers only `R d' R U2 R' U2 F'`, whose derived
+  state has the FR pair already home, so it is not an FR last-slot case; its `d'` has no restoring
+  `d`, leaving the D layer a quarter turn off. And one collision is recorded rather than merged:
+  `f2l-33-2` and `f2l-34-2` are distinct states that share the coarse signature a consuming lookup
+  keys on, so one shadows the other. Merging on that signature is wrong — it is lossy, and doing so
+  fused genuinely different cases in an earlier pass.
 
 - **`@moishy/steps@0.2.0`: an F2L tie between slots now goes to a back slot.** Where two slots are
   equally cheap, filling a back one leaves the FRONT slots open — and those are the ones you can

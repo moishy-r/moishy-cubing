@@ -15,23 +15,26 @@
  * not used: a method whose last slot is elsewhere rotates to bring it to FR rather than
  * relying on per-slot data.
  *
- * 299 cases, 641 algs, from the sheet's 41 F2L headings x 8
- * edge-orientation sub-cases (`f2l-<heading>-<sub>`). Of those 328 cells, 24 are empty in
- * the sheet and five more do not survive as distinct cases:
+ * 301 cases, 645 algs, from the sheet's 41 F2L headings x 8
+ * edge-orientation sub-cases (`f2l-<heading>-<sub>`). The grid is NOT uniform: headings
+ * 1-40 sit on a 5-row pitch but F2L 41's is only three rows below F2L 37's, so a reader
+ * that assumes even spacing runs headings 37-40 into 41's cells and reports phantom
+ * duplicates. Blocks 37-41 are genuinely short (2, 4, 4, 2 and 2 sub-cases filled), which
+ * is why the total is 302 cells rather than 328 — and 302 is the canonical ZBLS count.
  *
- *   * `f2l-12-5` offers only `R d' R U2 R' U2 F'`, whose wide `d'` leaves the
- *     centres drifted rather than rotated, so it never solves into a coherent fixed frame.
- *   * Four are the *same* ZBLS state as an earlier heading and are merged into it, keeping
- *     both headings' algs as variants: `f2l-26-7`->`f2l-26-6`,
- *     `f2l-34-2`->`f2l-33-2`, `f2l-41-1`->`f2l-37-4`, `f2l-41-5`->`f2l-37-8`.
- *     A ZBLS case *is* a pair position plus an edge-orientation pattern; two headings that
- *     agree on both differ only in last-layer corners, which ZBLS does not touch. The
- *     merge is keyed on the AUF coset the consuming lookup actually indexes, so it removes
- *     exactly the collisions that would otherwise let one case silently shadow another —
- *     the defect that once broke 27 cases here.
+ * Two anomalies remain, both single cells, both left as they are rather than guessed at:
  *
- * A further 6 individual algs are dropped: they do not solve the case they are listed
- * under, under any AUF. Every alg kept is verified to solve its own case.
+ *   * `f2l-12-5` (sheet cell S13) offers only `R d' R U2 R' U2 F'`. Its derived state
+ *     has the FR pair already home, so it is not an FR last-slot case at all; the `d'`
+ *     has no restoring `d`, leaving the D layer a quarter turn off. It is excluded.
+ *   * `f2l-11-7` (N15) and `f2l-26-7` (I35) each contain one alg that solves a
+ *     *different* case from the rest of its cell — at I35 five algs agree and one does
+ *     not. Those two outliers are dropped; the majority defines the case.
+ *
+ * A case's recognition state is taken from the largest group of algs in its cell that
+ * agree with each other, and specifically from a **well-framed** member of that group. A
+ * wide `d` leaves the centres drifted rather than rotated, so such an alg cannot define
+ * a case even though it solves it perfectly well — it is kept as a variant.
  *
  * Every case's primary is verified to derive a genuine FR-slot ZBLS state — cross solved,
  * FR open, the other three slots in — and to reach the goal from it. Rotations inside an
@@ -1210,7 +1213,17 @@ export const zbls: AlgSet = defineAlgSet({
         "r U r' U2 r U' R' U2 R U' r'",
         "R' D' R U' M' U r' D R",
         "y' r U R U R U' R' U' r'",
-        "r U2 B U' B' U2 r'",
+      ],
+    },
+    {
+      id: "f2l-26-7",
+      subset: "F2L 26",
+      algs: [
+        "r U2 f R f' U2 r'",
+        "R' D' r U r' D R U' R U R'",
+        "U F R U' R' r U2 r' U' F'",
+        "R' D r2 U r' U' r U' r2 D' R",
+        "F2 R U' R2 F R2 U R' F2",
       ],
     },
     {
@@ -1422,14 +1435,7 @@ export const zbls: AlgSet = defineAlgSet({
       ],
     },
     { id: "f2l-33-1", subset: "F2L 33", algs: ["U' R U' R' U2 R U' R'"] },
-    {
-      id: "f2l-33-2",
-      subset: "F2L 33",
-      algs: [
-        "R U M U' R' U r U' R'",
-        "U' R U' R' F' U' F R U2 R'",
-      ],
-    },
+    { id: "f2l-33-2", subset: "F2L 33", algs: ["R U M U' R' U r U' R'"] },
     {
       id: "f2l-33-3",
       subset: "F2L 33",
@@ -1474,6 +1480,7 @@ export const zbls: AlgSet = defineAlgSet({
       ],
     },
     { id: "f2l-34-1", subset: "F2L 34", algs: ["U R' D' R U' R' D R", "U' R' D' R U R' D R"] },
+    { id: "f2l-34-2", subset: "F2L 34", algs: ["U' R U' R' F' U' F R U2 R'"] },
     {
       id: "f2l-34-3",
       subset: "F2L 34",
@@ -1643,14 +1650,6 @@ export const zbls: AlgSet = defineAlgSet({
       ],
     },
     {
-      id: "f2l-37-4",
-      subset: "F2L 37",
-      algs: [
-        "U' R U R' F U R U' R' F' R U R'",
-        "R U R' U' R U' R' U2 F' U' F",
-      ],
-    },
-    {
       id: "f2l-37-5",
       subset: "F2L 37",
       algs: [
@@ -1660,7 +1659,6 @@ export const zbls: AlgSet = defineAlgSet({
         "R U' R' U R' F R F2 U2 F R U R'",
       ],
     },
-    { id: "f2l-37-8", subset: "F2L 37", algs: ["R U' M' U' r' U2 r U r'"] },
     { id: "f2l-38-1", subset: "F2L 38", algs: ["R2 U2 R' U' R U' R' U2 R'"] },
     {
       id: "f2l-38-2",
@@ -1709,5 +1707,14 @@ export const zbls: AlgSet = defineAlgSet({
         "R' F R D R U R U' R2 D' F'",
       ],
     },
+    {
+      id: "f2l-41-1",
+      subset: "F2L 41",
+      algs: [
+        "U' R U R' F U R U' R' F' R U R'",
+        "R U R' U' R U' R' U2 F' U' F",
+      ],
+    },
+    { id: "f2l-41-5", subset: "F2L 41", algs: ["R U' M' U' r' U2 r U r'"] },
   ],
 });
