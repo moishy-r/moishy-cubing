@@ -20,6 +20,7 @@ import {
   centersSolved,
   cloneState,
   type CubeState,
+  homingRotation,
   invert,
   parseAlg,
   solvedCube,
@@ -94,6 +95,24 @@ export interface AlgSetInput {
   cases: AlgCaseInput[];
   /** Recognition projection. Defaults to full-facelet exact match. */
   signature?: StateSignature;
+  /**
+   * How to work out the frame a case's primary alg lands in, when deriving the state it
+   * solves (see {@link defineAlgSet}).
+   *
+   * - `"rotations"` (default) — the alg's own `x`/`y`/`z` moves. Correct whenever the
+   *   frame story is told entirely by rotations, which is nearly always.
+   * - `"centres"` — the alg's *net centre permutation*. Needed when a wide or slice move
+   *   carries the frame instead: `R d' R U2 R' U2 F'` has no rotation token at all, yet
+   *   its `d'` turns the whole first two layers as a unit, so the slot that was
+   *   front-right at the start is somewhere else by the end. Under `"rotations"` that
+   *   alg derives a state for the wrong slot; under `"centres"` it derives the right one.
+   *
+   * Not the default because a *drifting* alg — one whose pieces did NOT move with the
+   * centres, like an M-slice DF/DB insert — has a non-home centre permutation that is not
+   * a reframing at all, and reading it as one moves the case. Sets whose algs drift keep
+   * `"rotations"`; sets whose algs reframe via wide moves opt in.
+   */
+  frameDerivation?: "rotations" | "centres";
 }
 
 /** A parsed case: {@link AlgCase} from core, plus optional author-facing metadata. */
@@ -187,26 +206,31 @@ export function defineAlgSet(input: AlgSetInput): AlgSet {
     // made 32 zbls cases look like they had been authored against the wrong slot.
     // Seeding from the rotated solved cube is the whole fix: rotations in stored
     // algs are then completely ordinary, and nothing has to be de-rotated.
-    // `p` is the alg's own rotation content — the `x`/`y`/`z` moves, in order.
+    // `p` is the frame the primary lands in. Which reading is correct depends on the
+    // set, so it is declared rather than guessed — see `AlgSetInput.frameDerivation`:
     //
-    // It must NOT be read off the end state's centers: a slice or wide move also
-    // moves the centers, but does not reorient the cube in your hands. That is
-    // *drift*, not a rotation, and the two are opposite cases — a drifting alg
-    // (DFDB's M-slice moves) still solves into the home frame and needs no
-    // correction, while a rotating alg does. Reading `cn` conflates them.
+    //   "rotations" (default) — the alg's own x/y/z moves. Right whenever rotations tell
+    //     the whole frame story, and right for a *drifting* alg (an M-slice DF/DB insert)
+    //     whose pieces did NOT move with the centres, where the centre permutation is not
+    //     a reframing at all and reading it as one would move the case.
+    //   "centres" — the alg's net centre permutation. Needed when a wide move carries the
+    //     frame: `R d' R U2 R' U2 F'` has no rotation token, yet its `d'` turns the whole
+    //     first two layers as a unit, so the slot that was front-right at the start is
+    //     elsewhere by the end.
     //
-    // The correction is adopted only when it yields a coherent fixed-frame state
-    // (centers home). It does whenever the alg's rotations are its whole frame
-    // story. It does not when the alg *also* carries wide/slice moves whose drift
-    // does not cancel against those rotations — a handful of ZBLL primaries like
-    // `x R2 D2 R U2 R' D2 R U2 l`. Those were authored against the raw derivation
-    // and end the cube drifted rather than rotated, so correcting them would move
-    // the case somewhere neither reading recognizes.
-    const p = algs[0].moves.filter((m) => m.family === "x" || m.family === "y" || m.family === "z");
+    // The rotation correction is additionally adopted only when it yields a coherent
+    // fixed-frame state (centres home). That matters for a handful of ZBLL primaries like
+    // `x R2 D2 R U2 R' D2 R U2 l`, which mix a rotation with wide moves whose drift does
+    // not cancel against it: those were authored against the raw derivation and end the
+    // cube drifted rather than rotated, so correcting them would move the case somewhere
+    // neither reading recognizes.
+    const p = input.frameDerivation === "centres"
+      ? invert(homingRotation(applyMoves(solvedCube(), algs[0].moves)))
+      : algs[0].moves.filter((m) => m.family === "x" || m.family === "y" || m.family === "z");
     let state = applyMoves(solvedCube(), invert(algs[0].moves));
     if (p.length > 0) {
       const corrected = applyMoves(applyMoves(solvedCube(), p), invert(algs[0].moves));
-      if (centersSolved(corrected)) state = corrected;
+      if (input.frameDerivation === "centres" || centersSolved(corrected)) state = corrected;
     }
     cases.push(parsed);
     byId.set(c.id, parsed);

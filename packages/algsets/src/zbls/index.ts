@@ -12,26 +12,31 @@
  * inconsistencies creep in, and the previous one had ten cases authored against the wrong
  * slot.
  *
- * 301 cases, 645 algs. The sheet's FR tab holds 302 filled cells — 41 F2L
- * headings x 8 edge-orientation sub-cases, except headings 37 and 40 and 41 which carry 2
- * each and 38 and 39 which carry 4 (36x8 + 2+2+2 + 4+4 = 302). Two notes on reading it:
+ * 302 cases, 648 algs — **every cell and every alg in the sheet**, nothing excluded.
+ * The FR tab holds 302 filled cells: 41 F2L headings x 8 edge-orientation sub-cases, except
+ * headings 37, 40 and 41 which carry 2 each and 38 and 39 which carry 4
+ * (36x8 + 2+2+2 + 4+4 = 302). Three things about reading it, each learned by getting it
+ * wrong first:
  *
- *   * **The grid is not uniform.** Headings 1-40 sit on a 5-row pitch but F2L 41's is only
- *     three rows below F2L 37's, so a reader assuming even spacing runs headings 37-40 into
- *     41's cells and reports phantom duplicates. 302 matching the canonical ZBLS count is
- *     the check that the geometry is right.
+ *   * **The grid is not uniform.** Headings 1-40 sit on a 5-row pitch, but F2L 41's heading
+ *     (A50) is only three rows below F2L 37's (A47), so a reader assuming even spacing runs
+ *     headings 37-40 into 41's cells and reports phantom duplicates. 302 matching the
+ *     canonical ZBLS count is the check that the geometry is right.
+ *   * **The frame an alg lands in is its net centre permutation, not its x/y/z tokens.**
+ *     A wide move carries the frame too: f2l-12-5's only alg, `R d' R U2 R' U2 F'`, has no
+ *     rotation token at all, yet its `d'` turns the whole first two layers as a unit, so
+ *     the slot that was front-right when the alg began is elsewhere by the end. Read as
+ *     rotations it derives a state for the wrong slot and looks invalid; read as centres it
+ *     is an ordinary FR case. See `AlgSetInput.frameDerivation`.
  *   * **A case's state comes from the largest group of algs in its cell that agree with
- *     each other**, and specifically from a *well-framed* member of that group. Taking the
- *     first alg that parses lets a single outlier define the case and discards the majority.
- *     A wide `d` leaves the centres drifted rather than rotated, so such an alg cannot
- *     define a case — but it solves one perfectly well and is kept as a variant.
+ *     each other.** Taking the first alg that parses lets a single outlier define the case
+ *     and discards the majority.
  *
- * One cell is not represented: **f2l-12-5** (sheet cell S13), whose only alg
- * `R d' R U2 R' U2 F'` derives a state with the FR pair already home, so it is not an FR
- * last-slot case; its `d'` has no restoring `d`, leaving the D layer a quarter turn off.
- * Kept out rather than guessed at. Two further algs are dropped as outliers against their
- * own cell's majority: `f2l-11-7` (N15) `F' U r' F' r U r' F r F` and `f2l-26-7` (I35)
- * `r U2 B U' B' U2 r'`.
+ * Two algs are filed under a different case than the cell they appear in, because that is
+ * the case they actually solve: `F' U r' F' r U r' F r F` (N15, listed under f2l-11-7)
+ * belongs to **f2l-9-7**, and `r U2 B U' B' U2 r'` (I35, listed under f2l-26-7) belongs to
+ * **f2l-26-6**. Both were placed by applying them to each candidate's derived state, not by
+ * reading the sheet.
  *
  * ```ts
  * import { zbls } from "@moishy/algsets/zbls";
@@ -47,6 +52,9 @@ import { type AlgSet, defineAlgSet } from "../define.ts";
 export const zbls: AlgSet = defineAlgSet({
   id: "zbls",
   name: "ZBLS",
+  // A wide move carries the frame just as a rotation does, and several algs here rely on
+  // that — see the module doc and AlgSetInput.frameDerivation.
+  frameDerivation: "centres",
   cases: [
     { id: "f2l-1-1", subset: "F2L 1", algs: ["U R U' R'"] },
     { id: "f2l-1-2", subset: "F2L 1", algs: ["R' F R F'", "M' U R U' r'"] },
@@ -246,8 +254,8 @@ export const zbls: AlgSet = defineAlgSet({
       id: "f2l-8-4",
       subset: "F2L 8",
       algs: [
-        "r' U2 R2 U R' U' R' U2 r",
         "U R U' R' d R' U R U' R' U R",
+        "r' U2 R2 U R' U' R' U2 r",
         "R l U' R' U F' l' U2 R U' R'",
       ],
     },
@@ -281,7 +289,7 @@ export const zbls: AlgSet = defineAlgSet({
       algs: ["y' U2 R' U R U R' U' R", "U y' R' U' R U' R' U' R", "R' D' R U' R' D R F' U' F"],
     },
     { id: "f2l-9-2", subset: "F2L 9", algs: ["F R U R' U' F' R U' R'"] },
-    { id: "f2l-9-3", subset: "F2L 9", algs: ["F2 r U r' U' r' F r U' F", "U' R U' R' d R' U' R"] },
+    { id: "f2l-9-3", subset: "F2L 9", algs: ["U' R U' R' d R' U' R", "F2 r U r' U' r' F r U' F"] },
     { id: "f2l-9-4", subset: "F2L 9", algs: ["U r U R' U' M R U' R'", "R' F R U2 r U2 r' U2 F'"] },
     {
       id: "f2l-9-5",
@@ -296,7 +304,11 @@ export const zbls: AlgSet = defineAlgSet({
     {
       id: "f2l-9-7",
       subset: "F2L 9",
-      algs: ["U r U r' S' r U' r' S r U' r'", "R' F R2 U' R' U' r U2 r' U' F'"],
+      algs: [
+        "U r U r' S' r U' r' S r U' r'",
+        "R' F R2 U' R' U' r U2 r' U' F'",
+        "F' U r' F' r U r' F r F",
+      ],
     },
     {
       id: "f2l-9-8",
@@ -393,6 +405,7 @@ export const zbls: AlgSet = defineAlgSet({
       algs: ["R U' R' U R U' R' U R' F R F'", "U r U' R' U' R U r' U' R U R'"],
     },
     { id: "f2l-12-4", subset: "F2L 12", algs: ["U F' U2 F U' R U R'"] },
+    { id: "f2l-12-5", subset: "F2L 12", algs: ["R d' R U2 R' U2 F'"] },
     {
       id: "f2l-12-6",
       subset: "F2L 12",
@@ -638,8 +651,8 @@ export const zbls: AlgSet = defineAlgSet({
       id: "f2l-18-7",
       subset: "F2L 18",
       algs: [
-        "R U R' F' L' U2 L U' F",
         "R U R' d' r' F r2 U' r' F",
+        "R U R' F' L' U2 L U' F",
         "R U' R D r' U' r D' R2 U' R U R'",
         "U F2 r U r' U F R U2 R'",
       ],
@@ -704,8 +717,8 @@ export const zbls: AlgSet = defineAlgSet({
       id: "f2l-20-3",
       subset: "F2L 20",
       algs: [
-        "R' F2 r U2 R U' r2 F r F",
         "U' R U' R' U R U' R' d R' U R",
+        "R' F2 r U2 R U' r2 F r F",
         "S R U2 R' U' R U R' U S'",
       ],
     },
@@ -843,8 +856,8 @@ export const zbls: AlgSet = defineAlgSet({
       id: "f2l-24-3",
       subset: "F2L 24",
       algs: [
-        "y U' L' U L U L' U L2 F' L' F",
         "R U R' d R' U R U' R' U R",
+        "y U' L' U L U L' U L2 F' L' F",
         "R U' R2 F' U' F U R2 U' R'",
         "U' R U R' U R U' l U' R' U R'",
         "U F' r' F r F R U R'",
@@ -949,7 +962,12 @@ export const zbls: AlgSet = defineAlgSet({
     {
       id: "f2l-26-6",
       subset: "F2L 26",
-      algs: ["r U r' U2 r U' R' U2 R U' r'", "R' D' R U' M' U r' D R", "y' r U R U R U' R' U' r'"],
+      algs: [
+        "r U r' U2 r U' R' U2 R U' r'",
+        "R' D' R U' M' U r' D R",
+        "y' r U R U R U' R' U' r'",
+        "r U2 B U' B' U2 r'",
+      ],
     },
     {
       id: "f2l-26-7",
@@ -1003,7 +1021,7 @@ export const zbls: AlgSet = defineAlgSet({
     {
       id: "f2l-28-2",
       subset: "F2L 28",
-      algs: ["R U R' r' D' r U' r' D r", "R U R' d R' U2 R", "F U R U' R2 F' R2 U R'"],
+      algs: ["R U R' d R' U2 R", "R U R' r' D' r U' r' D r", "F U R U' R2 F' R2 U R'"],
     },
     { id: "f2l-28-3", subset: "F2L 28", algs: ["R U2 l U' R' U l'"] },
     {
@@ -1106,7 +1124,7 @@ export const zbls: AlgSet = defineAlgSet({
     {
       id: "f2l-32-5",
       subset: "F2L 32",
-      algs: ["U2 F' U r' F' r U' F", "U R' F R F' d R' U' R", "U2 R' F R F2 r U' r' F2"],
+      algs: ["U R' F R F' d R' U' R", "U2 F' U r' F' r U' F", "U2 R' F R F2 r U' r' F2"],
     },
     {
       id: "f2l-32-6",
@@ -1220,8 +1238,8 @@ export const zbls: AlgSet = defineAlgSet({
       id: "f2l-35-2",
       subset: "F2L 35",
       algs: [
-        "U M' U R U' M U' R'",
         "U' R U R' d R' U' R",
+        "U M' U R U' M U' R'",
         "R U R2 F R F' R' F R F'",
         "R U R' l' U R U' R' U R U' x'",
       ],

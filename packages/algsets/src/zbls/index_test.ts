@@ -6,5 +6,5 @@ Deno.test("zbls is structurally valid", () => {
   assertValidAlgSet(zbls);
 });
 Deno.test("zbls has the expected case count", () => {
-  assertEquals(zbls.cases.length, 301);
+  assertEquals(zbls.cases.length, 302);
 });
