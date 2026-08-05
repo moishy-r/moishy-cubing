@@ -71,30 +71,35 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
   test that recorded them as known exceptions now asserts an empty list. Nine had been patched by
   hand with a leading rotation; one consistent source removed the need.
 
-  **The sheet's grid is not uniform, and assuming it is produces phantom findings.** Headings 1-40
-  sit on a 5-row pitch, but F2L 41's heading is only three rows below F2L 37's, so a reader that
-  assumes even spacing runs headings 37-40 into 41's cells. A first pass did exactly that and
-  reported two "duplicate" cases that were the same cells read twice. Blocks 37-41 are genuinely
-  short (2, 4, 4, 2, 2 sub-cases filled), which is why the sheet holds 302 cells rather than 328 —
-  and 302 is the canonical ZBLS count, which is the check that the geometry is now right.
+  **Accounting, because two earlier passes lost cases without saying so.** The sheet's FR tab holds
+  302 filled cells: 41 F2L headings x 8 edge-orientation sub-cases, except headings 37, 40 and 41
+  which carry 2 each and 38 and 39 which carry 4 — 36x8 + 2+2+2 + 4+4 = 302. The generator now
+  asserts `kept + excluded === cells`, which is what finally surfaced `f2l-34-2` being dropped in
+  silence. 301 kept, 1 excluded, 645 algs.
 
-  Two things that shape how a case is read, both learned the hard way:
+  Two things about reading the sheet, both found by getting them wrong first:
 
-  - A case's state comes from the **largest group of algs in its cell that agree with each other**,
-    not the first alg that parses. First-match let a single outlier define the case and discard the
-    majority: at I35 one alg disagreed with five, at N15 one with two. Those two outliers are the
-    only algs dropped.
-  - That state must come from a **well-framed** member of the group. A wide `d` leaves the centres
-    drifted rather than rotated, so it cannot define a case — but it solves one perfectly well and
-    is kept as a variant. Taking the group's first alg regardless briefly rejected eight `d`-bearing
-    cases outright.
+  - **The grid is not uniform.** Headings 1-40 sit on a 5-row pitch, but F2L 41's heading (A50) is
+    only three rows below F2L 37's (A47), so a reader assuming even spacing runs headings 37-40 into
+    41's cells. A first pass did exactly that and reported two "duplicate cases" that were the same
+    cells (B51, D51) read twice. 302 matching the canonical ZBLS count is the check that the
+    geometry is right.
+  - **A case's state comes from the largest group of algs in its cell that agree with each other**,
+    and specifically from a _well-framed_ member of that group. First-match let a single outlier
+    define the case and discard the majority — at I35 one alg disagreed with five, at N15 one with
+    two; those two are the only algs dropped. And a wide `d` leaves the centres drifted rather than
+    rotated, so it cannot define a case even though it solves one fine and stays a variant; taking a
+    group's first alg regardless briefly rejected eight `d`-bearing cases outright.
 
-  One case is excluded: `f2l-12-5` (sheet cell S13) offers only `R d' R U2 R' U2 F'`, whose derived
-  state has the FR pair already home, so it is not an FR last-slot case; its `d'` has no restoring
-  `d`, leaving the D layer a quarter turn off. And one collision is recorded rather than merged:
-  `f2l-33-2` and `f2l-34-2` are distinct states that share the coarse signature a consuming lookup
-  keys on, so one shadows the other. Merging on that signature is wrong — it is lossy, and doing so
-  fused genuinely different cases in an earlier pass.
+  Merging was removed entirely. An earlier pass merged on the coarse signature a consuming lookup
+  keys on, which is lossy and fused genuinely different cases: `f2l-33-2` and `f2l-34-2` share that
+  key and each one's alg solves the other's state, so they are the same case up to AUF — both are
+  now kept, the lookup returns one, and either alg works.
+
+  One cell is genuinely unrepresented: **`f2l-12-5`** (sheet cell **S13**), whose only alg
+  `R d' R U2 R' U2 F'` derives a state with the FR pair already home, so it is not an FR last-slot
+  case at all — its `d'` has no restoring `d`, leaving the D layer a quarter turn off. Left out
+  rather than guessed at; it may be a pseudo-slot alg, which nothing supports yet.
 
 - **`@moishy/steps@0.2.0`: an F2L tie between slots now goes to a back slot.** Where two slots are
   equally cheap, filling a back one leaves the FRONT slots open — and those are the ones you can
