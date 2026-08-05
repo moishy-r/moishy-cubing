@@ -25,6 +25,8 @@
 import { type AlgSet, aufInvariantLookup } from "@moishy/algsets";
 import {
   type AlgorithmicPhase,
+  applyMoves,
+  axisCanonical,
   type CaseLookup,
   type CubeState,
   type Extra,
@@ -35,8 +37,12 @@ import {
   regionSolved,
   regionSolvedAndEO,
   type Replacement,
+  type SearchPhase,
 } from "@moishy/cubing-core";
 import { CROSS } from "./blocks.ts";
+
+// The AUF alignments an insert will try, as move lists.
+const AUF_STATES = ["", "U", "U2", "U'"].map((a) => (a ? parseAlg(a) : []));
 import { llOriented } from "./last-layer.ts";
 import {
   F2L,
@@ -137,22 +143,61 @@ function zblsPhase(
   };
 }
 
-/** One plain insert phase, optionally reserving a slot. */
-function insertPhase(
-  n: number,
-  cases: CaseLookup,
-  keep: F2lSlot | null,
-): AlgorithmicPhase {
+/** The goal of the Nth insert, with or without a reservation. */
+function insertGoal(n: number, keep: F2lSlot | null): (s: CubeState) => boolean {
+  if (keep) return f2lGoalLeavingOpen(n, keep);
   const crossSolved = regionSolved(CROSS);
-  return {
-    kind: "algorithmic",
-    id: `insert${n}`,
-    goal: keep
-      ? f2lGoalLeavingOpen(n, keep)
-      : (s: CubeState) => crossSolved(s) && solvedSlotCount(s) >= n,
-    cases,
-    auf: ["U"],
+  return (s) => crossSolved(s) && solvedSlotCount(s) >= n;
+}
+
+/** One insert phase, optionally reserving a slot. */
+function insertPhase(n: number, cases: CaseLookup, keep: F2lSlot | null): AlgorithmicPhase {
+  return { kind: "algorithmic", id: `insert${n}`, goal: insertGoal(n, keep), cases, auf: ["U"] };
+}
+
+/**
+ * A short setup before an insert, for when no stored case applies to any slot the
+ * reservation permits.
+ *
+ * The plain F2L steps each carry this as a fallback strategy; a reserved insert needs it
+ * just as much, and needs it *more* — reserving a slot removes options, so a state that
+ * some slot could have handled may have nothing left for the slots still allowed.
+ * Omitting it is why reserving FR failed on 39 of 60 crosses while recognition, once
+ * reached, was already 100%.
+ *
+ * The goal is "an insert from here will actually finish this step", not merely "a case
+ * matches": a case can match and still be unable to net a slot, and the search would
+ * happily stop at the cheapest such dead end. `runPhase` tries the zero-move option
+ * first, so this costs nothing whenever an insert already works.
+ */
+function insertSetupPhase(n: number, cases: CaseLookup, keep: F2lSlot | null): SearchPhase {
+  const goal = insertGoal(n, keep);
+  const succeeds = (s: CubeState): boolean => {
+    for (const pre of AUF_STATES) {
+      const aligned = applyMoves(s, pre);
+      const hit = cases.find(aligned);
+      if (!hit) continue;
+      for (const v of hit.algs) {
+        const after = applyMoves(aligned, v.moves);
+        for (const post of AUF_STATES) if (goal(applyMoves(after, post))) return true;
+      }
+    }
+    return false;
   };
+  return {
+    kind: "search",
+    id: `setup${n}`,
+    goal: succeeds,
+    moves: ["U", "D", "L", "R", "F", "B"],
+    canFollow: axisCanonical,
+    // A trigger, not an insertion — three moves frees any stuck pair.
+    maxDepth: 3,
+  };
+}
+
+/** setup + insert, repeated for the first three pairs. */
+function threeInserts(cases: CaseLookup, keep: F2lSlot | null) {
+  return [1, 2, 3].flatMap((n) => [insertSetupPhase(n, cases, keep), insertPhase(n, cases, keep)]);
 }
 
 /**
@@ -186,9 +231,7 @@ export function zblsReplacement(
         id: "zblsReserved",
         label: "ZBLS (slot reserved)",
         phases: [
-          insertPhase(1, f2lCases, slot),
-          insertPhase(2, f2lCases, slot),
-          insertPhase(3, f2lCases, slot),
+          ...threeInserts(f2lCases, slot),
           alignSlotToFront(slot),
           zblsPhase(set, slot),
         ],
@@ -198,9 +241,7 @@ export function zblsReplacement(
         id: "zblsAligned",
         label: "ZBLS (align last slot)",
         phases: [
-          insertPhase(1, f2lCases, null),
-          insertPhase(2, f2lCases, null),
-          insertPhase(3, f2lCases, null),
+          ...threeInserts(f2lCases, null),
           alignOpenSlotToFront(),
           zblsPhase(set, slot),
         ],

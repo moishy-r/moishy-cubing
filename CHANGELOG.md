@@ -104,6 +104,30 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
   other. First-match let a single outlier define the case and discard the majority — at I35 one alg
   disagreed with five, at N15 one with two.
 
+- **`@moishy/steps`: a reserved F2L insert now carries a setup fallback, which is what makes ZBLS
+  apply to every solve.** The plain F2L steps each have one; the reserved inserts inside
+  `zblsReplacement` did not, and that single omission was the whole applicability ceiling. Reserving
+  a slot _removes_ options, so a state some slot could have handled may have nothing left for the
+  slots still allowed — reserving FR failed on 39 of 60 crosses. With the fallback: 60 of 60.
+
+  Recognition was never the problem, which took an embarrassing detour to establish. A measured "19%
+  recognised" was taken over _greedy_ three-pair states, where the open slot is FR only about one
+  time in four; over _reserved_ states it was already 100% (21/21 recognised and solved). Measuring
+  the wrong population made a solved problem look unsolved.
+
+  The result is what ZBLS is supposed to be. Over 20 random scrambles, forced:
+
+  |             | applies | cost      | moves    |
+  | ----------- | ------- | --------- | -------- |
+  | plain CFOP  | —       | 59.12     | 54.5     |
+  | ZBLS        | 20/20   | 66.61     | 61.3     |
+  | ZBLS + ZBLL | 20/20   | **58.09** | **54.1** |
+
+  ZBLS alone is dearer, exactly as expected — it spends moves orienting edges and full OLL was
+  already cheap. Paired with ZBLL it beats plain CFOP outright, and it now applies to **every**
+  solve rather than the quarter where the last slot happened to land on FR. Alignment is at most a
+  single `y` and never a `y2`, asserted per scramble.
+
 - **`@moishy/steps@0.2.0`: an F2L tie between slots now goes to a back slot.** Where two slots are
   equally cheap, filling a back one leaves the FRONT slots open — and those are the ones you can
   see; keeping a back slot open puts the next pair in your blind spot. Free to implement, because

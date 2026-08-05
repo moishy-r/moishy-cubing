@@ -297,3 +297,82 @@ Deno.test("ZBLS + ZBLL solves, and the last layer collapses to one alg", async (
   assert(applicable > 0, "no scramble admitted a ZBLS route");
   assert(withZbll > 0, "ZBLS never handed a solved-edge last layer to ZBLL");
 });
+
+// The point of reserving a slot: with FR kept back, ZBLS applies to EVERY solve rather
+// than to the roughly one in four where the open slot happens to be FR already.
+//
+// This only works because each reserved insert carries a setup fallback. Without one the
+// reserved inserts failed on 39 of 60 crosses — reserving removes options, so a state
+// some slot could have handled may have nothing left for the slots still allowed — while
+// recognition, once reached, was already 100%. With the fallback: 60/60 inserts, and 59
+// of 60 recognised and solved.
+Deno.test("ZBLS, forced, applies to every solve", async () => {
+  let applied = 0;
+  for (const scramble of SCRAMBLES) {
+    const res = await cfop.solve(scramble, {
+      replacements: { zbls: { enabled: true, mode: "force" } },
+    });
+    assert(res.solved, `unsolved with zbls forced: ${scramble}`);
+    const framed = applyMoves(solvedCube(), [
+      ...invert(res.orientation),
+      ...parseAlg(scramble),
+      ...res.orientation,
+    ]);
+    assert(isSolved(applyMoves(framed, res.solution)), `wrong solution for "${scramble}"`);
+    const seg = res.segments.find((s) => s.unitId === "zbls");
+    assert(seg, `zbls was forced but did not fire on "${scramble}"`);
+    applied++;
+    // It must land the whole F2L with every edge oriented — that is what makes the last
+    // layer a ZBLL (or, without it, one of the seven OCLL shapes).
+    const after = seg.phases.at(-1)!.endState;
+    assert(regionSolved(F2L)(after), `F2L incomplete after zbls on "${scramble}"`);
+    assert(
+      normalizeOrientation(after).eo.every((o) => o === 0),
+      `zbls left an edge misoriented on "${scramble}"`,
+    );
+    // Alignment is at most one rotation, never a y2.
+    const rots = seg.moves.filter((m) => "xyz".includes(m.family));
+    assert(rots.length <= 1, `zbls used ${rots.length} rotations on "${scramble}"`);
+    for (const r of rots) {
+      assert(r.family === "y", `zbls aligned with ${r.family}, expected y`);
+      assert(r.amount !== 2, `zbls aligned with a y2 on "${scramble}"`);
+    }
+  }
+  assertEquals(applied, SCRAMBLES.length, "zbls must apply to every scramble");
+});
+
+// ZBLS + ZBLL is what ZBLS is for, and together they now beat plain CFOP outright.
+// Measured over 20 random scrambles: cost 59.12 -> 58.09, moves 54.5 -> 54.1, with ZBLS
+// applying to 20/20. ZBLS alone is dearer (66.61) — its cost only repays when ZBLL is
+// there to collect the oriented edges.
+Deno.test("ZBLS + ZBLL beats plain CFOP", async () => {
+  let plainCost = 0, zbCost = 0, n = 0, withZbll = 0;
+  for (const scramble of SCRAMBLES) {
+    const plain = await cfop.solve(scramble);
+    const zb = await cfop.solve(scramble, {
+      replacements: { zbls: { enabled: true, mode: "force" }, zbll: { enabled: true } },
+    });
+    assert(zb.solved, `unsolved: ${scramble}`);
+    const framed = applyMoves(solvedCube(), [
+      ...invert(zb.orientation),
+      ...parseAlg(scramble),
+      ...zb.orientation,
+    ]);
+    assert(isSolved(applyMoves(framed, zb.solution)), `wrong solution for "${scramble}"`);
+    // ZBLL is `compete`, so on a scramble where plain OLL+PLL happens to be cheaper it
+    // correctly does not fire. Count rather than require it.
+    if (zb.segments.some((s) => s.unitId === "zbll")) {
+      withZbll++;
+      assert(!zb.segments.some((s) => s.unitId === "oll"), `oll also ran on "${scramble}"`);
+    }
+    plainCost += plain.cost;
+    zbCost += zb.cost;
+    n++;
+  }
+  assert(
+    zbCost < plainCost,
+    `ZB should beat plain CFOP in aggregate: ${(zbCost / n).toFixed(2)} vs ${
+      (plainCost / n).toFixed(2)
+    }`,
+  );
+});
