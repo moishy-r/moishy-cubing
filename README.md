@@ -44,6 +44,7 @@ for (const seg of res.segments) {
 | [`@moishy/algsets`](./packages/algsets)<br>[jsr](https://jsr.io/@moishy/algsets) · [npm](https://www.npmjs.com/package/@moishy/algsets)                 | `deno add jsr:@moishy/algsets`<br>`npm install @moishy/algsets`         | Algorithm case data (ZBLL, PLL, OLL, COLL, …) with recognition derived from the algs, plus the AlgSet→CaseLookup adapters |
 | [`@moishy/steps`](./packages/steps)<br>[jsr](https://jsr.io/@moishy/steps) · [npm](https://www.npmjs.com/package/@moishy/steps)                         | `deno add jsr:@moishy/steps`<br>`npm install @moishy/steps`             | Reusable solver steps — block-building searches (Roux FB, 2x2x2, 2x2x3, cross) ready to compose                           |
 | [`@moishy/apb`](./packages/apb)<br>[jsr](https://jsr.io/@moishy/apb) · [npm](https://www.npmjs.com/package/@moishy/apb)                                 | `deno add jsr:@moishy/apb`<br>`npm install @moishy/apb`                 | The APB method — and the reference implementation for adding your own                                                     |
+| [`@moishy/cfop`](./packages/cfop)<br>[jsr](https://jsr.io/@moishy/cfop) · [npm](https://www.npmjs.com/package/@moishy/cfop)                             | `deno add jsr:@moishy/cfop`<br>`npm install @moishy/cfop`               | The CFOP method — cross, F2L as an exhaustive pair-order search, OLL, PLL                                                 |
 
 Every package ships to both registries; the npm build is dual ESM/CJS, so `import` and `require`
 both work. To pull the JSR build on Node instead, `npx jsr add @moishy/apb` (see
@@ -88,7 +89,7 @@ deno task bundle
 Publishing is automated. Two GitHub Actions workflows:
 
 - **CI** (`.github/workflows/ci.yml`) — on every push and PR: `deno task ok`, a `deno publish` dry
-  run for all four packages, and an npm build that packs the tarballs, installs them into a clean
+  run for all five packages, and an npm build that packs the tarballs, installs them into a clean
   project and runs a real solve through both ESM and CJS.
 - **Release** (`.github/workflows/release.yml`) — publishes to JSR and npm.
 

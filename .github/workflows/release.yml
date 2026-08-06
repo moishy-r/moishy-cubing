@@ -31,7 +31,7 @@ on:
         required: true
         type: choice
         default: all
-        options: [all, cubing-core, algsets, steps, apb]
+        options: [all, cubing-core, algsets, steps, apb, cfop]
 
 permissions:
   contents: read
@@ -42,7 +42,7 @@ concurrency:
 
 jobs:
   # Dependency order matters in both registries: each package declares the ones
-  # below it (cubing-core <- algsets <- steps <- apb), and a registry will reject a
+  # below it (cubing-core <- algsets <- steps <- {apb, cfop}), and a registry will reject a
   # package whose dependencies do not resolve. Keep `all` in that order.
   targets:
     runs-on: ubuntu-latest
@@ -60,7 +60,7 @@ jobs:
           set -euo pipefail
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             case "${{ inputs.package }}" in
-              all) PACKAGES="cubing-core algsets steps apb" ;;
+              all) PACKAGES="cubing-core algsets steps apb cfop" ;;
               *)   PACKAGES="${{ inputs.package }}" ;;
             esac
           else
