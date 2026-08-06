@@ -11,14 +11,16 @@
     "fmt": "deno fmt",
     "lint": "deno lint",
     "check": "deno check packages/*/mod.ts",
-    "bundle": "deno task bundle:apb && deno task bundle:crop",
+    "bundle": "deno task bundle:apb && deno task bundle:cfop && deno task bundle:crop",
     "bundle:apb": "deno bundle --platform browser --minify -o docs/apb-demo/apb.bundle.js docs/apb-demo/entry.ts",
+    "bundle:cfop": "deno bundle --platform browser --minify -o docs/cfop-demo/cfop.bundle.js docs/cfop-demo/entry.ts",
     "bundle:crop": "mkdir -p docs/crop && cp crop/core/crop-core.js crop/core/crop-overlay.css docs/crop/ && cp -r crop/core/icons docs/crop/ && cp crop/core/crop-core.js crop/core/crop-overlay.css crop/extension/ && cp -r crop/core/icons crop/extension/",
     "ok": "deno task check && deno task lint && deno fmt --check && deno task test"
   },
   "exclude": [
     ".claude",
     "docs/apb-demo/apb.bundle.js",
+    "docs/cfop-demo/cfop.bundle.js",
     "crop/",
     "docs/crop/"
   ],

@@ -13,7 +13,8 @@ name: Deploy site
 #
 # Building here removes the failure mode instead of policing it: the deployed
 # bundle is compiled from whatever is on `main` at deploy time, so it cannot
-# disagree with the source. `docs/apb-demo/apb.bundle.js` is gitignored.
+# disagree with the source. Both `docs/apb-demo/apb.bundle.js` and
+# `docs/cfop-demo/cfop.bundle.js` are gitignored.
 
 on:
   push:
@@ -43,22 +44,23 @@ jobs:
         with:
           deno-version: v2.x
 
-      - name: Build the demo bundle
+      - name: Build the demo bundles
         run: deno task bundle
 
-      - name: Fail if the bundle is missing or implausibly small
+      - name: Fail if a demo bundle is missing or implausibly small
         run: |
           set -euo pipefail
-          f=docs/apb-demo/apb.bundle.js
-          test -f "$f" || { echo "::error::$f was not produced"; exit 1; }
-          size=$(wc -c < "$f")
-          echo "bundle: $size bytes"
-          # A real bundle is ~440KB. Anything tiny means the build silently
-          # produced a stub, which would deploy a broken page.
-          if [ "$size" -lt 100000 ]; then
-            echo "::error::bundle is only $size bytes — refusing to deploy"
-            exit 1
-          fi
+          # Real bundles are ~440KB (apb) and ~320KB (cfop). Anything tiny means the
+          # build silently produced a stub, which would deploy a broken page.
+          for f in docs/apb-demo/apb.bundle.js docs/cfop-demo/cfop.bundle.js; do
+            test -f "$f" || { echo "::error::$f was not produced"; exit 1; }
+            size=$(wc -c < "$f")
+            echo "$f: $size bytes"
+            if [ "$size" -lt 100000 ]; then
+              echo "::error::$f is only $size bytes — refusing to deploy"
+              exit 1
+            fi
+          done
 
       - name: Fail if the CROP assets were not copied
         run: |
