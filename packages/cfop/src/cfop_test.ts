@@ -124,6 +124,37 @@ Deno.test("no solution contains a rotation that is immediately undone", async ()
   assert(withRotations > 0, "no solution used a rotation; are they being suppressed?");
 });
 
+// A phase must never emit two moves of the same family in a row: `U' U` is two turns
+// nobody executes, charged for twice and drawing an overwork penalty on top. `runPhase`
+// merges them where it assembles a candidate, which also puts the merged form in the
+// search space so an alignment that cancels into its alg can WIN rather than just look
+// silly (measured: cost 55.23 -> 52.73 over 6 scrambles).
+//
+// Asserted per phase, not per solution. Merging across a phase or step boundary is
+// deliberately not done — it would change the intermediate state a segment ends on, so a
+// step's own goal would no longer hold at its own boundary. The cost model charges
+// overwork there, so the runner avoids it where it can choose to.
+Deno.test("no phase emits two moves of the same family in a row", async () => {
+  let checked = 0;
+  for (const scramble of SCRAMBLES) {
+    const res = await cfop.solve(scramble);
+    for (const seg of res.segments) {
+      for (const phase of seg.phases) {
+        for (let i = 1; i < phase.moves.length; i++) {
+          const a = phase.moves[i - 1], b = phase.moves[i];
+          assert(
+            a.family !== b.family,
+            `${seg.unitId}/${phase.phaseId} emitted ${a.family}${a.amount} ${b.family}${b.amount} ` +
+              `on "${scramble}" — those are one move`,
+          );
+        }
+        checked += phase.moves.length;
+      }
+    }
+  }
+  assert(checked > 500, `only ${checked} moves checked`);
+});
+
 // APB's OCLL+PLL and COLL+EPLL are not reusable here, and the reason is worth pinning:
 // both assume the last-layer edges are already oriented, which is true in APB (EO is a
 // core step) and false in CFOP. Forcing either must fail loudly at the `oll` boundary
@@ -439,23 +470,25 @@ Deno.test("both kinds of F2L strategy win races, and the orders win some", async
   assert(byGreedy > 0, "the greedy fallback never won — has it stopped competing?");
 });
 
-// The point of the exercise. Against the four-Step greedy shape `@moishy/steps` still
-// exports, an exhaustive order is cheaper on the span it covers. Measured over 60 scrambles
-// (the 20 here plus 40 seeded): F2L cost 30.32 -> 27.78, F2L moves 27.6 -> 25.9, better on
-// 44, worse on 9, tied on 7. Asserted here in aggregate on a subset — per-scramble it can
-// lose, since a fixed order forbids un-solving a slot the count-based goal would allow.
-Deno.test("the order search beats a greedy walk on F2L, in aggregate", async () => {
+// The point of the exercise — asserted on the WHOLE SOLVE, not on the F2L span, and the
+// difference is not pedantry. With lookahead from `f2l` into `oll` the step minimises
+// span + peek(oll), so it will knowingly take a dearer F2L that leaves a better OLL.
+// Measured over these 10 scrambles: F2L span greedy 26.70 vs pool 27.06 (the pool is
+// DEARER on the span), whole solve greedy 54.65 vs pool 54.11 (and cheaper on the solve),
+// with the pool ahead on 4 of 10 individually. Asserting on the span asks the wrong
+// question and fails for the right reason.
+Deno.test("the order pool beats a greedy walk on the whole solve, in aggregate", async () => {
   const greedyOnly = { stepOptions: { f2l: { forceStrategy: "greedy" } } };
-  let greedy = 0, ordered = 0, n = 0;
+  let greedy = 0, pooled = 0, n = 0;
   for (const scramble of SCRAMBLES.slice(0, 10)) {
-    greedy += f2lSpan(await cfop.solve(scramble, greedyOnly)).cost;
-    ordered += f2lSpan(await cfop.solve(scramble)).cost;
+    greedy += (await cfop.solve(scramble, greedyOnly)).cost;
+    pooled += (await cfop.solve(scramble)).cost;
     n++;
   }
   assert(
-    ordered < greedy,
-    `expected cheaper F2L: greedy ${(greedy / n).toFixed(2)} vs ordered ${
-      (ordered / n).toFixed(2)
+    pooled < greedy,
+    `expected a cheaper solve: greedy ${(greedy / n).toFixed(2)} vs pooled ${
+      (pooled / n).toFixed(2)
     }`,
   );
 });

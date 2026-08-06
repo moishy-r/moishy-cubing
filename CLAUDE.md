@@ -119,6 +119,11 @@ a greedy any-order strategy, no estimate anywhere. Three things shape any such f
 - **Fan-out is not free and the race is not a formality.** In CFOP's F2L the greedy any-order
   strategy wins 14 of 20 races and the 24 exhaustive orders win 6 — and the combination still beats
   greedy alone in aggregate. Do not assume the elaborate strategy is the one doing the work; count.
+- **Judge a Step on the solve, not on the region it covers.** With lookahead into the next Step, a
+  Step minimises its own cost _plus_ the peek, so it will knowingly take a dearer region to leave a
+  better next one. CFOP's F2L pool is measurably dearer than a greedy walk on the F2L span (27.06 vs
+  26.70) and cheaper on the whole solve (54.11 vs 54.65). A test asserting the span fails for the
+  right reason.
 
 A cost-optimal search whose **goal is expensive** wants `useAStar: true`, not the IDA\* default.
 IDA\* re-expands its whole tree per cost threshold, and with real-valued MCC costs there are many

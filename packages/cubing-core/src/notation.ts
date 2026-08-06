@@ -165,3 +165,69 @@ export function invert(moves: Move[]): Move[] {
   }
   return out;
 }
+
+/**
+ * Collapses runs of the same move family into one move, dropping the ones that
+ * cancel: `U2 U2` and `U U'` vanish, `U U` becomes `U2`, `R2 R` becomes `R'`.
+ *
+ * Two same-family moves are the same layer about the same axis, so their amounts
+ * simply add mod 4 — this is exact, not an approximation, and it applies to outer
+ * turns, slices, wide turns and whole-cube rotations alike. Different families are
+ * never touched, even when they commute (`R L` is left alone).
+ *
+ * It runs to a fixed point in one pass, because a cancellation can expose a new
+ * adjacency: `U R R' U` collapses to nothing, not to `U U`.
+ *
+ * The point is not tidiness. A solver that emits `U' U` is charging for two turns
+ * nobody would execute, and — worse — the merged form was not in its search space,
+ * so it could not choose it. Merging where a phase assembles its candidate
+ * (`runPhase`) is what lets an alignment that cancels into its alg *win* on cost
+ * rather than merely look silly.
+ */
+export function mergeAdjacent(moves: readonly Move[]): Move[] {
+  const out: Move[] = [];
+  for (const move of moves) {
+    const top = out[out.length - 1];
+    if (top !== undefined && top.family === move.family) {
+      out.pop();
+      const amount = (top.amount + move.amount) % 4;
+      if (amount !== 0) out.push({ family: move.family, amount: amount as 1 | 2 | 3 });
+      continue;
+    }
+    out.push(move);
+  }
+  return out;
+}
+
+/**
+ * {@link mergeAdjacent}, plus a map from each original index to the length of the
+ * merged prefix that precedes it — the translation a split point needs.
+ *
+ * `prefix[i]` is `-1` where the answer does not exist: a merge that straddles
+ * position `i` has destroyed that split point, because the two moves either side
+ * of it became one move (or none). A caller holding an index into the original —
+ * a mid-alg checkpoint — must drop it rather than guess, or it would splice at the
+ * wrong place. `prefix` has one entry per original move, plus a final entry for
+ * the end of the sequence.
+ */
+export function mergeAdjacentWithPrefixes(
+  moves: readonly Move[],
+): { moves: Move[]; prefix: number[] } {
+  const out: Move[] = [];
+  const prefix: number[] = [];
+  for (const move of moves) {
+    const top = out[out.length - 1];
+    const merges = top !== undefined && top.family === move.family;
+    // A split before this move survives only if this move stands on its own.
+    prefix.push(merges ? -1 : out.length);
+    if (merges) {
+      out.pop();
+      const amount = (top!.amount + move.amount) % 4;
+      if (amount !== 0) out.push({ family: move.family, amount: amount as 1 | 2 | 3 });
+      continue;
+    }
+    out.push(move);
+  }
+  prefix.push(out.length);
+  return { moves: out, prefix };
+}

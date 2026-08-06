@@ -27,7 +27,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
   to achieve, whereas nothing here estimates anything.
 
   Measured over 60 scrambles (the 20 in the CFOP tests plus 40 seeded, so the numbers are not read
-  off the population the tests were tuned on), against the four-Step greedy shape:
+  off the population the tests were tuned on), against the four-Step greedy shape, with the search
+  in its original Replacement form:
 
   |              | F2L cost  | F2L moves | solve cost | solve moves |
   | ------------ | --------- | --------- | ---------- | ----------- |
@@ -35,9 +36,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
   | order search | **27.78** | **25.9**  | **57.39**  | **53.5**    |
 
   Better on 44 of 60, worse on 9, tied on 7 — a fixed order forbids un-solving a slot the
-  count-based goal would allow, which is exactly what the greedy strategy is kept for. On a
-  6-scramble spot check of the shipped configuration: 55.23 cost, 50.7 moves, 2.86 s/solve against
-  0.80 for the old greedy walk.
+  count-based goal would allow, which is exactly what the greedy strategy is kept for.
+
+  **As a Step the gain moves out of the span, and it is worth knowing why.** A Step gets lookahead
+  into the one after it, so `f2l` minimises span + peek(`oll`) and will knowingly take a dearer F2L
+  that leaves a better OLL. Measured over 10 scrambles against `forceStrategy: "greedy"`: F2L span
+  26.70 -> 27.06 (the pool is _dearer_ on the span), whole solve 54.65 -> **54.11**. Judge this
+  search on the solve, not on the region it covers; asserting on the span asks the wrong question.
 
   Two findings worth keeping:
 
@@ -156,6 +161,30 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
   they are listed in the module doc.
 
 ### Fixed
+
+- **`@moishy/cubing-core@0.3.3`: a phase no longer emits two moves of the same family in a row.** A
+  real CFOP solve contained `U2 U2 R' F' r U R U' r' F` — a pre-AUF that cancelled straight into its
+  alg's first move, two turns nobody executes, charged for twice and drawing an overwork penalty on
+  top. `runPhase` now merges same-family adjacencies where it assembles a candidate
+  (`mergeAdjacent`, exported).
+
+  Doing it there rather than as a tidy-up on the finished solution is the whole point: the merged
+  form has to be what the **cost** is computed from, or an alignment that cancels into its alg can
+  never win its own race. It also keeps `moves` and `cost` describing the same sequence, which a
+  post-pass would break. Measured over 6 scrambles: CFOP cost **55.23 -> 52.73**, moves 50.7 -> 50.0
+  — the cost falls further than the moves because a cancelling pair was also drawing the overwork
+  penalty, and because better alignments now win elsewhere. APB: 39.8 -> 38.3 moves.
+
+  **Not applied across phase or step boundaries**, though the same waste occurs there (measured: 1
+  occurrence in 12 solves, against 2 within phases). Merging there would change the intermediate
+  state a segment ends on, so a step's own goal would no longer hold at its own boundary — the
+  per-step contract the whole result object is built on. The cost model already charges overwork for
+  the adjacency, so the runner avoids it where it can choose to. A test asserts the per-phase
+  property so it cannot silently regress.
+
+  Mid-alg checkpoints are translated through the merge and **dropped** where it destroyed the split
+  they name (`mergeAdjacentWithPrefixes` reports that as `-1`): a checkpoint that no longer exists
+  must not quietly become a splice at the wrong move.
 
 - **The version-drift test never covered `@moishy/cfop`.** It asserts every workspace member's
   exported `VERSION` matches its manifest and that inter-package ranges still resolve — and cfop,

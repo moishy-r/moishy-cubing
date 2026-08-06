@@ -4,11 +4,14 @@ import {
   formatMove,
   isDouble,
   isPrime,
+  mergeAdjacent,
+  mergeAdjacentWithPrefixes,
   type Move,
   NotationError,
   parseAlg,
   parseMove,
 } from "./notation.ts";
+import { applyMoves, solvedCube, toFacelets } from "./cube-state.ts";
 
 Deno.test("parseMove: single quarter turn -> amount 1", () => {
   assertEquals(parseMove("R"), { family: "R", amount: 1 });
@@ -118,4 +121,83 @@ Deno.test("isDouble / isPrime are derived from amount", () => {
 Deno.test("formatMove: throws on structurally invalid Move values", () => {
   assertThrows(() => formatMove({ family: "Q" as Move["family"], amount: 1 }), NotationError);
   assertThrows(() => formatMove({ family: "R", amount: 4 as Move["amount"] }), NotationError);
+});
+
+// --- mergeAdjacent -----------------------------------------------------------
+//
+// Two same-family moves are the same layer about the same axis, so their amounts add
+// mod 4. This is what stops a solver emitting `U' U` — two turns nobody executes,
+// charged for twice and drawing an overwork penalty on top.
+
+Deno.test("mergeAdjacent adds the amounts of a same-family run", () => {
+  const cases: [string, string][] = [
+    ["U U", "U2"],
+    ["U U'", ""],
+    ["U2 U2", ""],
+    ["U2 U", "U'"],
+    ["U U2", "U'"],
+    ["U' U'", "U2"],
+    ["U U U", "U'"],
+    ["U U U U", ""],
+    ["R U R'", "R U R'"], // different families are never touched
+    ["R L", "R L"], // ...even when they commute
+    ["R r", "R r"], // ...and a wide turn is a different family from its outer turn
+  ];
+  for (const [input, want] of cases) {
+    assertEquals(formatAlg(mergeAdjacent(parseAlg(input))), want, input);
+  }
+});
+
+// A cancellation can expose a new adjacency, so one pass has to reach a fixed point.
+Deno.test("mergeAdjacent re-merges what a cancellation exposes", () => {
+  assertEquals(formatAlg(mergeAdjacent(parseAlg("U R R' U"))), "U2");
+  assertEquals(formatAlg(mergeAdjacent(parseAlg("U R R' U'"))), "");
+  assertEquals(formatAlg(mergeAdjacent(parseAlg("F U R R' U' F'"))), "");
+  assertEquals(formatAlg(mergeAdjacent(parseAlg("D F U R R' U' F' D"))), "D2");
+});
+
+Deno.test("mergeAdjacent leaves the net effect unchanged", () => {
+  // The whole point: fewer moves, same cube. Checked on the sequences above plus a
+  // few longer ones, by comparing the states they reach.
+  const algs = [
+    "U U",
+    "U2 U2",
+    "U R R' U",
+    "R U R' U'",
+    "y y' R U R'",
+    "M2 M2 U",
+    "F U R R' U' F' D D",
+    "L' U L U' L' U L",
+    "x x' R2 R2 U",
+  ];
+  for (const alg of algs) {
+    const moves = parseAlg(alg);
+    const merged = mergeAdjacent(moves);
+    assertEquals(
+      toFacelets(applyMoves(solvedCube(), merged)),
+      toFacelets(applyMoves(solvedCube(), moves)),
+      `${alg} changed the cube when merged`,
+    );
+    assertEquals(merged.length <= moves.length, true, `${alg} got longer`);
+  }
+});
+
+// A split point a merge straddled no longer exists, and must be reported as gone
+// rather than guessed at — a checkpoint Extra would otherwise splice at the wrong move.
+Deno.test("mergeAdjacentWithPrefixes marks destroyed split points", () => {
+  const { moves, prefix } = mergeAdjacentWithPrefixes(parseAlg("R U2 U2 F"));
+  assertEquals(formatAlg(moves), "R F");
+  assertEquals(prefix[0], 0, "before R");
+  assertEquals(prefix[1], 1, "before the first U2 — survives");
+  assertEquals(prefix[2], -1, "between the two U2s — destroyed");
+  assertEquals(prefix[3], 1, "before F");
+  assertEquals(prefix[4], 2, "end of the sequence");
+});
+
+Deno.test("mergeAdjacentWithPrefixes agrees with mergeAdjacent, and indexes untouched runs", () => {
+  const moves = parseAlg("R U R' U'");
+  const { moves: merged, prefix } = mergeAdjacentWithPrefixes(moves);
+  assertEquals(formatAlg(merged), formatAlg(mergeAdjacent(moves)));
+  // Nothing merged, so every split point survives and maps to itself.
+  assertEquals(prefix, [0, 1, 2, 3, 4]);
 });

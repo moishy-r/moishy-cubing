@@ -14,7 +14,7 @@
 // the method pipeline runner (step 6); `runPhase` is the primitive it builds on.
 
 import { applyMoves, type CubeState, homingRotation } from "./cube-state.ts";
-import type { Move, MoveFamily } from "./notation.ts";
+import { mergeAdjacentWithPrefixes, type Move, type MoveFamily } from "./notation.ts";
 import { createDefaultMoveCostModel, type MoveCostModel } from "./move-cost.ts";
 import { search, searchAStar, searchAStarMany, searchMany } from "./search.ts";
 
@@ -409,6 +409,46 @@ function phaseBudget(
 }
 
 /**
+ * Assembles a phase's emitted moves from its parts, collapsing any same-family
+ * adjacency the joins created — a pre-AUF that cancels into its alg's first move,
+ * an alg ending on the family its post-AUF turns.
+ *
+ * Done here, where the candidate is built and costed, rather than as a tidy-up on
+ * the finished solution: the merged form has to be what the *cost* is computed
+ * from, or the alignment that cancels can never win its own race. It also keeps
+ * `moves` and `cost` describing the same sequence, which a post-pass would break.
+ *
+ * Checkpoints are translated through the merge and dropped where it destroyed the
+ * split they name (see {@link mergeAdjacentWithPrefixes}); a checkpoint that no
+ * longer exists must not silently become a splice at the wrong index.
+ *
+ * Deliberately NOT applied across phase or step boundaries, though the same waste
+ * occurs there (measured: 1 occurrence in 12 solves, against 2 within phases).
+ * Merging there would change the intermediate state a segment ends on, so a step's
+ * own goal would no longer hold at its own boundary — the per-step contract the
+ * whole result object is built on. The cost model already charges overwork for the
+ * adjacency, so the runner avoids it where it can choose to.
+ */
+function assemble(
+  parts: Move[][],
+  checkpoints: Checkpoint[] | undefined,
+  checkpointOffset: number,
+): { moves: Move[]; checkpoints: Checkpoint[] | undefined } {
+  const flat = parts.length === 1 ? parts[0] : ([] as Move[]).concat(...parts);
+  if (checkpoints === undefined || checkpoints.length === 0) {
+    const merged = mergeAdjacentWithPrefixes(flat);
+    return { moves: merged.moves, checkpoints: undefined };
+  }
+  const { moves, prefix } = mergeAdjacentWithPrefixes(flat);
+  const mapped: Checkpoint[] = [];
+  for (const cp of checkpoints) {
+    const at = prefix[cp.index + checkpointOffset];
+    if (at !== undefined && at >= 0) mapped.push({ label: cp.label, index: at });
+  }
+  return { moves, checkpoints: mapped.length > 0 ? mapped : undefined };
+}
+
+/**
  * Executes a single phase against `start`, returning its best (cheapest by MCC)
  * segment, or `null` if the phase cannot reach its goal.
  *
@@ -494,7 +534,7 @@ export function runPhase(
     for (const pre of auf) {
       const endState = applyMoves(base, pre);
       if (!phase.goal(endState)) continue;
-      const moves = hm.length > 0 ? [...hm, ...pre] : [...pre];
+      const { moves } = assemble([hm, pre], undefined, 0);
       const cost = segmentCost(moves, prevMove, costModel);
       if (best && cost >= best.cost) continue;
       best = {
@@ -516,16 +556,15 @@ export function runPhase(
         const variant = matched.algs[vi];
         const afterAlg = applyMoves(aligned, variant.moves);
         for (const post of auf) {
-          const moves = [...hm, ...pre, ...variant.moves, ...post];
           const endState = applyMoves(afterAlg, post);
           if (!phase.goal(endState)) continue;
+          const { moves, checkpoints } = assemble(
+            [hm, pre, variant.moves, post],
+            variant.checkpoints,
+            hm.length + pre.length,
+          );
           const cost = segmentCost(moves, prevMove, costModel);
           if (best && cost >= best.cost) continue;
-          const offset = hm.length + pre.length;
-          const checkpoints = variant.checkpoints?.map((c) => ({
-            label: c.label,
-            index: c.index + offset,
-          }));
           best = {
             phaseId: phase.id,
             kind: "algorithmic",
@@ -672,7 +711,7 @@ export function runPhaseCandidates(
     for (const pre of auf) {
       const endState = applyMoves(base, pre);
       if (!phase.goal(endState)) continue;
-      const moves = hm.length > 0 ? [...hm, ...pre] : [...pre];
+      const { moves } = assemble([hm, pre], undefined, 0);
       const cost = segmentCost(moves, prevMove, costModel);
       if (skip && cost >= skip.cost) continue;
       skip = {
@@ -694,17 +733,16 @@ export function runPhaseCandidates(
         const variant = matched.algs[vi];
         const afterAlg = applyMoves(aligned, variant.moves);
         for (const post of auf) {
-          const moves = [...hm, ...pre, ...variant.moves, ...post];
           const endState = applyMoves(afterAlg, post);
           if (!phase.goal(endState)) continue;
+          const { moves, checkpoints } = assemble(
+            [hm, pre, variant.moves, post],
+            variant.checkpoints,
+            hm.length + pre.length,
+          );
           const cost = segmentCost(moves, prevMove, costModel);
           const existing = perVariant.get(vi);
           if (existing && cost >= existing.cost) continue;
-          const offset = hm.length + pre.length;
-          const checkpoints = variant.checkpoints?.map((c) => ({
-            label: c.label,
-            index: c.index + offset,
-          }));
           perVariant.set(vi, {
             phaseId: phase.id,
             kind: "algorithmic",

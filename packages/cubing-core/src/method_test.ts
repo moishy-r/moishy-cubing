@@ -36,9 +36,15 @@ const searchStrategy: Strategy = {
 };
 const algStrategy: Strategy = {
   id: "alg",
+  // Padded so it loses the race. The padding is `D U D' U'` — state-neutral (D and U are
+  // on the same axis, so they commute and it is the identity) with no two adjacent moves
+  // of the same family. That matters: `runPhase` merges same-family adjacencies where it
+  // assembles a candidate, so padding built from `U U'` or `U2 U2` is silently removed and
+  // the "expensive" route stops being expensive. These fixtures were written that way and
+  // six of them started passing for the wrong reason.
   phases: [algPhase("a", isSolved, [{
     state: scrambledLL,
-    case: { id: "sexy", algs: [{ moves: parseAlg("U R U' R' U U'") }] },
+    case: { id: "sexy", algs: [{ moves: parseAlg("U R U' R' D U D' U'") }] },
   }])],
 };
 
@@ -97,7 +103,7 @@ function regionMethod() {
         phases: [
           algPhase("p", isSolved, [{
             state: midState,
-            case: { id: "part2", algs: [{ moves: parseAlg("R' U' U2 U2") }] },
+            case: { id: "part2", algs: [{ moves: parseAlg("R' U' D U D' U'") }] },
           }]),
         ],
       }],
@@ -208,7 +214,7 @@ Deno.test("phase-chaining: keeping a dearer upstream branch wins on the joint to
     phases: [
       { kind: "search", id: "reach", goal: oneOf(P, Q), moves: ["R"], maxDepth: 1 },
       algPhase("finish", isSolved, [
-        { state: P, case: { id: "fromP", algs: [{ moves: parseAlg("R' U U'") }] } }, // padded
+        { state: P, case: { id: "fromP", algs: [{ moves: parseAlg("R' D U D' U'") }] } }, // padded
         { state: Q, case: { id: "fromQ", algs: [{ moves: parseAlg("R2") }] } }, // cheap
       ]),
     ],
@@ -250,7 +256,7 @@ function lookaheadMethod() {
     strategies: [{
       id: "sb",
       phases: [algPhase("pb", isSolved, [
-        { state: X, case: { id: "fromX", algs: [{ moves: parseAlg("R' U U'") }] } }, // padded
+        { state: X, case: { id: "fromX", algs: [{ moves: parseAlg("R' D U D' U'") }] } }, // padded
         { state: Y, case: { id: "fromY", algs: [{ moves: parseAlg("R2") }] } }, // cheap
       ])],
     }],
@@ -329,7 +335,7 @@ Deno.test("overlapping compete replacements: the region DP picks the cheapest co
       phases: [
         algPhase("p", isSolved, [{
           state: s1,
-          case: { id: "r2", algs: [{ moves: parseAlg("F F' U' R'") }] },
+          case: { id: "r2", algs: [{ moves: parseAlg("U' R' D U D' U'") }] },
         }]),
       ],
     }],
@@ -411,7 +417,7 @@ Deno.test("boundary extra (opt-in, force): a triggered extra replaces its region
         phases: [
           algPhase("p", isSolved, [{
             state: st("R"),
-            case: { id: "base", algs: [{ moves: parseAlg("R' U U'") }] },
+            case: { id: "base", algs: [{ moves: parseAlg("R' D U D' U'") }] },
           }]),
         ],
       }],
@@ -676,7 +682,7 @@ Deno.test("a compete unit that improves the solve is still used", async () => {
         id: "padded",
         phases: [algPhase("p", isSolved, [{
           state: st(SCRAMBLE),
-          case: { id: "padded", algs: [{ moves: parseAlg("U R U' R' U U'") }] },
+          case: { id: "padded", algs: [{ moves: parseAlg("U R U' R' D U D' U'") }] },
         }])],
       }],
     }],
