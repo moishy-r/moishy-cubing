@@ -201,6 +201,26 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ### Changed
 
+- **`@moishy/cfop@0.4.0`: ZBLL and COLL+EPLL are Extras, not Replacements** — breaking for anyone
+  who enabled them, since the settings key moves from `replacements` to `extras`.
+
+  The three kinds mean different things and these were the wrong one. A **Strategy** reaches the
+  same result a different way. A **Replacement** covers a range of steps with a different route and
+  is available on _every_ solve. An **Extra** is conditional — if the case allows it, try this.
+
+  Both of these are conditional: they need the last-layer **edges already oriented**, and nothing in
+  plain CFOP orients them (OLL is where that happens, and these replace OLL). So they apply only
+  when something upstream did it — ZBLS — or the scramble happened to leave them oriented, which is
+  about one solve in eight. Measured over the 20 test scrambles: the edges are oriented at the `oll`
+  boundary on 4, and ZBLL fires on 3 of those (the fourth loses the race, which `compete` is for).
+
+  As Replacements they worked by accident: the lookup found no case and the unit quietly produced no
+  candidate. Same outcome, wrong statement — and it cost a recognition attempt on every solve. A
+  boundary trigger says the condition out loud and is checked once, at the `oll` boundary.
+
+  They stay `compete` once triggered, because "the case is right" is not "this is cheaper": a
+  one-alg last layer does not always beat the OLL/PLL pair it replaces.
+
 - **A Method may now recommend a `compete` Replacement ON; `force` stays caller-only.** The
   project-wide rule was that `enabled` always defaults to false, no exceptions — right for `force`,
   where "on" changes what the solver is _allowed_ to do and a caller can be handed a solution they

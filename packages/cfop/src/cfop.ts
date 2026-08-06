@@ -26,7 +26,13 @@
 // it. Nothing wants to — ZBLS already spans the whole of F2L, since which slot it leaves
 // open is decided by the three inserts before the last one, not by the last one.
 
-import { type MethodDefinition, type Move, parseAlg, type Replacement } from "@moishy/cubing-core";
+import {
+  type BoundaryTrigger,
+  type Extra,
+  type MethodDefinition,
+  type Move,
+  parseAlg,
+} from "@moishy/cubing-core";
 import { advancedF2lBySlot } from "@moishy/algsets/advanced-f2l";
 import { f2lBySlot } from "@moishy/algsets/f2l";
 import { oll as ollSet } from "@moishy/algsets/oll";
@@ -35,6 +41,7 @@ import {
   blockSearch,
   collEpllStrategy,
   CROSS,
+  edgesOriented,
   f2lLookup,
   f2lOrderedStep,
   f2lPseudoReplacement,
@@ -63,7 +70,7 @@ const cross: MethodDefinition["steps"][number] = {
   strategies: [{ id: "cross", phases: [blockSearch("cross", CROSS, { maxDepth: 8 })] }],
 };
 
-// --- Steps: f2l1..f2l4 -------------------------------------------------------
+// --- Step: f2l ---------------------------------------------------------------
 //
 // Both sets are passed so their algs merge per pair position and compete on cost:
 // `advanced-f2l` covers pairs with a piece trapped in another slot, which the classic
@@ -116,36 +123,61 @@ const zbls = zblsReplacement(zblsSet, F2L_CASES);
  */
 const f2lPseudo = f2lPseudoReplacement(F2L_CASES, { region: ["f2l", "f2l"] });
 
+// --- Extras ------------------------------------------------------------------
+//
+// Both of these are **Extras, not Replacements**, and the distinction is the one the
+// model is built on rather than a label:
+//
+//   * a Strategy reaches the same result a different way;
+//   * a Replacement covers a range of steps with a different route, and it is available
+//     on every solve;
+//   * an Extra is conditional — "if the case allows it, try this instead".
+//
+// ZBLL and COLL+EPLL are conditional. Both need the last-layer **edges already
+// oriented**, and nothing in plain CFOP orients them: OLL is where that happens, and
+// these replace OLL. So they apply only when something upstream did it (ZBLS) or the
+// scramble happened to leave the edges oriented — about one solve in eight.
+//
+// Modelling that as a Replacement worked by accident: the lookup found no case and the
+// unit quietly produced no candidate. Same outcome, wrong statement — and it cost a
+// recognition attempt on every solve. A boundary trigger says the condition out loud,
+// is checked once at the `oll` boundary, and skips the attempt entirely when false.
+
+/** The condition both last-layer shortcuts need: OLL's edge half already done. */
+const llEdgesOriented: BoundaryTrigger = { kind: "boundary", test: (s) => edgesOriented(s) };
+
 /**
  * ZBLL over `[oll, pll]`: the whole last layer in one alg.
  *
- * Only applicable once the last-layer edges are already oriented, which in CFOP means
- * something upstream did it — i.e. ZBLS. Enable both and the pair becomes what ZB
- * actually is: spend a few moves orienting edges during the last insert, collect the
- * entire last layer in a single alg. `compete`, so on the scrambles where the edges are
- * not oriented it simply produces no candidate and the normal OLL/PLL runs.
+ * Pair it with ZBLS and you have what ZB actually is — spend a few moves orienting the
+ * edges during the last insert, collect the entire last layer in a single alg.
+ *
+ * `compete` once triggered, because "the case is right" does not mean "this is cheaper":
+ * a one-alg last layer is not always better than the OLL/PLL pair it replaces, so the
+ * runner races it on the whole solve and keeps the winner.
  */
-const zbll: Replacement = {
+const zbll: Extra = {
   id: "zbll",
   label: "ZBLL",
   region: ["oll", "pll"],
   mode: "compete",
+  trigger: llEdgesOriented,
   strategies: [zbllStrategy(zbllSet, pllSet)],
 };
 
 /**
- * COLL + EPLL over `[oll, pll]`. Like ZBLL it needs the edges already oriented, so it is
- * a companion to ZBLS rather than something CFOP can use on its own.
+ * COLL + EPLL over `[oll, pll]` — corners in one alg, then an edge permutation. Same
+ * trigger as ZBLL, and like it a companion to ZBLS rather than something plain CFOP
+ * reaches on its own.
  */
-const collEpll: Replacement = {
+const collEpll: Extra = {
   id: "collEpll",
   label: "COLL + EPLL",
   region: ["oll", "pll"],
   mode: "compete",
+  trigger: llEdgesOriented,
   strategies: [collEpllStrategy(collSet, pllSet)],
 };
-
-// --- Extras ------------------------------------------------------------------
 
 /**
  * Winter/Summer Variation: part-way through the last insert, splice an alg that
@@ -196,8 +228,8 @@ export const cfopDefinition: MethodDefinition = {
   id: "cfop",
   label: "CFOP",
   steps: [cross, f2l, oll, pll],
-  replacements: [f2lPseudo, zbls, zbll, collEpll],
-  extras: [winterSummerVariation],
+  replacements: [f2lPseudo, zbls],
+  extras: [zbll, collEpll, winterSummerVariation],
   recommendedSettings: {
     colorNeutrality: DUAL_CN_BOTTOM,
     lookahead: {

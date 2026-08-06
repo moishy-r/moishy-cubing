@@ -57,11 +57,19 @@ Deno.test("the method definition is the shape CFOP describes", () => {
       `${step.id} names a slot; F2L steps must be interchangeable`,
     );
   }
+  // Replacements are available on every solve; Extras are conditional. ZBLL and COLL+EPLL
+  // both need the last-layer edges already oriented, which plain CFOP never guarantees, so
+  // they are Extras with a boundary trigger — not Replacements that quietly find no case.
+  assertEquals(cfopDefinition.replacements?.map((r) => r.id), ["f2lPseudo", "zbls"]);
   assertEquals(
-    cfopDefinition.replacements?.map((r) => r.id),
-    ["f2lPseudo", "zbls", "zbll", "collEpll"],
+    cfopDefinition.extras?.map((e) => e.id),
+    ["zbll", "collEpll", "winterSummerVariation"],
   );
-  assertEquals(cfopDefinition.extras?.map((e) => e.id), ["winterSummerVariation"]);
+  for (const id of ["zbll", "collEpll"]) {
+    const extra = cfopDefinition.extras!.find((e) => e.id === id)!;
+    assertEquals(extra.trigger.kind, "boundary", `${id} must be gated by a boundary trigger`);
+    assertEquals(extra.mode, "compete", `${id} must still be raced, not forced`);
+  }
 });
 
 Deno.test("VERSION matches the manifest", async () => {
@@ -271,12 +279,14 @@ Deno.test("enabling ZBLS never makes a solve more expensive", async () => {
 });
 
 // ZBLL over [oll, pll]: the whole last layer in one alg, but only once the edges are
-// already oriented. On its own that happens by luck (the four LL edges must all come out
+// already oriented — which is why it is an Extra with a boundary trigger, and why it is
+// enabled under `extras` rather than `replacements`. The settings key is part of the
+// public API, so the reclassification is a breaking change for a caller who enabled it. On its own that happens by luck (the four LL edges must all come out
 // oriented); paired with ZBLS it is what ZB actually is.
 Deno.test("ZBLL fires on its own only when the edges happen to be oriented", async () => {
   let fired = 0;
   for (const scramble of SCRAMBLES) {
-    const res = await cfop.solve(scramble, { replacements: { zbll: { enabled: true } } });
+    const res = await cfop.solve(scramble, { extras: { zbll: { enabled: true } } });
     assert(res.solved, `unsolved with zbll enabled: ${scramble}`);
     const framed = applyMoves(solvedCube(), [
       ...invert(res.orientation),
@@ -305,7 +315,8 @@ Deno.test("ZBLS + ZBLL solves, and the last layer collapses to one alg", async (
     let res;
     try {
       res = await cfop.solve(scramble, {
-        replacements: { zbls: { enabled: true, mode: "force" }, zbll: { enabled: true } },
+        replacements: { zbls: { enabled: true, mode: "force" } },
+        extras: { zbll: { enabled: true } },
       });
     } catch {
       continue; // no ZBLS route on this scramble
@@ -387,7 +398,8 @@ Deno.test("ZBLS + ZBLL beats plain CFOP", async () => {
   for (const scramble of SCRAMBLES) {
     const plain = await cfop.solve(scramble);
     const zb = await cfop.solve(scramble, {
-      replacements: { zbls: { enabled: true, mode: "force" }, zbll: { enabled: true } },
+      replacements: { zbls: { enabled: true, mode: "force" } },
+      extras: { zbll: { enabled: true } },
     });
     assert(zb.solved, `unsolved: ${scramble}`);
     const framed = applyMoves(solvedCube(), [

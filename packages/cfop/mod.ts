@@ -27,7 +27,7 @@
 import { Method, VERSION as CUBING_CORE_VERSION } from "@moishy/cubing-core";
 import { cfopDefinition } from "./src/cfop.ts";
 
-export const VERSION = "0.3.0";
+export const VERSION = "0.4.0";
 export const CUBING_CORE_VERSION_USED = CUBING_CORE_VERSION;
 
 export { cfopDefinition } from "./src/cfop.ts";

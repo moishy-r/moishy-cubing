@@ -1,6 +1,6 @@
 {
   "name": "@moishy/cfop",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "A solver for the CFOP speedsolving method (cross, F2L, OLL, PLL), producing human-executable solutions ranked by turning ergonomics.",
   "exports": "./mod.ts",
   "license": "MIT",
