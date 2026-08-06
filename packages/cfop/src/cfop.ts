@@ -16,19 +16,15 @@
 // emitted to undo a rotation. Slots are tracked by cubie, so a rotation never changes
 // which pair a step means; `slotAt` maps back to the physical position for display.
 //
-// **F2L is four steps, not one.** They are interchangeable: the goal of step N is "the
-// cross is intact and at least N slots are solved", so which pair each solves is
-// decided by cost, per scramble. A slot that is already solved costs nothing, which is
-// what will let an X-cross replace only the cross step later. And the last slot being
-// an ordinary Step is what will let ZBLS/OLS replace it — see KNOWN below.
+// **F2L is ONE step, whose strategies are the pair orders.** Not four. Four Steps model F2L
+// as four decisions, each committed before the next is looked at — and once the orders are
+// searched exhaustively that structure does not exist: there is one decision, the order,
+// taken once. Worth ~3 moves of F2L over deciding a pair at a time. `@moishy/steps` still
+// exports the four-Step shape (`f2lSteps`) for a method that wants per-pair granularity.
 //
-// KNOWN, deliberately not wired yet: the last-slot variants (ZBLS, OLS) and the
-// Winter/Summer Variation extra. Their data is authored for the **FR slot**, while
-// CFOP's last slot is whichever one the first three steps did not take. Making them
-// apply generally needs either per-slot data or an alignment that can combine a
-// rotation with a U turn (`aufOptions` offers one family at a time), and half-working
-// is worse than absent. The step shape is ready for them: `[f2l4, f2l4]` for a
-// replacement, `[f2l4, oll]` for the extra.
+// The consequence to know: nothing can replace only the *last* slot, because no step names
+// it. Nothing wants to — ZBLS already spans the whole of F2L, since which slot it leaves
+// open is decided by the three inserts before the last one, not by the last one.
 
 import { type MethodDefinition, type Move, parseAlg, type Replacement } from "@moishy/cubing-core";
 import { advancedF2lBySlot } from "@moishy/algsets/advanced-f2l";
@@ -40,7 +36,9 @@ import {
   collEpllStrategy,
   CROSS,
   f2lLookup,
-  f2lSteps,
+  f2lOrderedStep,
+  f2lPseudoReplacement,
+  f2lSlotLookups,
   ollStep,
   pllStep,
   wvSvExtra,
@@ -72,7 +70,9 @@ const cross: MethodDefinition["steps"][number] = {
 // 41 do not. Each step also carries a setup fallback for the mid-F2L tangles neither
 // set covers — see `@moishy/steps`' f2l module.
 const F2L_SETS = [f2lBySlot, advancedF2lBySlot];
-const f2l = f2lSteps(F2L_SETS);
+const F2L_CASES = f2lSlotLookups(F2L_SETS);
+// 24 order strategies plus the greedy any-order one as a safety net; the race picks.
+const f2l = f2lOrderedStep(F2L_CASES, f2lLookup(F2L_SETS));
 
 // --- Steps: oll, pll ---------------------------------------------------------
 const oll = ollStep(ollSet);
@@ -105,7 +105,16 @@ const pll = pllStep(pllSet);
  * `replacements: { zbls: { enabled: true, mode: "force" } }` to see it regardless; it is
  * correct, just not cheaper.
  */
-const zbls = zblsReplacement(zblsSet, f2lLookup(F2L_SETS));
+const zbls = zblsReplacement(zblsSet, F2L_CASES);
+
+/**
+ * Pseudo-slotting: the same order search, but each pair may go in against a D layer turned
+ * away from the centers, with one D at the end to put it right.
+ *
+ * See the measurement note in `@moishy/steps`' f2l-order before enabling it — under this
+ * cost model, starting from an *exact* cross, it is close to a wash.
+ */
+const f2lPseudo = f2lPseudoReplacement(F2L_CASES, { region: ["f2l", "f2l"] });
 
 /**
  * ZBLL over `[oll, pll]`: the whole last layer in one alg.
@@ -147,7 +156,7 @@ const collEpll: Replacement = {
  * WV needs the last-layer edges already oriented, which happens on about 1 solve in 8,
  * and the data is FR-authored so the last slot must be there or a single `y` away.
  */
-const winterSummerVariation = wvSvExtra(wvSet, svSet);
+const winterSummerVariation = wvSvExtra(wvSet, svSet, { region: ["f2l", "oll"] });
 
 // Not reusable, and worth recording why: APB's `ocllPll` and `collEpll` line up with
 // CFOP's `[oll, pll]` region but both OCLL and COLL assume the last-layer **edges are
@@ -186,19 +195,16 @@ const DUAL_CN_BOTTOM: Move[][] = [
 export const cfopDefinition: MethodDefinition = {
   id: "cfop",
   label: "CFOP",
-  steps: [cross, ...f2l, oll, pll],
-  replacements: [zbls, zbll, collEpll],
+  steps: [cross, f2l, oll, pll],
+  replacements: [f2lPseudo, zbls, zbll, collEpll],
   extras: [winterSummerVariation],
   recommendedSettings: {
     colorNeutrality: DUAL_CN_BOTTOM,
     lookahead: {
       depth: 1,
       scope: [
-        ["cross", "f2l1"],
-        ["f2l1", "f2l2"],
-        ["f2l2", "f2l3"],
-        ["f2l3", "f2l4"],
-        ["f2l4", "oll"],
+        ["cross", "f2l"],
+        ["f2l", "oll"],
         ["oll", "pll"],
       ],
     },

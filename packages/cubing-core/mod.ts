@@ -28,7 +28,7 @@
  * @module
  */
 
-export const VERSION = "0.3.1";
+export const VERSION = "0.3.2";
 
 export {
   formatAlg,
@@ -75,6 +75,7 @@ export {
   regionSolvedAndEO,
   regionSolvedLRHome,
   regionSolvedStrict,
+  regionSolvedUpToD,
 } from "./src/regions.ts";
 
 // Pattern databases: admissible, cost-based, centre-aware heuristics over a
@@ -107,6 +108,7 @@ export {
   type AlgCase,
   type AlgorithmicPhase,
   type AlgVariant,
+  aufOptions,
   type CaseLookup,
   type Checkpoint,
   fallThrough,

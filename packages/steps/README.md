@@ -18,7 +18,14 @@ those searches, the standard targets and the assembled steps, so a method is com
 re-derivation.
 
 ```ts
-import { block223Step, blockSearch, CROSS, f2lSteps, ROUX_FB } from "@moishy/steps";
+import {
+  block223Step,
+  blockSearch,
+  CROSS,
+  f2lLookup,
+  f2lOrderedStep,
+  f2lSlotLookups,
+} from "@moishy/steps";
 import { dfdb } from "@moishy/algsets/dfdb";
 import { f2lBySlot } from "@moishy/algsets/f2l";
 import { advancedF2lBySlot } from "@moishy/algsets/advanced-f2l";
@@ -27,7 +34,8 @@ import { advancedF2lBySlot } from "@moishy/algsets/advanced-f2l";
 const cross = blockSearch("cross", CROSS, { maxDepth: 8 });
 
 // ...and its four pair steps. Each inserts whichever pair is cheapest.
-const f2l = f2lSteps([f2lBySlot, advancedF2lBySlot]);
+const sets = [f2lBySlot, advancedF2lBySlot];
+const f2l = f2lOrderedStep(f2lSlotLookups(sets), f2lLookup(sets)); // one Step, 24 pair orders
 
 // Roux's first block, on its own.
 const fb = blockSearch("rouxFB", ROUX_FB, { lrHome: true, maxDepth: 9 });
@@ -55,6 +63,22 @@ a small ergonomic tiebreak. Blockbuilders optimize move count; the last layer op
 **Six 2x2x3 strategies** — `rouxFbDfdb`, `direct`, `cornerFirstFront`, `cornerFirstBack`,
 `cross1Front`, `cross1Back`, exported individually so a method can take one, and as `block223Step()`
 for a method that wants the whole race.
+
+**F2L** — `f2lOrderedStep` is the whole of F2L as one Step, racing 24 strategies (one per pair
+_order_, every one fully executed and compared on real cost) plus a greedy any-order strategy as a
+safety net. Worth about a tenth of F2L over deciding a pair at a time. `f2lSteps` still gives the
+four interchangeable pair Steps for a method that wants per-pair granularity, and
+`f2lOrderReplacement` is the order search in Replacement form for it — note the two shapes want
+opposite `branchVariants` settings, since a Step gets lookahead into the next one and a Replacement
+does not (see `InsertSequenceOptions.branchVariants`).
+
+`f2lPseudoReplacement` is the same search with the D layer deliberately offset and one D turn at the
+end to correct it. It works and it never wins — read the module doc in `src/f2l-order.ts` before
+reaching for it, because the reason is arithmetic rather than a wiring gap.
+
+**Last-slot and mid-insert variants** — `zblsReplacement` (three pairs in a searched order, then an
+alg that inserts the fourth and orients the last-layer edges) and `wvSvExtra` (Winter/Summer
+Variation, spliced part-way through the last insert).
 
 ## Why it depends on @moishy/algsets
 

@@ -1,13 +1,13 @@
 {
   "name": "@moishy/cfop",
-  "version": "0.1.0",
+  "version": "0.3.0",
   "description": "A solver for the CFOP speedsolving method (cross, F2L, OLL, PLL), producing human-executable solutions ranked by turning ergonomics.",
   "exports": "./mod.ts",
   "license": "MIT",
   "imports": {
     "@moishy/cubing-core": "jsr:@moishy/cubing-core@^0.3.1",
     "@moishy/algsets": "jsr:@moishy/algsets@^0.3.2",
-    "@moishy/steps": "jsr:@moishy/steps@^0.2.0"
+    "@moishy/steps": "jsr:@moishy/steps@^0.4.0"
   },
   "publish": {
     "exclude": [

@@ -16,7 +16,7 @@
 // `BLOCK223`, `AFTER_BR`, `F2L` for a worked set. Nothing here assumes any
 // particular method, layer, or solving order.
 
-import { type CubeState, normalizeOrientation } from "./cube-state.ts";
+import { applyMoves, type CubeState, normalizeOrientation, solvedCube } from "./cube-state.ts";
 import type { Move, MoveFamily } from "./notation.ts";
 
 // --- Goal predicates ---------------------------------------------------------
@@ -55,6 +55,54 @@ export function regionSolved(region: PieceRegion): (s: CubeState) => boolean {
     const n = normalizeOrientation(s);
     return region.corners.every((i) => n.cp[i] === i && n.co[i] === 0) &&
       region.edges.every((i) => n.ep[i] === i && n.eo[i] === 0);
+  };
+}
+
+// The three non-identity D offsets, as "where did the piece now at slot i come from".
+// Derived by turning a solved cube, where cubie index == slot index, so the resulting
+// permutation vectors *are* the maps. Built once: a goal predicate is called millions of
+// times in a solve and must not apply moves per call.
+//
+// U and D quarter turns leave every corner's `co` and every edge's `eo` alone (both are
+// measured against the U–D axis), which is why these maps need no orientation term.
+const D_MAPS = ([1, 2, 3] as const).map((amount) => {
+  const s = applyMoves(solvedCube(), [{ family: "D", amount }]);
+  return { cp: s.cp, ep: s.ep };
+});
+
+/**
+ * True iff `region` is solved **up to a D-layer offset** — exactly analogous to AUF, but
+ * on D instead of U, and evaluated (like {@link regionSolved}) up to whole-cube rotation.
+ *
+ * This is the goal predicate pseudo-slotting is defined against. A pseudo state is one
+ * where the cross and the pairs already inserted are correct *relative to each other* but
+ * the whole bottom is turned with respect to the centers, to be put right by a single D
+ * later. Every other region goal here is exact, which cannot express that: a pseudo state
+ * has each individual piece off its home slot.
+ *
+ * Note the offset is shared across the *whole* region, which is the entire point — a
+ * per-piece or per-slot D tolerance would accept states that are not solvable by one D
+ * turn and are not "pseudo" in any useful sense. So a caller asks about the cross plus the
+ * slots it has filled *as one region*, never slot by slot.
+ *
+ * Rotation is normalized first, so `D` means the physical bottom layer of the frame the
+ * cube is being held in rather than whichever face a mid-solve `x` left pointing down.
+ */
+export function regionSolvedUpToD(region: PieceRegion): (s: CubeState) => boolean {
+  const { corners, edges } = region;
+  return (s) => {
+    const n = normalizeOrientation(s);
+    if (
+      corners.every((i) => n.cp[i] === i && n.co[i] === 0) &&
+      edges.every((i) => n.ep[i] === i && n.eo[i] === 0)
+    ) return true;
+    for (const map of D_MAPS) {
+      if (
+        corners.every((i) => n.cp[map.cp[i]] === i && n.co[map.cp[i]] === 0) &&
+        edges.every((i) => n.ep[map.ep[i]] === i && n.eo[map.ep[i]] === 0)
+      ) return true;
+    }
+    return false;
   };
 }
 

@@ -8,13 +8,16 @@
  * here and a method composes them.
  *
  * ```ts
- * import { blockSearch, CROSS, f2lSteps, block223Step } from "@moishy/steps";
+ * import {
+ *   block223Step, blockSearch, CROSS, f2lLookup, f2lOrderedStep, f2lSlotLookups,
+ * } from "@moishy/steps";
  * import { dfdb } from "@moishy/algsets/dfdb";
  * import { f2lBySlot } from "@moishy/algsets/f2l";
  * import { advancedF2lBySlot } from "@moishy/algsets/advanced-f2l";
  *
  * const cross = blockSearch("cross", CROSS, { maxDepth: 8 }); // CFOP's cross
- * const f2l = f2lSteps([f2lBySlot, advancedF2lBySlot]); // its four pair steps
+ * const sets = [f2lBySlot, advancedF2lBySlot];
+ * const f2l = f2lOrderedStep(f2lSlotLookups(sets), f2lLookup(sets)); // one Step, 24 pair orders
  * const block = block223Step(dfdb); // the whole 2x2x3 step, six strategies raced
  * ```
  *
@@ -25,7 +28,7 @@
  * @module
  */
 
-export const VERSION = "0.2.0";
+export const VERSION = "0.4.0";
 
 export {
   BACK_222,
@@ -44,9 +47,25 @@ export {
 } from "./src/blocks.ts";
 
 export {
+  crossPlus,
+  dCorrectionPhase,
+  exactProgress,
+  f2lOrderedStep,
+  f2lOrderReplacement,
+  type F2lProgress,
+  f2lPseudoReplacement,
+  greedyInsertStrategy,
+  insertOrderStrategies,
+  type InsertSequenceOptions,
+  insertSequencePhases,
+  insertSequenceStrategy,
+  pseudoProgress,
+  slotOrders,
+} from "./src/f2l-order.ts";
+
+export {
   alignOpenSlotToFront,
   alignSlotToFront,
-  f2lGoalLeavingOpen,
   lastSlotSignature,
   wvSvExtra,
   wvSvSignature,
@@ -76,14 +95,18 @@ export {
 export {
   anySlotLookup,
   F2L,
+  F2L_OFFER_ORDER,
   F2L_SLOT,
   F2L_SLOTS,
   f2lGoal,
   f2lLookup,
   f2lSetupStrategy,
   type F2lSlot,
+  f2lSlotLookups,
   f2lStep,
   f2lSteps,
+  insertReachable,
+  insertSetupPhase,
   openSlots,
   slotAt,
   slotSignature,

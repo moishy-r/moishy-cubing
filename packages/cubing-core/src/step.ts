@@ -193,6 +193,25 @@ export interface AlgorithmicPhase {
    * last layer keeps ergonomic MCC. Defaults to the solve-global model.
    */
   costModel?: MoveCostModel;
+  /**
+   * Pool *all* of the recognized case's variants for joint minimization with the rest
+   * of this strategy, instead of committing this phase's own cheapest.
+   *
+   * This is the same mechanism caller-configured lookahead scope turns on between two
+   * algorithmic phases (see /DESIGN.md, "Solver settings" #3) — declared by the phase
+   * itself, for a strategy that is *meaningless* without it rather than merely improved
+   * by it. The exhaustive F2L pair-order search is the case: it fixes the order the
+   * pairs go in and then, if each level commits its locally cheapest insert, is still
+   * greedy about *which alg* fills each pair — which is where a third of the moves it
+   * is trying to recover actually live. Leaving that to a caller's `lookahead.scope`
+   * would make the strategy silently degrade to something not worth its wall clock.
+   *
+   * Ignored on a strategy's final phase (nothing downstream to minimize against);
+   * cross-*step* lookahead still branches that one via `branchTailVariants`. Costs a
+   * fold of up to `BRANCH_CAP` candidates per level, so set it only where the joint
+   * minimum is the point.
+   */
+  branchVariants?: boolean;
 }
 
 /** A phase is one of the two kinds. */
@@ -276,11 +295,34 @@ function segmentCost(moves: Move[], prevMove: Move | null, model: MoveCostModel)
   return total;
 }
 
-// AUF alignment options: identity plus each family's three amounts.
-function aufOptions(families: MoveFamily[]): Move[][] {
-  const options: Move[][] = [[]];
+/**
+ * The alignment options an {@link AlgorithmicPhase} tries before and after its
+ * case alg: the **product** of the given families, identity first.
+ *
+ * One family (`["U"]`, the default and what every phase passed before pseudo-
+ * slotting existed) gives exactly `{-, U, U2, U'}`. Two give all 16 combinations,
+ * `D U` and `U D2` included — not merely the union `{-, U, U2, U', D, D2, D'}`.
+ * The union is what this used to build, and it is not enough for a phase that
+ * needs both at once: pseudo-slotting inserts a pair against a deliberately
+ * offset D layer, so its alignment is a U turn to present the pair *and* a D turn
+ * to choose the offset. A union can only ever express one of the two.
+ *
+ * The product is a superset of the union, so every existing phase is unaffected —
+ * and the cost is paid only where more than one family is asked for, since the
+ * option count is 4^families.
+ *
+ * Identity stays first so `runPhase`'s zero-move "skip" candidate is still seeded
+ * before any turning.
+ */
+export function aufOptions(families: MoveFamily[]): Move[][] {
+  let options: Move[][] = [[]];
   for (const family of families) {
-    options.push([{ family, amount: 1 }], [{ family, amount: 2 }], [{ family, amount: 3 }]);
+    const next: Move[][] = [];
+    for (const option of options) {
+      next.push(option);
+      for (const amount of [1, 2, 3] as const) next.push([...option, { family, amount }]);
+    }
+    options = next;
   }
   return options;
 }

@@ -28,7 +28,7 @@
 import { Method, VERSION as CUBING_CORE_VERSION } from "@moishy/cubing-core";
 import { apbDefinition } from "./src/apb.ts";
 
-export const VERSION = "0.2.4";
+export const VERSION = "0.2.6";
 export const CUBING_CORE_VERSION_USED = CUBING_CORE_VERSION;
 
 export { apbDefinition } from "./src/apb.ts";

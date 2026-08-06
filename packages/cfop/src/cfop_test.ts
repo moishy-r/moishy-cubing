@@ -9,7 +9,7 @@ import {
 } from "@moishy/cubing-core";
 import { CROSS, F2L, solvedSlotCount } from "@moishy/steps";
 import { normalizeOrientation } from "@moishy/cubing-core";
-import { Method, type MethodDefinition } from "@moishy/cubing-core";
+import { Method, type MethodDefinition, type Move } from "@moishy/cubing-core";
 import { ocllPllStrategy } from "@moishy/steps";
 import { oll as ollSet } from "@moishy/algsets/oll";
 import { pll as pllSet } from "@moishy/algsets/pll";
@@ -47,7 +47,7 @@ Deno.test("the method definition is the shape CFOP describes", () => {
   assertEquals(cfopDefinition.id, "cfop");
   assertEquals(
     cfopDefinition.steps.map((s) => s.id),
-    ["cross", "f2l1", "f2l2", "f2l3", "f2l4", "oll", "pll"],
+    ["cross", "f2l", "oll", "pll"],
   );
   // Nothing in the step list names a slot: which pair each F2L step takes is decided
   // per scramble by cost.
@@ -57,7 +57,10 @@ Deno.test("the method definition is the shape CFOP describes", () => {
       `${step.id} names a slot; F2L steps must be interchangeable`,
     );
   }
-  assertEquals(cfopDefinition.replacements?.map((r) => r.id), ["zbls", "zbll", "collEpll"]);
+  assertEquals(
+    cfopDefinition.replacements?.map((r) => r.id),
+    ["f2lPseudo", "zbls", "zbll", "collEpll"],
+  );
   assertEquals(cfopDefinition.extras?.map((e) => e.id), ["winterSummerVariation"]);
 });
 
@@ -82,22 +85,16 @@ Deno.test("CFOP solves, and every step does the job it claims", async () => {
     assert(isSolved(applyMoves(framed, res.solution)), `solution does not solve "${scramble}"`);
 
     // ...and each step's own contract holds at its boundary.
-    const seen = new Map<string, number>();
-    for (const seg of res.segments) seen.set(seg.unitId, (seen.get(seg.unitId) ?? 0) + 1);
-    for (const id of ["cross", "f2l1", "f2l2", "f2l3", "f2l4"]) {
-      assert(seen.has(id), `no ${id} segment for "${scramble}"`);
-    }
+    const seen = new Set(res.segments.map((x) => x.unitId));
+    for (const id of ["cross", "f2l"]) assert(seen.has(id), `no ${id} segment for "${scramble}"`);
     for (const seg of res.segments) {
       const after = seg.phases.at(-1)?.endState;
       if (!after) continue;
-      if (seg.unitId === "cross") {
-        assert(crossSolved(after), `cross not solved for "${scramble}"`);
-      }
-      if (seg.unitId.startsWith("f2l")) {
-        const n = Number(seg.unitId.slice(3));
-        assert(crossSolved(after), `${seg.unitId} broke the cross for "${scramble}"`);
-        assert(solvedSlotCount(after) >= n, `${seg.unitId} did not net a slot for "${scramble}"`);
-        if (seg.unitId === "f2l4") assert(f2lSolved(after), `F2L incomplete for "${scramble}"`);
+      if (seg.unitId === "cross") assert(crossSolved(after), `cross not solved: "${scramble}"`);
+      if (seg.unitId === "f2l") {
+        assert(crossSolved(after), `f2l broke the cross for "${scramble}"`);
+        assert(f2lSolved(after), `F2L incomplete for "${scramble}"`);
+        assertEquals(solvedSlotCount(after), 4, `not all four slots for "${scramble}"`);
       }
     }
   }
@@ -172,7 +169,7 @@ Deno.test("ZBLS is opt-in, and off by default", async () => {
 // is CORRECT where it exists, not that it wins.
 Deno.test("ZBLS, forced, solves and lands every edge oriented", async () => {
   const F2L_REGION = regionSolved(F2L);
-  let applicable = 0, reserved = 0, aligned = 0;
+  let applicable = 0, named = 0;
   for (const scramble of SCRAMBLES) {
     let res;
     try {
@@ -196,8 +193,13 @@ Deno.test("ZBLS, forced, solves and lands every edge oriented", async () => {
 
     const seg = res.segments.find((s) => s.unitId === "zbls")!;
     assert(seg, `zbls forced but produced no segment on "${scramble}"`);
-    if (seg.strategyId === "zblsReserved") reserved++;
-    if (seg.strategyId === "zblsAligned") aligned++;
+    // Each strategy names the three pairs it inserts, in order — which is also how a slot
+    // gets left open for the ZBLS alg. There is no separate "reserve a slot" route.
+    assert(
+      /^zbls(FR|FL|BL|BR){3}$/.test(seg.strategyId),
+      `unexpected zbls strategy id ${seg.strategyId}`,
+    );
+    named++;
 
     // What ZBLS promises: F2L complete AND every edge oriented, so OLL is an OCLL.
     const after = seg.phases.at(-1)!.endState;
@@ -221,7 +223,7 @@ Deno.test("ZBLS, forced, solves and lands every edge oriented", async () => {
   // Measured, not aspirational: roughly half the scrambles admit a ZBLS route. Zero
   // would mean the wiring broke.
   assert(applicable > 0, "no scramble admitted a ZBLS route at all");
-  assertEquals(reserved + aligned, applicable, "each firing should name one strategy");
+  assertEquals(named, applicable, "each firing should name the order it inserted");
 });
 
 // A compete unit is judged on the whole solve, so enabling it can never make things
@@ -330,12 +332,16 @@ Deno.test("ZBLS, forced, applies to every solve", async () => {
       normalizeOrientation(after).eo.every((o) => o === 0),
       `zbls left an edge misoriented on "${scramble}"`,
     );
-    // Alignment is at most one rotation, never a y2.
-    const rots = seg.moves.filter((m) => "xyz".includes(m.family));
-    assert(rots.length <= 1, `zbls used ${rots.length} rotations on "${scramble}"`);
-    for (const r of rots) {
-      assert(r.family === "y", `zbls aligned with ${r.family}, expected y`);
-      assert(r.amount !== 2, `zbls aligned with a y2 on "${scramble}"`);
+    // Alignment is at most one rotation, never a y2 — asserted on the ALIGN PHASE, not on
+    // the whole segment. Counting rotations across the segment also catches the ones the
+    // insert algs legitimately contain (CFOP's F2L data is full of them, and they are
+    // executed as written), which is a different thing and not a defect.
+    const align = seg.phases.find((p) => p.phaseId === "align");
+    assert(align, `no align phase in the zbls segment for "${scramble}"`);
+    assert(align.moves.length <= 1, `align emitted ${align.moves.length} moves on "${scramble}"`);
+    for (const r of align.moves) {
+      assertEquals(r.family, "y", `align emitted a non-y move on "${scramble}"`);
+      assert(r.amount !== 2, `align emitted a y2 on "${scramble}"`);
     }
   }
   assertEquals(applied, SCRAMBLES.length, "zbls must apply to every scramble");
@@ -375,4 +381,143 @@ Deno.test("ZBLS + ZBLL beats plain CFOP", async () => {
       (plainCost / n).toFixed(2)
     }`,
   );
+});
+
+// --- F2L as one step, whose strategies are the pair orders --------------------
+//
+// Which pair goes where is one decision, taken once, not four taken in sequence — so it is
+// one Step racing 24 order strategies (plus a greedy one as a safety net), not four Steps
+// each committing to the cheapest single insert. Every order is fully executed, so the race
+// compares real threaded MCC and not the optimistic `peekCost` estimate raising
+// `lookahead.depth` would supply. (That was measured and is the wrong tool: 13x the wall
+// clock for a slightly worse result.)
+
+const F2L_UNITS = new Set(["f2l", "f2lPseudo", "zbls"]);
+
+/** Cost and move count of whatever covered the F2L span. */
+function f2lSpan(res: { segments: { unitId: string; cost: number; moves: Move[] }[] }) {
+  let cost = 0, moves = 0;
+  for (const seg of res.segments) {
+    if (!F2L_UNITS.has(seg.unitId)) continue;
+    cost += seg.cost;
+    moves += seg.moves.filter((m) => !"xyz".includes(m.family)).length;
+  }
+  return { cost, moves };
+}
+
+Deno.test("F2L is one step, and it names the order it inserted", async () => {
+  for (const scramble of SCRAMBLES.slice(0, 6)) {
+    const res = await cfop.solve(scramble);
+    const seg = res.segments.find((s) => s.unitId === "f2l");
+    assert(seg, `no f2l segment for "${scramble}"`);
+    // The winner is either a named order or the greedy safety net.
+    assert(
+      /^order(FR|FL|BL|BR){4}$/.test(seg.strategyId) || seg.strategyId === "greedy",
+      `unexpected strategy id ${seg.strategyId}`,
+    );
+    assert(f2lSolved(seg.phases.at(-1)!.endState), `F2L incomplete on "${scramble}"`);
+  }
+});
+
+// How the two kinds of strategy actually split, recorded rather than assumed. The greedy
+// any-order strategy wins MOST races — 14 of 20 — and that is not a defect: it keeps
+// per-level variant pooling, which the 24 orders give up because a Step gets lookahead into
+// the next one instead (see `InsertSequenceOptions.branchVariants`, and the aggregate test
+// below, which is the claim that matters). An order winning 6 of 20 is what the exhaustive
+// search is buying on top.
+Deno.test("both kinds of F2L strategy win races, and the orders win some", async () => {
+  let byOrder = 0, byGreedy = 0;
+  for (const scramble of SCRAMBLES) {
+    const seg = (await cfop.solve(scramble)).segments.find((s) => s.unitId === "f2l")!;
+    if (seg.strategyId === "greedy") byGreedy++;
+    else byOrder++;
+  }
+  assertEquals(byOrder + byGreedy, SCRAMBLES.length);
+  // Both must be live. Zero orders would mean the search is dead weight; zero greedy would
+  // mean the safety net is never exercised and its failure mode would go unnoticed.
+  assert(byOrder > 0, "no scramble was won by a named order — is the order search dead?");
+  assert(byGreedy > 0, "the greedy fallback never won — has it stopped competing?");
+});
+
+// The point of the exercise. Against the four-Step greedy shape `@moishy/steps` still
+// exports, an exhaustive order is cheaper on the span it covers. Measured over 60 scrambles
+// (the 20 here plus 40 seeded): F2L cost 30.32 -> 27.78, F2L moves 27.6 -> 25.9, better on
+// 44, worse on 9, tied on 7. Asserted here in aggregate on a subset — per-scramble it can
+// lose, since a fixed order forbids un-solving a slot the count-based goal would allow.
+Deno.test("the order search beats a greedy walk on F2L, in aggregate", async () => {
+  const greedyOnly = { stepOptions: { f2l: { forceStrategy: "greedy" } } };
+  let greedy = 0, ordered = 0, n = 0;
+  for (const scramble of SCRAMBLES.slice(0, 10)) {
+    greedy += f2lSpan(await cfop.solve(scramble, greedyOnly)).cost;
+    ordered += f2lSpan(await cfop.solve(scramble)).cost;
+    n++;
+  }
+  assert(
+    ordered < greedy,
+    `expected cheaper F2L: greedy ${(greedy / n).toFixed(2)} vs ordered ${
+      (ordered / n).toFixed(2)
+    }`,
+  );
+});
+
+Deno.test("pseudo-slotting is opt-in, and off by default", async () => {
+  const res = await cfop.solve(SCRAMBLES[0]);
+  assert(
+    !res.segments.some((s) => s.unitId === "f2lPseudo"),
+    "f2lPseudo must not fire unless explicitly enabled",
+  );
+});
+
+// --- Pseudo-slotting ---------------------------------------------------------
+//
+// Insert pairs against a deliberately offset D layer, correcting with one D later. The
+// mechanism is correct and it never wins, for a reason that is arithmetic rather than
+// wiring: recognition is defined against an exact cross, so entering an offset and using it
+// each cost a D turn and the correction costs another — while a pseudo cross can be at most
+// ONE D turn cheaper than the exact one (if `M` leaves the cross solved up to `d`, then
+// `M·d` solves it exactly). Its real value is in the cases the offset makes available, and
+// an ergonomic cost model cannot see that. Both facts are asserted below.
+Deno.test("pseudo-slotting, forced, still solves and lands F2L exactly", async () => {
+  for (const scramble of SCRAMBLES.slice(0, 4)) {
+    const res = await cfop.solve(scramble, {
+      replacements: { f2lPseudo: { enabled: true, mode: "force" } },
+    });
+    assert(res.solved, `unsolved with f2lPseudo forced: ${scramble}`);
+    const framed = applyMoves(solvedCube(), [
+      ...invert(res.orientation),
+      ...parseAlg(scramble),
+      ...res.orientation,
+    ]);
+    assert(isSolved(applyMoves(framed, res.solution)), `wrong solution for "${scramble}"`);
+    const seg = res.segments.find((s) => s.unitId === "f2lPseudo");
+    assert(seg, `f2lPseudo forced but did not fire on "${scramble}"`);
+    // However the pairs went in, the span must hand over an EXACTLY solved F2L — the D
+    // correction is what guarantees the next step sees no offset.
+    assert(f2lSolved(seg.phases.at(-1)!.endState), `F2L not exact after pseudo on "${scramble}"`);
+  }
+});
+
+Deno.test("pseudo-slotting does not pay from an exact cross", async () => {
+  let used = 0, dearer = 0, n = 0;
+  for (const scramble of SCRAMBLES.slice(0, 4)) {
+    const exact = await cfop.solve(scramble);
+    const pseudo = await cfop.solve(scramble, {
+      replacements: { f2lPseudo: { enabled: true, mode: "force" } },
+    });
+    // Did any offset actually get used? The correction phase emits a move only if so.
+    const correction = pseudo.segments
+      .find((s) => s.unitId === "f2lPseudo")?.phases
+      .find((p) => p.phaseId === "dCorrect");
+    assert(correction, "the pseudo route must always run its correction phase");
+    if (correction.moves.length > 0) used++;
+    if (f2lSpan(pseudo).cost > f2lSpan(exact).cost + 1e-9) dearer++;
+    n++;
+  }
+  // Recorded as the measurement it is, not as an aspiration: on these scrambles the offset
+  // is never worth using, so the pseudo route returns the same F2L as the exact one. If
+  // this ever starts failing, pseudo-slotting has found a reason to fire — which would be
+  // interesting, and worth reading the module doc in @moishy/steps' f2l-order before
+  // "fixing".
+  assertEquals(used, 0, `the D offset was used on ${used}/${n} — see f2l-order's module doc`);
+  assertEquals(dearer, 0, `pseudo came out dearer on ${dearer}/${n}, which compete would hide`);
 });

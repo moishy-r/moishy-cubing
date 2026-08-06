@@ -10,6 +10,111 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ### Added
 
+- **`@moishy/steps@0.4.0`: F2L is one Step whose strategies are the pair orders, searched
+  exhaustively.** `f2lOrderedStep` replaces the four numbered Steps with a single `f2l` Step racing
+  **one strategy per pair order** — 24 of them — plus a greedy any-order strategy as a safety net.
+  Each order is a real, fully executed phase chain, so the runner's ordinary strategy race compares
+  actual threaded MCC rather than an estimate.
+
+  Four Steps modelled F2L as four decisions, each committed before the next was looked at. Once the
+  orders are searched exhaustively that structure does not exist: there is one decision, the order,
+  taken once. Expressing it as four Steps and bolting the search on as a `compete` Replacement made
+  the runner solve every scramble _twice_ to compare the real model against the vestigial one —
+  5m01s -> 8m22s on this repo's suite for no change in result.
+
+  This is the thing the lookahead note further down says cannot be done with `lookahead.depth`:
+  `peekCost` returns an optimistic _minimum_ over the next few steps that the greedy walk then fails
+  to achieve, whereas nothing here estimates anything.
+
+  Measured over 60 scrambles (the 20 in the CFOP tests plus 40 seeded, so the numbers are not read
+  off the population the tests were tuned on), against the four-Step greedy shape:
+
+  |              | F2L cost  | F2L moves | solve cost | solve moves |
+  | ------------ | --------- | --------- | ---------- | ----------- |
+  | greedy Steps | 30.32     | 27.6      | 59.40      | 54.5        |
+  | order search | **27.78** | **25.9**  | **57.39**  | **53.5**    |
+
+  Better on 44 of 60, worse on 9, tied on 7 — a fixed order forbids un-solving a slot the
+  count-based goal would allow, which is exactly what the greedy strategy is kept for. On a
+  6-scramble spot check of the shipped configuration: 55.23 cost, 50.7 moves, 2.86 s/solve against
+  0.80 for the old greedy walk.
+
+  Two findings worth keeping:
+
+  - **The setup fallback is load-bearing here, more than for the four Steps.** Targeting a _named_
+    slot hits the case data's coverage gap far more often than "advance any slot" does, because
+    naming the slot removes the three alternatives that would otherwise have rescued the step. A
+    first probe without it completed only 4 of 24 orders on some scrambles and then lost to the
+    greedy runner on a scramble it should have beaten.
+  - **Per-level variant pooling and lookahead into the next Step are substitutes.** Fixing the order
+    leaves the choice of _which alg_ fills each pair still greedy, and pooling the variants
+    (`branchVariants`) fixes that — essential when the search was a Replacement, which gets no
+    lookahead across its region boundary (without pooling, 3 of 6 scrambles came out worse than the
+    greedy Steps; with it, 0 of 6). As a Step it gets exit lookahead for free, and the two overlap.
+    All four combinations over 6 scrambles:
+
+    | pooling | exit lookahead | cost  | s/solve |
+    | ------- | -------------- | ----- | ------- |
+    | on      | on             | 56.08 | 9.39    |
+    | off     | on             | 56.79 | 2.36    |
+    | on      | off            | 57.22 | 9.28    |
+    | off     | off            | 60.65 | 2.37    |
+
+    Either alone recovers ~3.5 of the ~4.6 available; the second adds 0.71 for **4x** the wall
+    clock. So the Step turns pooling off and leans on lookahead; the Replacement form keeps it.
+
+  `f2lSteps` (the four-Step shape) and `f2lOrderReplacement` are still exported for a method that
+  wants per-pair granularity. What the single Step costs: nothing can replace only the _last_ slot,
+  because no Step names it. Nothing wants to — `zblsReplacement` already spans the whole of F2L,
+  since which slot it leaves open is decided by the three inserts before the last.
+
+- **`@moishy/cubing-core@0.3.2`: `regionSolvedUpToD`** — a region goal satisfied when the region is
+  solved **up to a shared D-layer offset**, exactly analogous to AUF but on D. Every other region
+  goal here is exact (up to whole-cube rotation), which cannot express a pseudo state at all: each
+  individual piece is off its home slot. The offset is shared across the whole region on purpose,
+  and a test pins it — two sub-regions can each be D-fixable while their union is not, and accepting
+  that is the bug a per-slot D tolerance would have. Implemented with precomputed permutation maps
+  rather than four `applyMoves` per call, since a goal predicate runs millions of times in a solve,
+  and checked against the obvious definition over ~99k states because that derivation is the part
+  that could be silently wrong.
+
+- **`@moishy/cubing-core@0.3.2`: `AlgorithmicPhase.branchVariants`** — a phase declares that its
+  recognized case's variants must be pooled for joint minimization with the rest of its strategy.
+  Same mechanism caller-configured lookahead scope already turned on between two algorithmic phases,
+  but declared by the phase, for a strategy that is _meaningless_ without it rather than merely
+  improved by it. The pair-order search is the case: left to a caller's `lookahead.scope` it would
+  silently degrade to something not worth its wall clock. `aufOptions` is exported alongside it, so
+  a setup search can aim at exactly the alignments the insert will try instead of a hand-written
+  list that can drift.
+
+- **`@moishy/steps@0.3.0`: pseudo-slotting — `f2lPseudoReplacement`, `pseudoProgress`,
+  `dCorrectionPhase`.** The same order search, but each insert may leave the bottom layer turned
+  away from the centers, with one D at the end to put it right. The done-predicate is the pluggable
+  part (`F2lProgress`), which is why it takes a _set_ of slots: under an offset the solved portion
+  is only correct relative to itself, so the cross and every filled slot have to be judged together.
+
+  **It is correct, and it never fires. That is a result, not a gap.** Over 12 scrambles the pseudo
+  route returned the identical F2L to the exact order search on all 12, with the D correction
+  emitting zero moves every time. The arithmetic says why in two steps. Recognition is defined
+  against an exact cross, so entering an offset and using it each cost a D turn and the correction
+  costs another. And a pseudo cross cannot pay for them: if a sequence `M` leaves the cross solved
+  up to offset `d`, then `M·d` solves it exactly, so **a pseudo cross is at most one D turn cheaper
+  than the exact one** — while the correction owes exactly one D turn back. Net zero before the
+  offset has bought anything.
+
+  So under a model that charges a D turn the same wherever it sits, pseudo-slotting's entire value
+  is in the _cases_ the offset makes available — a shorter insert, a better last slot — and this
+  cost model scores turning ergonomics, so that is precisely the kind of payoff it cannot see. The
+  mechanism is here and costs ~0.2 s/solve when enabled; what it needs is a reason to prefer the
+  offset that is not move count. Both facts are asserted, so if it ever does start firing the test
+  will say so.
+
+- **`@moishy/cfop@0.2.0`: both F2L replacements wired** — `f2lOrder` on by default, `f2lPseudo` off.
+  The four F2L Steps are untouched: these are additional _covers_ of the span, the same shape `zbls`
+  already had, so `f2l4` stays its own Step and ZBLS and Winter/Summer Variation keep working. Turn
+  the order search off with `replacements: { f2lOrder: { enabled: false } }` when wall clock matters
+  more than move count.
+
 - **`@moishy/algsets@0.3.2`: F2L and Advanced F2L case data, all four slots** —
   `@moishy/algsets/f2l` (41 cases x 4 slots, 622 algs) and `@moishy/algsets/advanced-f2l`
   (42/35/28/31 cases for fr/fl/bl/br, 664 algs), scraped from SpeedCubeDB's F2L and AdvancedF2L
@@ -52,6 +157,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ### Fixed
 
+- **The version-drift test never covered `@moishy/cfop`.** It asserts every workspace member's
+  exported `VERSION` matches its manifest and that inter-package ranges still resolve — and cfop,
+  the newest package, was simply not in its list, so exactly the drift it exists to catch could have
+  shipped from it silently. Added.
+
 - **`@moishy/algsets`: `aufInvariantLookup` re-derived recognition with the pre-fix formula, so 24
   `zbls` cases could not be found by the very lookup built from them.** It recomputed
   `solved . invert(algs[0])` itself instead of asking the set for `recognitionState(id)` — silently
@@ -61,6 +171,64 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
   copy.
 
 ### Changed
+
+- **A Method may now recommend a `compete` Replacement ON; `force` stays caller-only.** The
+  project-wide rule was that `enabled` always defaults to false, no exceptions — right for `force`,
+  where "on" changes what the solver is _allowed_ to do and a caller can be handed a solution they
+  cannot execute, but wrong for `compete`, which already carries the guarantee the rule was
+  protecting: the runner solves once with the unit off and once on and keeps the cheaper _whole_
+  solve. Enabling one cannot make a solve worse; it can only cost time. CFOP's `f2lOrder` is the
+  first, and makes the trade explicit — roughly 2x the wall clock for ~3 moves of F2L. /DESIGN.md
+  updated.
+
+- **`@moishy/cubing-core@0.3.2`: `aufOptions` builds the PRODUCT of its families, not the union.**
+  `["U"]` is unchanged — identity plus the three amounts, identity still first — and every phase
+  written before this passed exactly one family, so nothing existing moves. `["U", "D"]` is now all
+  16 combinations rather than the seven singles, `D U` and `U D2` included. The union cannot express
+  what pseudo-slotting needs: a D turn to make the case recognizable _and_ a U turn to present the
+  pair, in one alignment. The product is a superset of the union, so this is additive, and the cost
+  (4^families) is paid only where more than one family is asked for.
+
+- **`@moishy/steps@0.3.0`: the F2L setup fallback searches with A\* instead of IDA\*, for an 88x
+  node reduction and identical answers.** The reason is the _goal_, not the state space: this goal
+  runs a whole trial insert per state, and IDA\* re-expands its entire tree once per cost threshold
+  — with real-valued MCC costs there are many thresholds between zero and three moves, so the same
+  states get their goal re-evaluated over and over. A\* visits each once, and both are cost-optimal.
+  Measured over the 240 setups a 60-scramble CFOP run actually reaches: 254,554 nodes -> 2,886, 4.8x
+  less time in the setups, **whole solves 1732 ms -> 775 ms**, and zero cost disagreements — F2L
+  cost and move count identical on all 60. This is what made the 24-strategy order search affordable
+  at all; before it, one scramble took 141 s.
+
+- **`@moishy/steps@0.4.0`: ZBLS reserves nothing, and recognizes the last slot by where it
+  physically is.** Its second argument is now a `Record<F2lSlot, CaseLookup>` (from the new
+  `f2lSlotLookups`) rather than the merged `f2lLookup`, because a level that has _named_ the slot it
+  is filling does not want four times the algs. And "reserve a slot" turns out to be nothing more
+  than **leaving that slot out of the order** — so the dedicated reserving goal
+  (`f2lGoalLeavingOpen`) and the separate align-whatever-is-left strategy are both gone, replaced by
+  24 order strategies with the race picking the cheapest.
+
+  The reason it can offer all 24 rather than only the six that leave FR: **a last-slot set
+  constrains the slot's _physical_ position, not which cubie pair sits in it.** An FR-authored alg
+  solves whichever slot the cuber holds at front-right, so an FL- or BR-open state is an ordinary FR
+  case after one `y'`/`y`; only BL, needing a `y2`, is out. Brute-forced over the whole set on 88
+  real post-three-insert states: **45 solvable within a single `y`**, against the 22 the old
+  cubie-keyed `lastSlotSignature("fr")` could see.
+
+  `lastSlotSignature` therefore reads the open pair and the EO pattern _through_ the rotation that
+  brings that slot to the front. **It is a partial fix and the honest numbers are these:** end to
+  end — recognized _and_ the chosen case's alg reaching the goal — routes that complete go from 22
+  to 32 of the 85 states that reach alignment, and slots that were impossible outright now work (a
+  BL pair drifted to BR/FL: 4 of 4). But a BR pair at BR completes on 2 of 17 and an FL pair at FL
+  on 3 of 20, where every one of those 37 is solvable by _some_ alg in the set. The projection lands
+  on a key without always landing on the right case; recognition matches, the alg fails the goal,
+  the candidate is dropped. Safe — `runPhase` goal-checks, so a mis-recognition costs a missed route
+  and never a wrong solve — but ~35 states remain headroom.
+
+  **Do not read a recognition failure as "no alg applies."** That inference was made here twice and
+  was wrong by a factor of two both times: the cubie-keyed signature matched none of those states,
+  and a first frame-aware attempt matched none either, while the algs solved them regardless.
+  Recognition and solvability are separate questions, and the way to ask the second is to offer
+  every alg and let the phase goal judge.
 
 - **`@moishy/algsets`: `zbls` is re-sourced wholly from the community ZBLS spreadsheet** (algs by
   Chad Batten and Tao Yu) — 301 cases, 645 algs — replacing a set stitched together from several
@@ -146,7 +314,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
   free. Measured, each level costs ~13x (9.3s -> 125s over 6 scrambles, depth 3+ does not finish)
   and the result is slightly _worse_ (cost 59.13 -> 59.24, moves 53.8 -> 55.2): `peekCost` returns
   an optimistic minimum that the greedy walk then does not achieve, so the adjustment misleads.
-  Depth stays at 1; a constraint that has to hold belongs in a phase goal, not in lookahead.
+  Depth stays at 1; a constraint that has to hold belongs in a phase goal, not in lookahead — which
+  is exactly the shape the exhaustive pair-order search above ended up taking.
 
 - **`@moishy/cubing-core@0.3.1`: rotations are no longer underpriced, so a regrip stops winning
   races it should lose.** 2H base costs go `y` 1.8 -> 2.6, `x` 2.0 -> 3.0, `z` 2.0 -> 3.2. The floor
@@ -351,6 +520,39 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 - **`@moishy/algsets`: the README and module doc showed `pll.byId(...)`**, which has never existed —
   the accessor is `get`.
+
+### Removed — breaking
+
+- **`@moishy/steps@0.4.0`: `f2lGoalLeavingOpen`.** It existed because a greedy walk cannot name the
+  slots it is going to use, so reserving one had to be expressed as a goal that refuses to fill it.
+  An order search names them, and `exactProgress` names every slot targeted so far — so nothing can
+  quietly fill the reserved slot on the way, and the weaker "do not fill it" formulation has no
+  remaining caller. `alignSlotToFront` stays exported for a method assembling its own last-slot
+  route, though `zblsReplacement` no longer needs it.
+
+- **`@moishy/cfop@0.3.0`: the step ids `f2l1`..`f2l4` are now a single `f2l`.** They are public
+  surface — settings keys, lookahead scope, the demo's generated options form — so anything naming
+  them needs updating. `@moishy/steps` still exports `f2lSteps` and `f2lOrderReplacement` for a
+  method that wants the four-Step shape; CFOP does not.
+
+- **`@moishy/steps@0.4.0`: `lastSlotSignature` takes no slot argument**, and `zblsReplacement` takes
+  per-slot lookups plus no `slot` option. Both follow from recognition being keyed on the open
+  slot's physical position rather than on a caller-named cubie pair. Their `region` defaults moved
+  from `["f2l1", "f2l4"]` / `["f2l4", "oll"]` to `["f2l", "f2l"]` / `["f2l", "oll"]`; a four-Step
+  method passes `region` explicitly.
+
+### Known — measured, not yet implemented
+
+- **~35 of the last-slot states an FR alg provably solves are still not recognized.** See the
+  `zblsReplacement` entry above for the measurement. The remaining gap is the projection landing on
+  the wrong case, not the technique. A goal-verifying lookup (offer every case, let `runPhase`
+  judge) is correct and ~10k `applyMoves` per call, but the order search feeds it a large candidate
+  pool, so it needs narrowing first.
+
+- **Pseudo-slotting has no enabler.** It is correct and never fires; the only place it could pay is
+  a pseudo _cross_, which needs the pruning table seeded with the four D-rotated home configurations
+  to stay admissible. Not built. See the pseudo-slotting entry above for why it cannot win on move
+  count alone.
 
 ---
 

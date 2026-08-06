@@ -94,6 +94,37 @@ reporting `rekorLogId: null` and `hasProvenance: false`: the attestation is real
 transparency log (the publish step prints its `search.sigstore.dev` link, and the Rekor entry
 resolves), JSR just isn't surfacing it. Nothing to fix on our side; the score is 100 regardless.
 
+## Lookahead Depth Is Not a Search
+
+`lookahead.depth` looks like the general knob for "consider more than one step at a time" and is
+not. `peekCost` returns the **minimum** achievable cost over the next few steps, which the greedy
+walk that follows then routinely fails to achieve — its candidate pool is re-derived, re-capped at
+`BRANCH_CAP = 12` and re-chosen under a different window — so the adjustment misleads. Measured on
+F2L: depth 2 costs ~13x depth 1 for a slightly _worse_ result, depth 3 does not finish. Depth stays
+at 1.
+
+When something genuinely has to be searched rather than estimated, make it a **Strategy** (or a
+Replacement offering one strategy per alternative) so the runner's ordinary race compares real
+executed costs. CFOP's F2L is the worked example: one Step, 24 strategies (one per pair order) plus
+a greedy any-order strategy, no estimate anywhere. Three things shape any such fan-out:
+
+- **`phaseChaining: false`** on strategies whose non-final phases are searches, or each gets pooled
+  within its slack and the pools multiply level over level.
+- **Variant pooling and exit lookahead are substitutes, and you rarely want both.**
+  `AlgorithmicPhase.branchVariants` stops a phase committing to its own cheapest alg; lookahead into
+  the next Step does much the same thing from the other side. Measured over 6 scrambles, either
+  alone recovers ~3.5 of the ~4.6 available, and the second adds 0.71 for **4x the wall clock**. A
+  Step gets lookahead for free, so it should pool nothing; a Replacement gets none across its region
+  boundary, so it must pool. This is why the same search wants opposite settings in the two shapes.
+- **Fan-out is not free and the race is not a formality.** In CFOP's F2L the greedy any-order
+  strategy wins 14 of 20 races and the 24 exhaustive orders win 6 — and the combination still beats
+  greedy alone in aggregate. Do not assume the elaborate strategy is the one doing the work; count.
+
+A cost-optimal search whose **goal is expensive** wants `useAStar: true`, not the IDA\* default.
+IDA\* re-expands its whole tree per cost threshold, and with real-valued MCC costs there are many
+thresholds, so the same states get their goal re-evaluated over and over. The F2L setup fallback
+went 88x fewer nodes with byte-identical results.
+
 ## Wall-Clock Budgets Make Tests Machine-Dependent
 
 `SearchPhase.timeBudgetMs` lets an expensive phase drop out of its step's race instead of hanging a
@@ -133,6 +164,21 @@ Two things to check whenever you touch a set:
   Algs transcribed for another slot look fine in isolation — they solve their own case — but their
   derived recognition state has the wrong slot open. That was the actual zbls bug, long mis-recorded
   as bad transcription.
+
+  **A last-slot set constrains the slot's PHYSICAL position, not which cubie pair is in it.** FR
+  data applies to whichever slot the cuber currently holds at front-right, so a state with the FL or
+  BR pair left open is solved by an ordinary FR alg after a single `y'`/`y`; only BL, needing a
+  `y2`, is out of reach. Measured by brute force over the whole zbls set on 88 real
+  post-three-insert states: solvable at BR by `y` (17), at FL by `y'` (20), at FR with no rotation
+  (17), plus 8 more where a mid-insert rotation had already drifted the open slot onto BR/FL/FR — 45
+  of 88 within one `y`, against 22 if you require the open pair to be cubie-FR.
+
+  **Do not read a recognition failure as "no alg applies".** That mistake was made here, in this
+  file, and was wrong by a factor of two: the cubie-keyed `lastSlotSignature("fr")` matches none of
+  those 45 states, and a frame-aware signature bolted on top matched none either — but the algs
+  solve them regardless. Recognition and solvability are separate questions. To ask the second one,
+  offer every alg and let the phase goal judge; `runPhase` already goal-checks every candidate, so a
+  brute-force probe over the set is a few lines and settles it.
 
 ## Verify Claims Against the Code
 

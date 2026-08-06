@@ -12,6 +12,7 @@ import { VERSION as CORE } from "../mod.ts";
 import { VERSION as ALGSETS } from "../../algsets/mod.ts";
 import { VERSION as STEPS } from "../../steps/mod.ts";
 import { VERSION as APB } from "../../apb/mod.ts";
+import { VERSION as CFOP } from "../../cfop/mod.ts";
 
 const read = async (pkg: string) =>
   JSON.parse(await Deno.readTextFile(new URL(`../../${pkg}/deno.json`, import.meta.url)));
@@ -21,6 +22,7 @@ const PACKAGES: [name: string, exported: string][] = [
   ["algsets", ALGSETS],
   ["steps", STEPS],
   ["apb", APB],
+  ["cfop", CFOP],
 ];
 
 Deno.test("each package's exported VERSION matches its deno.json", async () => {

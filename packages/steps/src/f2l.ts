@@ -28,30 +28,36 @@
 // Slots are tracked by *cubie*, so a mid-solve rotation never changes which pair a
 // step is talking about; {@link slotAt} maps back to the physical position for
 // display, which is what a solver holding the cube sees.
+//
+// What this shape does *not* give is the best pair order: each step commits to the
+// cheapest single insert it can see, and a locally cheap one can leave the rest of F2L
+// dearer than it saved (measured: about a tenth of F2L). Searching the order is
+// ./f2l-order.ts's job, as a Replacement over the same span rather than a change here —
+// the four Steps are load-bearing, since a last-slot Replacement needs an `f2l4` to
+// replace.
 
 import { type AlgSet, regionLookup } from "@moishy/algsets";
 import {
   type AlgCase,
   type AlgVariant,
   applyMoves,
+  aufOptions,
   axisCanonical,
   type CaseLookup,
   type CubeState,
   homingRotation,
   invert,
   type MethodDefinition,
+  type Move,
   type MoveFamily,
-  parseAlg,
   type PieceRegion,
   pieceSignature,
   regionSolved,
+  type SearchPhase,
   solvedCube,
   type Strategy,
 } from "@moishy/cubing-core";
 import { CROSS } from "./blocks.ts";
-
-// The four AUF alignments an insert will try, as states to test recognition against.
-const AUF_STATES = ["", "U", "U2", "U'"].map((a) => (a ? parseAlg(a) : []));
 
 /** The four F2L slots, named by their home position in the fixed frame. */
 export type F2lSlot = "fr" | "fl" | "bl" | "br";
@@ -76,7 +82,7 @@ export const F2L_SLOTS: readonly F2lSlot[] = ["fr", "fl", "bl", "br"];
  * most a single `y` from FR, where sets like `zbls` are authored. BL — the one that
  * would need a `y2` — is the first to be filled, not the last.
  */
-const OFFER_ORDER: readonly F2lSlot[] = ["bl", "br", "fr", "fl"];
+export const F2L_OFFER_ORDER: readonly F2lSlot[] = ["bl", "br", "fr", "fl"];
 
 /** The corner and edge each slot holds (Kociemba indices). */
 export const F2L_SLOT: Readonly<Record<F2lSlot, PieceRegion>> = {
@@ -171,8 +177,8 @@ export function anySlotLookup(bySlot: Partial<Record<F2lSlot, CaseLookup>>): Cas
   return {
     find(state) {
       const algs: AlgVariant[] = [];
-      // Back slots first, so they win a tie — see OFFER_ORDER.
-      for (const slot of OFFER_ORDER) {
+      // Back slots first, so they win a tie — see F2L_OFFER_ORDER.
+      for (const slot of F2L_OFFER_ORDER) {
         const lookup = bySlot[slot];
         if (!lookup) continue;
         const hit = lookup.find(state);
@@ -212,6 +218,85 @@ type Step = MethodDefinition["steps"][number];
 const F2L_MOVES: MoveFamily[] = ["U", "D", "L", "R", "F", "B"];
 
 /**
+ * "An insert from here will actually finish the step" — the goal a setup search aims
+ * at, given the goal the insert itself has to reach.
+ *
+ * Merely *recognizable* is too weak: a case can match a state and still be unable to
+ * net a slot, and a search aimed at recognition would happily stop at the cheapest
+ * such dead end and hand the next phase something it cannot solve. So this asks the
+ * real question — is there some case, some variant, some pre/post alignment that
+ * reaches `goal` — by trying exactly what `runPhase` will try.
+ *
+ * The alignment set is built with cubing-core's {@link aufOptions} rather than a
+ * hand-written list, so the two cannot drift apart in *form*. `auf` must be a subset of
+ * the insert phase's own families — never a superset. A subset only under-promises: the
+ * search stops where a narrower insert already works, and an insert with more alignments
+ * available can still do at least that, so what it costs is coverage (and possibly a
+ * dearer setup than necessary), not correctness. A superset is the unsafe direction — it
+ * aims the search at a goal the insert cannot reach, so the search succeeds and the insert
+ * then fails.
+ */
+export function insertReachable(
+  goal: (s: CubeState) => boolean,
+  cases: CaseLookup,
+  auf: MoveFamily[] = ["U"],
+): (s: CubeState) => boolean {
+  const alignments: Move[][] = aufOptions(auf);
+  return (s) => {
+    for (const pre of alignments) {
+      const aligned = pre.length === 0 ? s : applyMoves(s, pre);
+      const hit = cases.find(aligned);
+      if (!hit) continue;
+      for (const v of hit.algs) {
+        const after = applyMoves(aligned, v.moves);
+        for (const post of alignments) {
+          if (goal(post.length === 0 ? after : applyMoves(after, post))) return true;
+        }
+      }
+    }
+    return false;
+  };
+}
+
+/**
+ * The short-setup search phase shared by every insert that has a fallback: pull a
+ * stuck pair out with a trigger, then let an ordinary case read off what it became.
+ *
+ * Three moves, outer faces only. Searching for the whole insertion instead is a
+ * 6-face search to depth 12 that does not terminate — the first shape of this
+ * fallback, and a dead end worth recording. `runPhase` reaches the goal check on the
+ * start state before expanding anything, so this costs one goal evaluation and no
+ * moves whenever an insert already works.
+ *
+ * `useAStar` with no heuristic — i.e. uniform-cost search — rather than the IDA* default,
+ * and the reason is the *goal*, not the state space. This goal is expensive (it runs a
+ * whole trial insert per state), and IDA* re-expands its entire tree once per cost
+ * threshold; with real-valued MCC costs there are many thresholds between zero and three
+ * moves, so the same states get their goal re-evaluated over and over. A* visits each
+ * once. Both are cost-optimal, so this changes only the clock. Measured over the 240
+ * setups a 60-scramble CFOP run actually reaches: **88x fewer nodes**, 4.8x less time in
+ * the setups themselves, 2.2x faster whole solves (1732 -> 775 ms), and **zero** cost
+ * disagreements — F2L cost and move count identical on all 60.
+ */
+export function insertSetupPhase(
+  id: string,
+  goal: (s: CubeState) => boolean,
+  cases: CaseLookup,
+  auf: MoveFamily[] = ["U"],
+  maxDepth = 3,
+): SearchPhase {
+  return {
+    kind: "search",
+    id,
+    goal: insertReachable(goal, cases, auf),
+    moves: F2L_MOVES,
+    canFollow: axisCanonical,
+    maxDepth,
+    useAStar: true,
+  };
+}
+
+/**
  * Fallback for the Nth pair: a short **setup**, then an ordinary case.
  *
  * The case data covers a pair whose pieces are in the U layer or its own slot, and
@@ -231,41 +316,16 @@ const F2L_MOVES: MoveFamily[] = ["U", "D", "L", "R", "F", "B"];
  * whenever a case applies outright, so it only ever does the work no case can.
  */
 export function f2lSetupStrategy(n: number, lookup: CaseLookup): Strategy {
-  // The setup's goal is not "a case matches" but "an insert from here actually
-  // finishes the step": some case, some variant, some pre/post AUF reaching the
-  // step goal. Merely recognizable is too weak — a case can match a state and still
-  // be unable to net a slot, and the search would happily stop at the cheapest such
-  // dead end and hand the next phase something it cannot solve.
-  const insertSucceeds = (s: CubeState): boolean => {
-    const goal = f2lGoal(n);
-    for (const pre of AUF_STATES) {
-      const aligned = applyMoves(s, pre);
-      const hit = lookup.find(aligned);
-      if (!hit) continue;
-      for (const v of hit.algs) {
-        const after = applyMoves(aligned, v.moves);
-        for (const post of AUF_STATES) if (goal(applyMoves(after, post))) return true;
-      }
-    }
-    return false;
-  };
+  const goal = f2lGoal(n);
   return {
     id: `f2l${n}Setup`,
     label: `F2L ${n} (setup + case)`,
     phases: [
-      {
-        kind: "search",
-        id: `f2l${n}Setup`,
-        goal: insertSucceeds,
-        moves: F2L_MOVES,
-        canFollow: axisCanonical,
-        // A trigger, not an insertion: three moves frees any stuck pair.
-        maxDepth: 3,
-      },
+      insertSetupPhase(`f2l${n}Setup`, goal, lookup),
       {
         kind: "algorithmic",
         id: `f2l${n}Insert`,
-        goal: f2lGoal(n),
+        goal,
         cases: lookup,
         auf: ["U"],
       },
@@ -274,21 +334,25 @@ export function f2lSetupStrategy(n: number, lookup: CaseLookup): Strategy {
 }
 
 /**
- * The Nth F2L step (`n` is 1-based): insert one more pair, whichever is cheapest.
+ * One lookup per slot, each offering every set's algs for that pair's position.
  *
- * `sets` supplies the per-slot case data; several sets per slot are chained in the
- * order given, so a method passes its plain F2L set and its advanced one and gets
- * both. Give four steps `n = 1..4` and the whole of F2L is covered.
+ * The sets are *merged* rather than chained: several can offer an alg for the same pair
+ * position (a plain one and a shorter Advanced one), both correct, and the cost race
+ * should see both. Chaining would let the first-listed set shadow the other. See
+ * {@link slotSignature}.
+ *
+ * A step that does not care which pair it takes wants {@link f2lLookup}, the merge of
+ * all four. A step that has *named* its slot — the exhaustive pair-order search — wants
+ * the one lookup, which is both more meaningful and about four times less work per
+ * recognition.
  */
-export function f2lLookup(sets: readonly Readonly<Record<F2lSlot, AlgSet>>[]): CaseLookup {
+export function f2lSlotLookups(
+  sets: readonly Readonly<Record<F2lSlot, AlgSet>>[],
+): Record<F2lSlot, CaseLookup> {
   const bySlot: Partial<Record<F2lSlot, CaseLookup>> = {};
   for (const slot of F2L_SLOTS) {
     const sig = slotSignature(slot);
     const lookups = sets.map((bySet) => regionLookup(bySet[slot], sig));
-    // Merge the sets rather than chaining them: several sets can offer an alg for the
-    // same pair position (a plain one and a shorter Advanced one), both correct, and
-    // the cost race should see both. Chaining would let the first-listed set shadow
-    // the other. See `slotSignature`.
     bySlot[slot] = lookups.length === 1 ? lookups[0] : {
       find(s) {
         const algs: AlgVariant[] = [];
@@ -303,7 +367,18 @@ export function f2lLookup(sets: readonly Readonly<Record<F2lSlot, AlgSet>>[]): C
       },
     };
   }
-  return anySlotLookup(bySlot);
+  return bySlot as Record<F2lSlot, CaseLookup>;
+}
+
+/**
+ * The lookup an F2L step uses when it does not care which pair it takes: all four slots'
+ * candidates, merged into one case (see {@link anySlotLookup}).
+ *
+ * `sets` supplies the per-slot case data, so a method passes its plain F2L set and its
+ * advanced one and gets both competing.
+ */
+export function f2lLookup(sets: readonly Readonly<Record<F2lSlot, AlgSet>>[]): CaseLookup {
+  return anySlotLookup(f2lSlotLookups(sets));
 }
 
 /**

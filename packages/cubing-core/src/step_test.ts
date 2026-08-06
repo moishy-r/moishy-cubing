@@ -12,6 +12,7 @@ import { formatAlg, type Move, parseAlg } from "./notation.ts";
 import {
   type AlgCase,
   type AlgorithmicPhase,
+  aufOptions,
   type CaseLookup,
   runPhase,
   type SearchPhase,
@@ -264,4 +265,48 @@ Deno.test("phases compose: a Strategy's phases chain, threading state and prevMo
   console.log(`  chained solution: ${formatAlg(all)}`);
   assert(isSolved(state));
   assert(isSolved(applyAlg(start, formatAlg(all))));
+});
+
+// --- aufOptions -------------------------------------------------------------
+//
+// The alignment set an algorithmic phase tries either side of its case alg. It is the
+// PRODUCT of the families given, not the union — the distinction only shows up with more
+// than one family, and it is what pseudo-slotting needs (a `D` to make the case
+// recognizable *and* a `U` to present the pair, in one alignment).
+
+Deno.test("aufOptions with one family is identity plus its three amounts", () => {
+  assertEquals(
+    aufOptions(["U"]).map(formatAlg),
+    ["", "U", "U2", "U'"],
+    "the shape every phase written before pseudo-slotting relies on",
+  );
+  // Identity first, so runPhase's zero-move "skip" candidate is seeded before any turning.
+  assertEquals(aufOptions(["U"])[0], []);
+  assertEquals(aufOptions([]), [[]], "no families is just the identity alignment");
+});
+
+Deno.test("aufOptions with two families is the product, not the union", () => {
+  const options = aufOptions(["U", "D"]);
+  assertEquals(options.length, 16, "4 amounts (incl. identity) per family, squared");
+  const strings = options.map(formatAlg);
+  assertEquals(new Set(strings).size, 16, "every alignment distinct");
+  // The union — what this used to build — is these seven and nothing else.
+  for (const single of ["", "U", "U2", "U'", "D", "D2", "D'"]) {
+    assert(strings.includes(single), `missing single-family alignment ${single || "(identity)"}`);
+  }
+  // ...and the nine combinations a union cannot express, which are the point.
+  for (const both of ["U D", "U D2", "U D'", "U2 D", "U2 D2", "U2 D'", "U' D", "U' D2", "U' D'"]) {
+    assert(strings.includes(both), `missing combined alignment ${both}`);
+  }
+  assertEquals(options[0], [], "identity still first");
+});
+
+Deno.test("aufOptions alignments are all distinct as cube states", () => {
+  // Distinct move strings would not be enough on their own: U and D commute, so a product
+  // that emitted both orders would double up. Check the states, not the strings.
+  const seen = new Set<string>();
+  for (const option of aufOptions(["U", "D"])) {
+    seen.add(toFacelets(applyMoves(solvedCube(), option)));
+  }
+  assertEquals(seen.size, 16, "16 alignments must reach 16 different states");
 });

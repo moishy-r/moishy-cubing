@@ -251,10 +251,10 @@ method author but overridable per-solve in settings:
 
 ```ts
 interface ReplacementOptions {
-  enabled?: boolean; // ALWAYS defaults to false, project-wide - a Replacement
-  // is only ever active if the caller explicitly opts in,
-  // regardless of how good an idea the Method author
-  // thinks it is. No per-Replacement "on by default."
+  enabled?: boolean; // Defaults to false in the LIBRARY. A Method may recommend
+  // a `compete` one on via `recommendedSettings.replacements`,
+  // and the caller still overrides that - see the note below
+  // for why `force` is different.
   mode?: "compete" | "force"; // default per the Replacement's own definition,
   // but always caller-overridable - a Method
   // author picks a sensible default mode, they
@@ -262,6 +262,20 @@ interface ReplacementOptions {
 }
 // settings.replacements: { [replacementId: string]: ReplacementOptions }
 ```
+
+**On a Method recommending a Replacement ON.** The original rule here was absolute: no
+per-Replacement "on by default", regardless of how good an idea the Method author thinks it is. That
+is right for a `force` unit, where "on" changes what the solver is _allowed_ to do and a caller can
+be handed a solution they cannot execute. It is the wrong rule for a `compete` unit, because
+`compete` already carries the guarantee the rule was protecting - the runner solves once with the
+unit off and once on and keeps the cheaper _whole_ solve, so enabling one cannot make a solve worse.
+What it costs is time: a second solve, plus whatever the unit itself costs.
+
+So the rule is now **a Method may recommend a `compete` Replacement on; a `force` one stays
+caller-only.** CFOP's `f2lOrder` (the exhaustive F2L pair-order search) is the first, and it makes
+the general trade explicit - roughly 2x the wall clock for ~3 moves of F2L. A solver whose job is to
+find the good solution should take that; one being driven interactively may not, and turns it off in
+settings.
 
 v1 constraint: Replacements are defined against the base Method's core-step sequence only - no
 replacement-of-a-replacement. Revisit if a real method needs that nesting.
@@ -459,6 +473,16 @@ Phase - it is a different mechanism from Lookahead (#3) even though both are "ge
 jointly minimize," because the upstream candidates here come from a search (no fixed enumerable case
 list, just many possible move sequences within some slack), which needs the slack-based branching
 above rather than a stored `AlgVariant` list.
+
+A phase can also declare that pooling for it is **not optional**, via
+`AlgorithmicPhase.branchVariants`. Same mechanism, same data structures; the difference is who
+decides. Lookahead `scope` is a caller's tuning knob, which is right when pooling _improves_ a
+strategy — and wrong when a strategy is _meaningless_ without it, since the strategy then silently
+degrades to something not worth its wall clock depending on settings it does not control. The
+exhaustive F2L pair-order search is that case: fixing the pair order while still committing each
+level's locally cheapest alg gives back most of the gain (measured: 3 of 6 scrambles came out worse
+than the greedy Steps; with pooling, 0 of 6). Ignored on a strategy's final phase, where cross-step
+lookahead's `branchTailVariants` governs instead.
 
 **Important refinement**: when a multi-phase Strategy's phases are _all_ `AlgorithmicPhase`s (each
 with its own small enumerable case table and `AlgVariant` list - e.g. OCLL feeding PLL), the

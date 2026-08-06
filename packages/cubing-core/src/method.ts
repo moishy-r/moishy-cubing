@@ -374,8 +374,12 @@ function strategyCands(
       // unaffected: their alg phase is last and never a search pool.)
       if (chainEnabled && !isLast) branch = "search-pool";
     } else {
-      if (!isLast && ctx.scopeHas(phase.id, phases[i + 1].id)) branch = "all-variants";
-      else if (isLast && branchTailVariants) branch = "all-variants";
+      // The phase's own `branchVariants` is an intrinsic declaration — for a strategy
+      // whose whole point is the joint minimum, not a caller's tuning knob (see
+      // `AlgorithmicPhase.branchVariants`).
+      if (!isLast && (phase.branchVariants || ctx.scopeHas(phase.id, phases[i + 1].id))) {
+        branch = "all-variants";
+      } else if (isLast && branchTailVariants) branch = "all-variants";
     }
 
     const next: Cand[] = [];
