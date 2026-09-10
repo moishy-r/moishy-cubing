@@ -365,14 +365,28 @@ function strategyCands(
     // Decide whether this phase branches into a pool.
     let branch: "search-pool" | "all-variants" | "best" = "best";
     if (phase.kind === "search") {
-      // Pool only a *non-final* search phase: its candidates feed the downstream
-      // phase, which is scored per candidate (the phase-chaining benefit — try
-      // several first blocks, keep the one with the cheapest completion). A *final*
-      // search phase has nothing downstream, so pooling it would just re-run an
-      // expensive multi-solution search per fold candidate (pool×pool) to no gain —
-      // run it single-cheapest instead. (search→alg strategies like fbDfdb are
-      // unaffected: their alg phase is last and never a search pool.)
+      // Pool a *non-final* search phase: its candidates feed the downstream phase,
+      // which is scored per candidate (the phase-chaining benefit — try several first
+      // blocks, keep the one with the cheapest completion). Pooling a final one would
+      // otherwise just re-run an expensive multi-solution search per fold candidate
+      // (pool×pool) to no gain. (search→alg strategies like fbDfdb are unaffected:
+      // their alg phase is last and never a search pool.)
       if (chainEnabled && !isLast) branch = "search-pool";
+      // ...unless the *Step* is under lookahead. Then a final search phase does have
+      // something downstream — the next Step — and "nothing to jointly minimize
+      // against" stops being true. This is what lets a dearer block that leaves a much
+      // better next step win: a cross is rarely unique at its optimal cost, and which
+      // of the tied ones you take changes F2L a lot. The pool needs a `poolStateKey`
+      // fine enough to keep those apart, or the region coordinate every goal state
+      // shares collapses it to one candidate (see `SearchPhase.poolStateKey`).
+      // The `poolStateKey` requirement is the gate, not a formality: every goal state of
+      // a block search shares one region coordinate, so a phase without a finer pool key
+      // collapses to a single candidate — after paying for a multi-solution search and a
+      // lookahead peek to get there. Making the key the opt-in leaves a method that has
+      // not thought about pooling its final search (APB's block223) untouched.
+      else if (
+        isLast && branchTailVariants && chainEnabled && phase.poolStateKey !== undefined
+      ) branch = "search-pool";
     } else {
       // The phase's own `branchVariants` is an intrinsic declaration — for a strategy
       // whose whole point is the joint minimum, not a caller's tuning knob (see
