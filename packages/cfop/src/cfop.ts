@@ -28,6 +28,7 @@
 
 import {
   type BoundaryTrigger,
+  createDefaultMoveCostModel,
   type Extra,
   type MethodDefinition,
   type Move,
@@ -58,16 +59,34 @@ import { zbll as zbllSet } from "@moishy/algsets/zbll";
 import { sv as svSet } from "@moishy/algsets/sv";
 import { wv as wvSet } from "@moishy/algsets/wv";
 
+// The solve-global cost model, named so the cross can be built against the same one
+// everything else is scored by.
+const MCC = createDefaultMoveCostModel();
+
 // --- Step: cross -------------------------------------------------------------
 //
 // The four D-layer edges by search, and nearly free: a cross is 8 moves or fewer for
 // any scramble, and `blockSearch` already wires the pruning table, A*, axis
 // canonicalization and the region key. Colour neutrality is handled upstream by the
 // runner's commit-early rotation choice, so this stays in the fixed frame.
+//
+// **Costed in ergonomic MCC, not `blockSearch`'s move-count default.** That default
+// exists for APB, whose block strategies mirror OnionHoney's analyzer and rank by
+// fewest moves; CFOP has no such reference and ranks everything else by ergonomics.
+// Leaving the default in place meant a solve's reported cost was a sum of two
+// different units — the cross at ~1.0 per move, everything after it at ergonomic MCC
+// (a real solve reported 4.05 for a 4-move cross and 13.75 for a 10-move OLL). Nothing
+// compared across that boundary, so it was harmless but wrong; it stops being harmless
+// the moment anything trades cross moves against later ones, which is exactly what an
+// X-cross is. `blockSearch` builds the pruning table for whichever model it is given,
+// so admissibility is preserved.
 const cross: MethodDefinition["steps"][number] = {
   id: "cross",
   label: "Cross",
-  strategies: [{ id: "cross", phases: [blockSearch("cross", CROSS, { maxDepth: 8 })] }],
+  strategies: [{
+    id: "cross",
+    phases: [blockSearch("cross", CROSS, { maxDepth: 8, costModel: MCC })],
+  }],
 };
 
 // --- Step: f2l ---------------------------------------------------------------
