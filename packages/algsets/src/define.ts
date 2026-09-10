@@ -77,6 +77,19 @@ export interface AlgCaseInput {
   /** Subset/group this case belongs to within the set (e.g. OLL `"dot"`, ZBLL `"t"`). */
   subset?: string;
   tags?: string[];
+  /**
+   * The state `algs[0]` is authored against, if not the solved cube. Recognition
+   * is still fully alg-derived, never hand-written — this only generalizes the
+   * derivation formula from `solved · invert(algs[0])` to `baseState ·
+   * invert(algs[0])`, for a case whose alg reaches some other waypoint rather
+   * than a solved cube (e.g. a step that only forms a pair without inserting
+   * it). `baseState` is typically itself another algset's derived
+   * `recognitionState`, so the chain of derivation still bottoms out at the
+   * solved cube — see `@moishy/algsets/form-pair` for a worked example. Omit
+   * for the ordinary case (defaults to `solvedCube()`, unchanged from before
+   * this field existed).
+   */
+  baseState?: CubeState;
 }
 
 /**
@@ -224,12 +237,13 @@ export function defineAlgSet(input: AlgSetInput): AlgSet {
     // not cancel against it: those were authored against the raw derivation and end the
     // cube drifted rather than rotated, so correcting them would move the case somewhere
     // neither reading recognizes.
+    const base = c.baseState ?? solvedCube();
     const p = input.frameDerivation === "centres"
-      ? invert(homingRotation(applyMoves(solvedCube(), algs[0].moves)))
+      ? invert(homingRotation(applyMoves(base, algs[0].moves)))
       : algs[0].moves.filter((m) => m.family === "x" || m.family === "y" || m.family === "z");
-    let state = applyMoves(solvedCube(), invert(algs[0].moves));
+    let state = applyMoves(base, invert(algs[0].moves));
     if (p.length > 0) {
-      const corrected = applyMoves(applyMoves(solvedCube(), p), invert(algs[0].moves));
+      const corrected = applyMoves(applyMoves(base, p), invert(algs[0].moves));
       if (input.frameDerivation === "centres" || centersSolved(corrected)) state = corrected;
     }
     cases.push(parsed);

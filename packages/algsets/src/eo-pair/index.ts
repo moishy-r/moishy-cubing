@@ -8,6 +8,16 @@
  * as an interchangeable variant; recognition is derived from the primary (first) alg of each
  * case. See /DESIGN.md. Source flagged usesMccLookahead: true (a method-runner concern, step 8).
  *
+ * 8 cases added since the transform (or-allOriented-*, ou-allOriented-*, via
+ * scripts/generate_eo_pair_all_oriented.ts): the source never covered the "every
+ * edge already oriented" pattern at `or`/`ou`'s geometric positions — harmless for
+ * the original search-based formPair (which could always steer around the gap via
+ * F/B), but a hard blocker for a pure <R,U> forming step (`@moishy/apb`'s
+ * `formPairRU`), which can only ever land there when EO started fully solved. Not
+ * needed for `mr`/`mu`: both require the BR edge's own orientation bit to be 1,
+ * which is impossible to reach from an already-oriented start under <R,U> (R/U
+ * never flip that bit).
+ *
  * ```ts
  * import { eoPair } from "@moishy/algsets/eo-pair";
  * eoPair.cases.length;
@@ -70,6 +80,13 @@ export const eoPair: AlgSet = defineAlgSet({
     { id: "or-29", subset: "or", algs: ["R' U R' S' U' S", "f R' S' R F' R2"] },
     { id: "or-30", subset: "or", algs: ["R' S R S' R U' R2"] },
     { id: "or-31", subset: "or", algs: ["f R' f' R2 S' U' S", "U D r' U' r D' F R' F' R2"] },
+    // Added by scripts/generate_eo_pair_all_oriented.ts: the "every edge
+    // already oriented" case at each of or's 4 rotations, previously missing
+    // (see that script's header for why it matters for <R,U>-only forming).
+    { id: "or-allOriented-1", subset: "or", algs: ["R2"] },
+    { id: "or-allOriented-2", subset: "or", algs: ["U' R2"] },
+    { id: "or-allOriented-3", subset: "or", algs: ["U2 R2"] },
+    { id: "or-allOriented-4", subset: "or", algs: ["U R2"] },
     {
       id: "dbr-solved-eo-(1)-UF/UR",
       subset: "dbr-solved-eo-(1)",
@@ -189,6 +206,12 @@ export const eoPair: AlgSet = defineAlgSet({
     { id: "ou-29", subset: "ou", algs: ["R2 U' R' S' U' S", "R2 U' R' S' U S"] },
     { id: "ou-30", subset: "ou", algs: ["R2 S R S' U R"] },
     { id: "ou-31", subset: "ou", algs: ["R F' U F S' U' S", "U' S R S' R' F R U R U' F'"] },
+    // Added by scripts/generate_eo_pair_all_oriented.ts: the "every edge
+    // already oriented" case at each of ou's 4 rotations, previously missing.
+    { id: "ou-allOriented-1", subset: "ou", algs: ["U' R"] },
+    { id: "ou-allOriented-2", subset: "ou", algs: ["U2 R"] },
+    { id: "ou-allOriented-3", subset: "ou", algs: ["U R"] },
+    { id: "ou-allOriented-4", subset: "ou", algs: ["R"] },
     { id: "dfr-UF/UR", subset: "dfr", algs: ["F R' F'"] },
     { id: "dfr-UL/UR", subset: "dfr", algs: ["F R U R' U' F'"] },
     { id: "dfr-UF/BR", subset: "dfr", algs: ["f R f'"] },

@@ -11,6 +11,7 @@
     "./eo-pair": "./src/eo-pair/index.ts",
     "./eodr": "./src/eodr/index.ts",
     "./f2l": "./src/f2l/index.ts",
+    "./form-pair": "./src/form-pair/index.ts",
     "./fr-pair": "./src/fr-pair/index.ts",
     "./lxs": "./src/lxs/index.ts",
     "./lxs-back-slot": "./src/lxs-back-slot/index.ts",

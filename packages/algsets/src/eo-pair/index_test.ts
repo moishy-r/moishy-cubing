@@ -23,5 +23,7 @@ Deno.test("eo-pair: only cross-subset signature collisions remain (pending regio
 });
 
 Deno.test("eo-pair has the expected case count", () => {
-  assertEquals(eoPair.cases.length, 148);
+  // 148 transformed + 8 added by generate_eo_pair_all_oriented.ts (the
+  // "every edge already oriented" case at each of or/ou's 4 rotations).
+  assertEquals(eoPair.cases.length, 156);
 });
