@@ -235,6 +235,45 @@ Deno.test("eoPair splits so formPair actually forms the pair (not the insert)", 
   }
 });
 
+// Full-coverage regression for the <R,U>-only `formPairRU` wired into
+// `eoPair`: every one of the 251 reachable raw (DBR corner 7, BR edge 11)
+// positions with block223 intact — 89 br-pair cases x up to 4 AUFs, deduped —
+// must form the pair AND have that result picked up by eoPairInsert. This
+// used to fail for 110/251 (every state where EO was already fully oriented
+// before forming started, since eo-pair had no case for that pattern at
+// or/ou's positions — see eo-pair's `*-allOriented-*` cases and their
+// generator). With those added, coverage is genuinely complete: 0 declines.
+Deno.test("eoPair's formPairRU covers every reachable (DBR,BR) raw state", async () => {
+  const { brPair: brPairSet } = await import("@moishy/algsets/br-pair");
+  const eoPairReplacement = apbDefinition.replacements!.find((r) => r.id === "eoPair")!;
+  const formPairPhase = eoPairReplacement.strategies[0].phases[0];
+  const insertPhase = eoPairReplacement.strategies[0].phases[1];
+  const AUFm = (n: number): Move[] => n ? [{ family: "U", amount: n as 1 | 2 | 3 }] : [];
+
+  const seen = new Set<string>();
+  const failures: string[] = [];
+  for (const c of brPairSet.cases) {
+    for (let k = 0; k < 4; k++) {
+      const start = applyMoves(brPairSet.recognitionState(c.id), AUFm(k));
+      const sig = pieceSignature([7], [11])(start);
+      if (seen.has(sig)) continue;
+      seen.add(sig);
+
+      const formSeg = runPhase(formPairPhase, start);
+      if (!formSeg || !formPairPhase.goal(formSeg.endState)) {
+        failures.push(`${sig}: formPair did not reach the goal`);
+        continue;
+      }
+      const insertSeg = runPhase(insertPhase, formSeg.endState);
+      if (!insertSeg || !insertPhase.goal(insertSeg.endState)) {
+        failures.push(`${sig}: eoPairInsert did not complete after formPair`);
+      }
+    }
+  }
+  assertEquals(seen.size, 251, "expected exactly 251 reachable raw (DBR,BR) states");
+  assertEquals(failures, []);
+});
+
 Deno.test(
   "replacement/extra sets recognize + solve with their wired signatures",
   async () => {

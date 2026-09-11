@@ -106,6 +106,7 @@ import { zbll as zbllSet } from "@moishy/algsets/zbll";
 import { pll as pllSet } from "@moishy/algsets/pll";
 import { oll as ollSet } from "@moishy/algsets/oll";
 import { eoPair as eoPairSet } from "@moishy/algsets/eo-pair";
+import { formPair as formPairSet } from "@moishy/algsets/form-pair";
 import { collEpll as collSet } from "@moishy/algsets/coll-epll";
 import { eodr as eodrSet } from "@moishy/algsets/eodr";
 import { zbls as zblsSet } from "@moishy/algsets/zbls";
@@ -269,15 +270,21 @@ const collEpll: Replacement = {
 };
 
 // eoPair (region [brPair, eo]): form the BR pair by search, then the insert that
-// also does EO — the 126 mr/mu/or/ou cases of `eo-pair` (excluding the `dbr` EO
-// and `dfr` back-slot subsets used elsewhere).
+// also does EO — the 134 mr/mu/or/ou cases of `eo-pair`, plus its 11
+// `dbr-solved-eo-(1)` cases for the "pair already exactly home, only EO is
+// left" edge case (excluding the `dfr` back-slot subset used elsewhere).
+// `dbr-solved-eo-(1)`'s own recognitionState always has the pair home
+// (pieceSignature "7.0/11.0"), so it slots into this SAME position+EO-keyed
+// lookup without any special-casing — without it, a scramble that happens to
+// reach `brPair` with the pair already placed had nowhere for `eoPair` to
+// finish (see `pairJoined` below).
 //
 // Recognition keys on the BR pair (DRB 7 + BR 11) location+orientation AND the EO
 // pattern: each case both inserts the pair and orients edges, so the same pair
 // position with a different EO state needs a different alg — the pair alone
 // collides badly (only ~12% of cases distinguishable), the pair+EO pair is
 // collision-free.
-const INSERT_SUBSETS = new Set(["mr", "mu", "or", "ou"]);
+const INSERT_SUBSETS = new Set(["mr", "mu", "or", "ou", DBR_EO]);
 const eoPairInsertSignature = (s: CubeState) =>
   `${pieceSignature([7], [11])(s)}/${eoSignature(EO_EDGE_SLOTS)(s)}`;
 const eoPairInsertLookup = regionLookup(
@@ -285,6 +292,60 @@ const eoPairInsertLookup = regionLookup(
   eoPairInsertSignature,
   (c) => INSERT_SUBSETS.has(c.subset ?? ""),
 );
+// formPair, two ways — formPairRU (below) is the active one; formPairSearch is
+// kept, and exported, purely for comparison/benchmarking.
+//
+// formPairRU: a generated <R,U>-only lookup (packages/algsets/src/form-pair),
+// reaching one of eo-pair's 15 or/ou/mr/mu *geometric* positions in <=6 moves
+// from every one of the 251 reachable (DBR,BR) raw states (verified — see
+// generate_form_pair.ts). Full coverage, verified exhaustively (see apb_test.ts
+// "eoPair's formPairRU covers every reachable (DBR,BR) raw state") —
+// getting there took fixing a real gap in eo-pair itself, not formPairRU:
+//
+// `eoPairFormed` additionally requires the landing state's 6-slot
+// EO_EDGE_SLOTS *reading* to exactly match a stored `eoPairInsertLookup`
+// case. R/U never flip an edge's own orientation bit, but they do permute
+// *which* cubie sits in those 6 slots — so the reading at the landing
+// position depends on the whole scramble's EO, not just the geometry. This
+// failed 110/251 states, every one sharing one trait: EO was already fully
+// oriented before forming started. That pattern ("or"/"ou" with every
+// EO_EDGE_SLOT reading 0) was simply missing from eo-pair — harmless for the
+// old search (F/B could always steer around it) but a hard blocker for a
+// pure-<R,U> step, which can only ever land on `or`/`ou` when EO started
+// solved (R/U can't flip the BR edge's own bit into the `mr`/`mu` shape
+// either). Added as eo-pair's 8 `*-allOriented-*` cases (4 `or` + 4 `ou`) —
+// see @moishy/algsets/eo-pair's module comment and
+// generate_eo_pair_all_oriented.ts. Each is a single R-family move plus AUF
+// (e.g. "R2", "U' R"), exactly what you'd expect: with EO already clean,
+// there's nothing left to fix, just a plain insert.
+const formPairRULookup = regionLookup(formPairSet, pieceSignature([7], [11]));
+const formPairRU: AlgorithmicPhase = alg("formPair", eoPairFormed, formPairRULookup);
+
+// Outer faces only: forming the BR pair while keeping the block intact is an
+// R/U-area manipulation (a slice used to form it would just have to be
+// undone). A* keyed by the block + pair coordinate (the goal's sufficient
+// statistic), guided by a pruning table over the BR pair pieces. That
+// heuristic targets the pair *inserted*, which is slightly past the "formed"
+// goal, so it can overestimate — formPair is not guaranteed minimal — but it
+// guides strongly toward the pair region (keeping this fast) and aligns with
+// the combined form+insert objective the next phase completes. eoPair is an
+// opt-in `compete` replacement, so a slightly long formPair only costs it
+// the race, never correctness.
+export const formPairSearch: SearchPhase = searchPhase("formPair", eoPairFormed, {
+  moves: ["U", "D", "L", "R", "F", "B"],
+  useAStar: true,
+  canFollow: axisCanonical,
+  heuristic: regionHeuristic([7], [11], ["U", "D", "L", "R", "F", "B"]),
+  // The A* identity key must be a sufficient statistic for the goal. The
+  // goal (`eoPairFormed` -> `pairJoined`) turns on the EO pattern (via the
+  // insert lookup's `eoSignature`), so the key MUST include EO — otherwise
+  // A* merges a goal state with an EO-differing non-goal state under one key
+  // and can return the non-goal one (the pair left one U short). The block +
+  // pair coordinate alone was not enough.
+  stateKey: (s, last) => `${regionCoordinate(AFTER_BR)(s, last)}/${eoSignature(EO_EDGE_SLOTS)(s)}`,
+  maxDepth: 9,
+});
+
 const eoPair: Replacement = {
   id: "eoPair",
   label: "EOPair",
@@ -293,31 +354,7 @@ const eoPair: Replacement = {
   strategies: [{
     id: "eoPair",
     phases: [
-      // Outer faces only: forming the BR pair while keeping the block intact is an
-      // R/U-area manipulation (a slice used to form it would just have to be
-      // undone). A* keyed by the block + pair coordinate (the goal's sufficient
-      // statistic), guided by a pruning table over the BR pair pieces. That
-      // heuristic targets the pair *inserted*, which is slightly past the "formed"
-      // goal, so it can overestimate — formPair is not guaranteed minimal — but it
-      // guides strongly toward the pair region (keeping this fast) and aligns with
-      // the combined form+insert objective the next phase completes. eoPair is an
-      // opt-in `compete` replacement, so a slightly long formPair only costs it
-      // the race, never correctness.
-      searchPhase("formPair", eoPairFormed, {
-        moves: ["U", "D", "L", "R", "F", "B"],
-        useAStar: true,
-        canFollow: axisCanonical,
-        heuristic: regionHeuristic([7], [11], ["U", "D", "L", "R", "F", "B"]),
-        // The A* identity key must be a sufficient statistic for the goal. The
-        // goal (`eoPairFormed` -> `pairJoined`) turns on the EO pattern (via the
-        // insert lookup's `eoSignature`), so the key MUST include EO — otherwise
-        // A* merges a goal state with an EO-differing non-goal state under one key
-        // and can return the non-goal one (the pair left one U short). The block +
-        // pair coordinate alone was not enough.
-        stateKey: (s, last) =>
-          `${regionCoordinate(AFTER_BR)(s, last)}/${eoSignature(EO_EDGE_SLOTS)(s)}`,
-        maxDepth: 9,
-      }),
+      formPairRU,
       alg("eoPairInsert", regionSolvedAndEO(AFTER_BR), eoPairInsertLookup),
     ],
   }],
@@ -347,11 +384,24 @@ function pairJoined(s: CubeState): boolean {
   if (eoPairInsertLookup.find(s) !== null) return true; // joined at the canonical alignment
   const cornerInU = s.cp.indexOf(7) < 4;
   const edgeInU = s.ep.indexOf(11) < 4;
-  return cornerInU && edgeInU &&
+  // AUF tolerance is safe exactly when a U turn cannot change the pair's own
+  // relative relationship: both pieces in the U layer (a U spins them
+  // together) or *both* out of it (a U turns neither — corner7 and edge11 are
+  // literally home, e.g. — only bystander edges cycle through the tracked EO
+  // slots). It is NOT safe when exactly one is in the U layer (or/mr): a U
+  // there moves that one relative to the other, which is pair-forming, not
+  // alignment, and belongs in formPair (see the module comment above).
+  return cornerInU === edgeInU &&
     AUF4.some((u) => eoPairInsertLookup.find(applyMoves(s, u)) !== null);
 }
 function eoPairFormed(s: CubeState): boolean {
-  return regionSolved(BLOCK223)(s) && pairJoined(s);
+  // Escape hatch for the trivial case pairJoined has no reason to cover:
+  // pair already home AND EO already fully solved, i.e. the insert phase's
+  // own true goal already holds with nothing left to insert. `pairJoined`
+  // only recognizes *insert* cases (data), and there is rightly no stored
+  // case for "nothing to do" — so check the real target goal directly rather
+  // than expecting a lookup to.
+  return regionSolved(BLOCK223)(s) && (pairJoined(s) || regionSolvedAndEO(AFTER_BR)(s));
 }
 
 // eodrLs (region [eo, lxs]): EODR (orient all edges + place DR) then LS. LS is
