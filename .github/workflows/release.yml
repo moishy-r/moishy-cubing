@@ -101,12 +101,25 @@ jobs:
       - name: Verify
         run: deno task ok
 
+      # --min-dep-age=0: Deno 2.9 added a default 24h minimum-dependency-age
+      # (versions published in the last day are skipped during resolution, as
+      # a supply-chain guard against a freshly-published malicious release).
+      # It fires on this workflow's own back-to-back dependency-order
+      # publishes: `all` (or two separate dispatches) can publish e.g. algsets
+      # and then apb minutes apart, and apb's `deno publish` would silently
+      # resolve `@moishy/algsets@^0.3.x` to the *previous* published version
+      # instead of the one this same run just shipped -- observed directly:
+      # `invalid 'jsr:' dependency subpath ... resolved to 0.3.2, has no
+      # export './form-pair'` when publishing apb 20-40 minutes after algsets
+      # 0.3.3. There is no real supply-chain risk to guard against here: the
+      # "new" dependency is our own package, published by this same pipeline,
+      # in this same run.
       - name: Publish to JSR
         run: |
           set -euo pipefail
           for pkg in ${{ needs.targets.outputs.packages }}; do
             echo "::group::jsr publish $pkg"
-            (cd "packages/$pkg" && deno publish)
+            (cd "packages/$pkg" && deno publish --min-dep-age=0)
             echo "::endgroup::"
           done
 
@@ -147,7 +160,10 @@ jobs:
             echo "::group::npm publish $pkg@$VERSION"
             (
               cd "packages/$pkg"
-              deno run -A ../../scripts/build_npm.ts "$VERSION"
+              # See the matching --min-dep-age note on the JSR publish step
+              # above -- dnt's build resolves this package's own jsr:
+              # dependencies too, so it needs the same opt-out.
+              deno run -A --min-dep-age=0 ../../scripts/build_npm.ts "$VERSION"
               cd npm
               # No token and no --provenance: trusted publishing authenticates over
               # OIDC and attaches a provenance attestation automatically.
