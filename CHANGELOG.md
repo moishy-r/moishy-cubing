@@ -10,7 +10,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
 ### Added
 
-- **`@moishy/algsets@0.3.2`: `form-pair`, a generated `<R,U>`-only algset for forming the BR pair.**
+- **`@moishy/algsets@0.3.3`: `form-pair`, a generated `<R,U>`-only algset for forming the BR pair.**
   236 cases covering every one of the 251 reachable raw `(DBR corner, BR edge)` positions in 6 moves
   or fewer (verified exhaustively — `packages/algsets/scripts/generate_form_pair.ts`), replacing
   `@moishy/apb`'s old full-move-set search for that step. Geometric forming turned out to always be
@@ -28,7 +28,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
   phase-chaining picks whichever finishes cheaper against the live EO pattern, same as any other
   multi-variant case.
 
-- **`@moishy/algsets@0.3.2`: `eo-pair` gains 8 cases closing a real coverage gap: `or`/`ou` had no
+- **`@moishy/algsets@0.3.3`: `eo-pair` gains 8 cases closing a real coverage gap: `or`/`ou` had no
   case for "every edge already oriented."** Every other pattern was covered at one canonical
   rotation of each of `or`/`ou`/`mr`/`mu` and sparsely elsewhere — harmless for the old search-based
   `formPair`, which could always use `F`/`B` (which flip edge orientation) to steer around the gap.
