@@ -18,19 +18,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
   gap — see the `@moishy/apb@0.2.7` entry below) did not hold up.
 
   Needed a new authoring primitive: `defineAlgSet`'s `AlgCaseInput.baseState`. Every other algset's
-  case solves back to the literal solved cube, so recognition can be derived as `solved ·
-  invert(alg)`. A forming alg does not — it solves to some other formed waypoint, not the solved
-  cube — so `baseState` generalizes the formula to `baseState · invert(alg)`, with `solvedCube()` as
-  the default (every existing algset is unaffected). Some raw positions have several forming paths
-  tied for shortest, landing on *different* geometric shapes (`or` vs `mu`, say) — those are kept as
-  interchangeable variants on one case, so the runner's existing phase-chaining picks whichever
-  finishes cheaper against the live EO pattern, same as any other multi-variant case.
+  case solves back to the literal solved cube, so recognition can be derived as
+  `solved ·
+  invert(alg)`. A forming alg does not — it solves to some other formed waypoint, not
+  the solved cube — so `baseState` generalizes the formula to `baseState · invert(alg)`, with
+  `solvedCube()` as the default (every existing algset is unaffected). Some raw positions have
+  several forming paths tied for shortest, landing on _different_ geometric shapes (`or` vs `mu`,
+  say) — those are kept as interchangeable variants on one case, so the runner's existing
+  phase-chaining picks whichever finishes cheaper against the live EO pattern, same as any other
+  multi-variant case.
 
 - **`@moishy/algsets@0.3.2`: `eo-pair` gains 8 cases closing a real coverage gap: `or`/`ou` had no
   case for "every edge already oriented."** Every other pattern was covered at one canonical
   rotation of each of `or`/`ou`/`mr`/`mu` and sparsely elsewhere — harmless for the old search-based
   `formPair`, which could always use `F`/`B` (which flip edge orientation) to steer around the gap.
-  It is a hard blocker for a pure `<R,U>` forming step: R and U can permute *which* edge sits in a
+  It is a hard blocker for a pure `<R,U>` forming step: R and U can permute _which_ edge sits in a
   tracked slot but never flip one, so landing on `or`/`ou` with EO already solved was simply
   unrecognized. Not needed for `mr`/`mu` — both require the BR edge's own orientation bit to be 1,
   which is unreachable under `<R,U>` from an already-oriented start. Added via
@@ -44,15 +46,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
 
   1. `eo-pair`'s missing "already oriented" cases (above) — without them, `formPair` failed outright
      on 110 of 251 reachable raw positions (every one where EO was already fully solved).
-  2. `pairJoined`'s AUF tolerance was narrower than it needed to be: it only allowed re-aligning by a
-     U turn when *both* the corner and edge were in the U layer. A U turn is equally harmless when
-     *neither* is — e.g. when the pair is already sitting fully home and only U-layer bystander
-     edges are cycling through the tracked EO slots — so the condition is now `cornerInU ===
-     edgeInU`. This is what lets `eoPair` pick up `eo-pair`'s existing `dbr-solved-eo-(1)` cases
-     (added to `eoPairInsertLookup`'s subset filter) for the "pair already home, only EO left" case,
-     instead of that falling through to the unrelated core `brPair` step.
+  2. `pairJoined`'s AUF tolerance was narrower than it needed to be: it only allowed re-aligning by
+     a U turn when _both_ the corner and edge were in the U layer. A U turn is equally harmless when
+     _neither_ is — e.g. when the pair is already sitting fully home and only U-layer bystander
+     edges are cycling through the tracked EO slots — so the condition is now
+     `cornerInU ===
+     edgeInU`. This is what lets `eoPair` pick up `eo-pair`'s existing
+     `dbr-solved-eo-(1)` cases (added to `eoPairInsertLookup`'s subset filter) for the "pair already
+     home, only EO left" case, instead of that falling through to the unrelated core `brPair` step.
   3. `eoPairFormed` had no escape hatch for "already fully solved, nothing to insert at all" — a
-     state `pairJoined` was never going to recognize, since there is rightly no *insert* case for
+     state `pairJoined` was never going to recognize, since there is rightly no _insert_ case for
      doing nothing. It now also accepts the insert phase's own true end goal directly.
 
   Verified end to end, not just on the state space: 3000 real random scrambles solve correctly with

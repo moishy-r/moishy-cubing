@@ -104,9 +104,7 @@ function bfsPathsFrom(anchorSig: string, anchorSt: CubeState): Map<string, Move[
 const pathsByAnchor = new Map<string, Map<string, Move[]>>();
 for (const [sig, st] of anchorState) pathsByAnchor.set(sig, bfsPathsFrom(sig, st));
 
-const unreached = [...allRawSigs].filter((s) =>
-  ![...pathsByAnchor.values()].some((m) => m.has(s))
-);
+const unreached = [...allRawSigs].filter((s) => ![...pathsByAnchor.values()].some((m) => m.has(s)));
 if (unreached.length) {
   console.error(`!! ${unreached.length} raw states unreachable via <R,U> from any anchor:`);
   console.error(unreached.join("\n"));
@@ -149,7 +147,11 @@ for (const sig of allRawSigs) {
   caseData.push({ sig, variants });
 }
 
-console.error(`Cases to author (excludes ${anchorState.size - 1} already-formed states, minus overlaps): ${caseData.length}`);
+console.error(
+  `Cases to author (excludes ${
+    anchorState.size - 1
+  } already-formed states, minus overlaps): ${caseData.length}`,
+);
 
 // --- 5. Verify every variant against an independently-derived representative
 
@@ -162,7 +164,9 @@ for (const c of caseData) {
     if (endSig !== v.anchorSig || !anchorState.has(endSig)) {
       verifyFail++;
       console.error(
-        `VERIFY FAIL: sig=${c.sig} alg="${formatAlg(v.alg)}" -> ${endSig} (expected ${v.anchorSig})`,
+        `VERIFY FAIL: sig=${c.sig} alg="${
+          formatAlg(v.alg)
+        }" -> ${endSig} (expected ${v.anchorSig})`,
       );
     }
   }
@@ -171,7 +175,9 @@ console.error(`Verification failures: ${verifyFail}`);
 if (verifyFail > 0) throw new Error("form-pair generation: verification failed");
 
 const hist = new Map<number, number>();
-for (const c of caseData) hist.set(c.variants[0].alg.length, (hist.get(c.variants[0].alg.length) ?? 0) + 1);
+for (const c of caseData) {
+  hist.set(c.variants[0].alg.length, (hist.get(c.variants[0].alg.length) ?? 0) + 1);
+}
 console.error("Move-count histogram (primary variant):");
 for (const [m, n] of [...hist.entries()].sort((a, b) => a[0] - b[0])) console.error(`  ${m}: ${n}`);
 const tieCount = caseData.filter((c) => new Set(c.variants.map((v) => v.subset)).size > 1).length;

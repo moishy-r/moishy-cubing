@@ -67,7 +67,10 @@ function forceAllOriented(base: CubeState, edgeOwnSlot: number): CubeState {
   let flips = 0;
   for (const slot of EO_EDGE_SLOTS) {
     if (slot === edgeOwnSlot) continue; // never touch — fixed by position identity
-    if (s.eo[slot] !== 0) { s.eo[slot] = 0; flips++; }
+    if (s.eo[slot] !== 0) {
+      s.eo[slot] = 0;
+      flips++;
+    }
   }
   if (flips % 2 !== 0) s.eo[11] = s.eo[11] === 0 ? 1 : 0; // untracked — restores parity only
   return s;
@@ -119,12 +122,19 @@ for (const [pos, base] of baseState) {
     failed.push(`${pos}: no alg found even with the wide move set`);
     continue;
   }
-  generated.push({ position: pos, subset: subsetOf.get(pos)!, alg: formatAlg(seg.moves), usedFallback });
+  generated.push({
+    position: pos,
+    subset: subsetOf.get(pos)!,
+    alg: formatAlg(seg.moves),
+    usedFallback,
+  });
 }
 
 console.error(`\nGenerated: ${generated.length}, failed: ${failed.length}`);
 if (failed.length) console.error(failed.join("\n"));
-console.error(`Needed the wide fallback (not pure <R,U>): ${generated.filter((g) => g.usedFallback).length}`);
+console.error(
+  `Needed the wide fallback (not pure <R,U>): ${generated.filter((g) => g.usedFallback).length}`,
+);
 
 // --- 4. Verify: standard defineAlgSet derivation (solved · invert(alg)) must
 // project to (position, "000000") exactly, and the alg must reach the goal. -
@@ -137,7 +147,9 @@ for (const g of generated) {
   const gotPattern = eoSig(derived);
   if (gotPos !== g.position || gotPattern !== "000000") {
     verifyFail++;
-    console.error(`VERIFY FAIL: intended ${g.position}/000000, derived ${gotPos}/${gotPattern} (alg "${g.alg}")`);
+    console.error(
+      `VERIFY FAIL: intended ${g.position}/000000, derived ${gotPos}/${gotPattern} (alg "${g.alg}")`,
+    );
     continue;
   }
   const end = applyMoves(derived, moves);
@@ -156,7 +168,9 @@ for (const g of generated.sort((a, b) => a.position.localeCompare(b.position))) 
   counter[g.subset]++;
   const id = `${g.subset}-allOriented-${counter[g.subset]}`;
   bySubset[g.subset].push(
-    `    { id: ${JSON.stringify(id)}, subset: ${JSON.stringify(g.subset)}, algs: [${JSON.stringify(g.alg)}] },`,
+    `    { id: ${JSON.stringify(id)}, subset: ${JSON.stringify(g.subset)}, algs: [${
+      JSON.stringify(g.alg)
+    }] },`,
   );
 }
 for (const subset of ["or", "ou"] as Subset[]) {

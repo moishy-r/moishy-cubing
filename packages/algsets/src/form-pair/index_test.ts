@@ -27,7 +27,9 @@ const INSERT_SUBSETS = new Set(["or", "ou", "mr", "mu"]);
 const posSig = pieceSignature([7], [11]);
 const formedPositions = new Set<string>();
 for (const c of eoPair.cases) {
-  if (INSERT_SUBSETS.has(c.subset ?? "")) formedPositions.add(posSig(eoPair.recognitionState(c.id)));
+  if (INSERT_SUBSETS.has(c.subset ?? "")) {
+    formedPositions.add(posSig(eoPair.recognitionState(c.id)));
+  }
 }
 formedPositions.add("7.0/11.0"); // solved
 

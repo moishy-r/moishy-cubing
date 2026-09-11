@@ -342,8 +342,7 @@ export const formPairSearch: SearchPhase = searchPhase("formPair", eoPairFormed,
   // A* merges a goal state with an EO-differing non-goal state under one key
   // and can return the non-goal one (the pair left one U short). The block +
   // pair coordinate alone was not enough.
-  stateKey: (s, last) =>
-    `${regionCoordinate(AFTER_BR)(s, last)}/${eoSignature(EO_EDGE_SLOTS)(s)}`,
+  stateKey: (s, last) => `${regionCoordinate(AFTER_BR)(s, last)}/${eoSignature(EO_EDGE_SLOTS)(s)}`,
   maxDepth: 9,
 });
 
