@@ -15,7 +15,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
   or fewer (verified exhaustively — `packages/algsets/scripts/generate_form_pair.ts`), replacing
   `@moishy/apb`'s old full-move-set search for that step. Geometric forming turned out to always be
   possible with just R and U; the earlier assumption that it wasn't (from a prior `eo-pair` coverage
-  gap — see the `@moishy/apb@0.2.7` entry below) did not hold up.
+  gap — see the `@moishy/apb@0.2.8` entry below) did not hold up.
 
   Needed a new authoring primitive: `defineAlgSet`'s `AlgCaseInput.baseState`. Every other algset's
   case solves back to the literal solved cube, so recognition can be derived as
@@ -39,7 +39,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/). Ver
   `packages/algsets/scripts/generate_eo_pair_all_oriented.ts`; each new case is, as expected once
   there is nothing left to fix, just a single R-family move plus AUF (`R2`, `U' R`, ...).
 
-- **`@moishy/apb@0.2.7`: `eoPair`'s `formPair` is now `<R,U>`-only, and `eoPair` no longer fails.**
+- **`@moishy/apb@0.2.8`: `eoPair`'s `formPair` is now `<R,U>`-only, and `eoPair` no longer fails.**
   `formPairRU` (backed by the new `form-pair` algset) replaces the old six-face-turn search as the
   active implementation; `formPairSearch` is kept and exported for a head-to-head comparison, not
   deleted. Getting to a genuine zero-failure state took three fixes, not one:
