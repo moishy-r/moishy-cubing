@@ -77,6 +77,21 @@ Point 3 is the trap. On a `0.x` line, **`^0.1.0` means `>=0.1.0 <0.2.0`** — so
 fine and needs no dependent changes, but `0.1.x → 0.2.0` strands every dependent on a version that
 no longer exists. `^0.0.1` is narrower still: it admits only `0.0.1` exactly.
 
+**A range has to admit the _lowest_ version that has what you use, not just the version you tested
+against.** `deno publish` validates every subpath import against the actual floor of the declared
+range, not against "latest" — so a range that's technically wide enough to resolve to the new
+version is not the same as a range that's _correct_. Concretely: `apb.ts` started importing
+`@moishy/algsets/form-pair`, a subpath that exists only from `algsets@0.3.3` on, but `apb`'s
+`deno.json` still said `^0.3.2` (true — 0.3.3 satisfies that range — but 0.3.2 itself, the floor,
+does not have that export). Publishing failed with
+`invalid 'jsr:' dependency subpath
+'@moishy/algsets@^0.3.2/form-pair', resolved to 0.3.2, has no export './form-pair'`
+— repeatably, across three attempts over two hours and two different `apb` versions, because the
+range itself was wrong, not stale. `deno publish --dry-run` does not run this check, so it looks
+fine locally and only fails for real. The fix is to bump the dependent's range to the actual minimum
+version that has the new export (here, `^0.3.3`), not to retry or re-bump the dependent's own
+version.
+
 Dependency order is `cubing-core → algsets → steps → apb`; both registries reject a package whose
 dependencies don't resolve. The Release workflow's `all` publishes in exactly that order.
 
@@ -94,19 +109,17 @@ reporting `rekorLogId: null` and `hasProvenance: false`: the attestation is real
 transparency log (the publish step prints its `search.sigstore.dev` link, and the Rekor entry
 resolves), JSR just isn't surfacing it. Nothing to fix on our side; the score is 100 regardless.
 
-**Publishing a dependent minutes after its dependency needs `--min-dep-age=0`.** Deno 2.9 added a
-default 24h minimum-dependency-age (a version published in the last day is skipped during
-resolution, even if it satisfies the range — a supply-chain guard against a freshly-published
-malicious release). This repo's own publish order routinely triggers it: publish `algsets`, then
-`apb` minutes later, and `apb`'s `deno publish` silently resolves `@moishy/algsets@^0.3.x` to the
-_previous_ published version instead of the one just shipped — observed directly as an "invalid
-'jsr:' dependency subpath ... resolved to 0.3.2, has no export './form-pair'" error right after
-publishing `algsets@0.3.3`. `deno publish --dry-run` does not exercise this check, so it looks fine
-locally and only fails for real. `release.yml` passes `--min-dep-age=0` to both the JSR publish and
-the npm build (`dnt` resolves the same `jsr:` dependencies) for exactly this reason — there is no
-real supply-chain risk to guard against between this workflow's own back-to-back publishes of its
-own packages. If you ever invoke `deno publish` or the npm build outside that workflow, pass the
-same flag or wait 24h.
+Separately: Deno 2.9 added a default 24h **minimum-dependency-age** (a version published in the last
+day is skipped during resolution even if it satisfies the range — a supply-chain guard against a
+freshly-published malicious release). It's a real thing this workflow's own publish-in-order flow
+could in principle trigger — publishing `algsets` and then `apb` minutes later depends on a version
+of `algsets` younger than 24h — so `release.yml` passes `--min-dep-age=0` to both the JSR publish
+and the npm build (`dnt` resolves the same `jsr:` dependencies) as a standing precaution; there's no
+real supply-chain risk between this workflow's own back-to-back publishes of its own packages. **It
+was not, however, the cause of the `form-pair` failure above** — that was a genuinely wrong range,
+and disabling this guard changed nothing until the range itself was fixed. Don't let a superficially
+similar error send you down this path first; check the dependent's actual subpath imports against
+the range's floor before suspecting the age guard.
 
 ## Lookahead Depth Is Not a Search
 
