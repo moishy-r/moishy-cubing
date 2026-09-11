@@ -94,6 +94,20 @@ reporting `rekorLogId: null` and `hasProvenance: false`: the attestation is real
 transparency log (the publish step prints its `search.sigstore.dev` link, and the Rekor entry
 resolves), JSR just isn't surfacing it. Nothing to fix on our side; the score is 100 regardless.
 
+**Publishing a dependent minutes after its dependency needs `--min-dep-age=0`.** Deno 2.9 added a
+default 24h minimum-dependency-age (a version published in the last day is skipped during
+resolution, even if it satisfies the range — a supply-chain guard against a freshly-published
+malicious release). This repo's own publish order routinely triggers it: publish `algsets`, then
+`apb` minutes later, and `apb`'s `deno publish` silently resolves `@moishy/algsets@^0.3.x` to the
+_previous_ published version instead of the one just shipped — observed directly as an "invalid
+'jsr:' dependency subpath ... resolved to 0.3.2, has no export './form-pair'" error right after
+publishing `algsets@0.3.3`. `deno publish --dry-run` does not exercise this check, so it looks fine
+locally and only fails for real. `release.yml` passes `--min-dep-age=0` to both the JSR publish and
+the npm build (`dnt` resolves the same `jsr:` dependencies) for exactly this reason — there is no
+real supply-chain risk to guard against between this workflow's own back-to-back publishes of its
+own packages. If you ever invoke `deno publish` or the npm build outside that workflow, pass the
+same flag or wait 24h.
+
 ## Lookahead Depth Is Not a Search
 
 `lookahead.depth` looks like the general knob for "consider more than one step at a time" and is
